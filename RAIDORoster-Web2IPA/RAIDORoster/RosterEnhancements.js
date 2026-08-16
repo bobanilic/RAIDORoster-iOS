@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = '2.3.0';
+  const VERSION = '2.4.0';
   if (window.RAIDOPlus?.version === VERSION) {
     window.RAIDOPlus.extractNow();
     window.RAIDOPlus.goToday();
@@ -17,6 +17,7 @@
   const compact = v => (v || '').replace(/\s+/g, ' ').trim();
   const upper = v => compact(v).toUpperCase();
   const pad2 = n => String(n).padStart(2, '0');
+  const escapeRE = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
   function hash(s) {
     let h = 2166136261;
@@ -28,7 +29,7 @@
   }
 
   function pageMonth() {
-    const text = upper(document.body?.innerText || '').slice(0, 100000);
+    const text = upper(document.body?.innerText || '').slice(0, 120000);
     const m = text.match(/\b(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+(20\d{2})\b/);
     if (!m) return null;
     const month = MONTH_NAMES.indexOf(m[1]) + 1;
@@ -70,6 +71,14 @@
     };
   }
 
+  function stamp(meta) {
+    return meta ? `${meta.dateISO} ${meta.localTime}` : '';
+  }
+
+  function utcStamp(meta) {
+    return meta?.utcTime ? `${meta.utcDateISO} ${meta.utcTime}` : '';
+  }
+
   function activityTables() {
     return Array.from(document.querySelectorAll('table.activity-table'));
   }
@@ -109,9 +118,94 @@
   }
 
   function description(segment, code) {
-    const escaped = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escaped = escapeRE(code);
     const re = new RegExp(`\\bActivity\\s+${escaped}\\s*,\\s*([^\\n]{1,90}?)(?=\\s+(?:Departure|Arrival|Station|CheckIn|Start|End|CheckOut|Hotel|ReservationNo|Station Category|Roster Designators|Activity Note|Day Note|Transfer Note|Crew On Board|STC|Aircraft Reg|A\\/C Phone)\\b|$)`, 'i');
     return compact(segment).match(re)?.[1] || '';
+  }
+
+  function cleanNote(value) {
+    if (!value) return '';
+    let text = String(value)
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/?strong>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&');
+    text = text
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\s*\n\s*/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    return text;
+  }
+
+  function labelledText(segment, label, stops) {
+    const source = String(segment || '');
+    const startRe = new RegExp(`\\b${escapeRE(label)}\\b\\s*`, 'i');
+    const match = startRe.exec(source);
+    if (!match) return '';
+    const tail = source.slice(match.index + match[0].length);
+    let end = tail.length;
+    for (const stop of stops || []) {
+      if (stop.toLowerCase() === label.toLowerCase()) continue;
+      const re = new RegExp(`\\b${escapeRE(stop)}\\b`, 'i');
+      const hit = re.exec(tail);
+      if (hit && hit.index < end) end = hit.index;
+    }
+    return cleanNote(tail.slice(0, end));
+  }
+
+  const NOTE_STOPS = [
+    'Activity Note', 'Day Note', 'Transfer Note', 'Crew On Board', 'A/C Phone',
+    'Aircraft Reg', 'STC', 'Station Category', 'Roster Designators', 'Reservation number',
+    'ReservationNo', 'CheckIn', 'Start', 'End', 'CheckOut'
+  ];
+
+  function pickupFrom(note) {
+    if (!note) return '';
+    let m = note.match(/\bPU\s+at\s+(?:(\d{1,2})([A-Z]{3})\s+)?(\d{1,2}:\d{2})\s*(?:local time|LT)?/i);
+    if (m) {
+      const date = m[1] && m[2] ? `${Number(m[1])} ${upper(m[2])} • ` : '';
+      return `${date}${m[3]} LT`;
+    }
+    m = note.match(/\bPickup\s+at\s+(\d{1,2}:\d{2})\s*(?:local time|LT)?/i);
+    return m ? `${m[1]} LT` : '';
+  }
+
+  function aircraftDetails(segment) {
+    const text = compact(segment);
+    const reg = text.match(/\bAircraft Reg\s+([A-Z0-9-]+)/i)?.[1] || '';
+    const version = text.match(/\bVersion\s+([A-Z0-9-]+)/i)?.[1] || '';
+    const type = text.match(/\bType\s+([A-Z0-9-]+)/i)?.[1] || '';
+    const phone = text.match(/\bA\/C Phone\s+(\+?[\d][\d\s().-]{6,}\d)/i)?.[1] || '';
+    return { reg: upper(reg), version: upper(version), type: upper(type), phone: compact(phone) };
+  }
+
+  function titleCaseName(value) {
+    return compact(value).toLowerCase().replace(/(^|[\s'’-])([a-zà-öø-ÿ])/g, (_, a, b) => a + b.toUpperCase());
+  }
+
+  function crewMembers(segment) {
+    const block = labelledText(segment, 'Crew On Board', ['Transfer Note', 'A/C Phone', 'Activity Note', 'Day Note']);
+    if (!block) return [];
+    const marker = /\b(CPT|FO|FA\d+|SCCM|CCM|PUR|PU)\s*-\s*([A-Z0-9]{2,6})\s+/gi;
+    const matches = [];
+    let m;
+    while ((m = marker.exec(block)) !== null) {
+      matches.push({ index: m.index, end: marker.lastIndex, role: upper(m[1]), code: upper(m[2]) });
+    }
+    return matches.map((item, i) => {
+      let chunk = block.slice(item.end, matches[i + 1]?.index ?? block.length);
+      chunk = chunk
+        .replace(/\s+[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}.*$/i, '')
+        .replace(/\s+\+?\d[\d\s().-]{7,}\d.*$/i, '')
+        .trim();
+      const parts = chunk.split(',').map(compact);
+      const name = parts.length >= 2
+        ? `${titleCaseName(parts.slice(1).join(' '))} ${titleCaseName(parts[0])}`.trim()
+        : titleCaseName(chunk);
+      return { role: item.role, code: item.code, name };
+    }).filter(c => c.name);
   }
 
   function category(code, desc, segment) {
@@ -165,6 +259,14 @@
     const station = stationFrom(segment);
     const route = ['FLIGHT', 'POSITIONING'].includes(cat) && dep && arr ? `${dep} → ${arr}` : '';
 
+    const activityNote = labelledText(segment, 'Activity Note', NOTE_STOPS);
+    const dayNote = labelledText(segment, 'Day Note', NOTE_STOPS);
+    const transferNote = labelledText(segment, 'Transfer Note', NOTE_STOPS);
+    const pickup = pickupFrom(transferNote);
+    const aircraft = aircraftDetails(segment);
+    const crew = crewMembers(segment);
+    const hotel = cat === 'HOTEL' ? hotelName(segment) : '';
+
     let timeText = '';
     if (['FLIGHT', 'POSITIONING'].includes(cat)) {
       const ci = checkIn?.localTime || '';
@@ -182,12 +284,14 @@
       dep ? `DEP: ${dep}` : '',
       arr ? `ARR: ${arr}` : '',
       station && !dep ? `STATION: ${station}` : '',
-      checkIn ? `CHECK-IN LT: ${checkIn.dateISO} ${checkIn.localTime}` : '',
-      `START LT: ${start.dateISO} ${start.localTime}`,
-      start.utcTime ? `START UTC: ${start.utcDateISO} ${start.utcTime}` : '',
-      end ? `END LT: ${end.dateISO} ${end.localTime}` : '',
-      end?.utcTime ? `END UTC: ${end.utcDateISO} ${end.utcTime}` : '',
-      checkOut ? `CHECK-OUT LT: ${checkOut.dateISO} ${checkOut.localTime}` : ''
+      checkIn ? `CHECK-IN LT: ${stamp(checkIn)}` : '',
+      `START LT: ${stamp(start)}`,
+      start.utcTime ? `START UTC: ${utcStamp(start)}` : '',
+      end ? `END LT: ${stamp(end)}` : '',
+      end?.utcTime ? `END UTC: ${utcStamp(end)}` : '',
+      checkOut ? `CHECK-OUT LT: ${stamp(checkOut)}` : '',
+      pickup ? `PICKUP: ${pickup}` : '',
+      aircraft.reg ? `AIRCRAFT: ${aircraft.reg}` : ''
     ].filter(Boolean);
 
     const sig = [
@@ -214,31 +318,48 @@
       code: upper(code),
       description: desc,
       station,
+      hotelName: hotel,
+      pickup,
+      transferNote,
+      activityNote,
+      dayNote,
+      aircraftReg: aircraft.reg,
+      aircraftType: aircraft.type,
+      aircraftVersion: aircraft.version,
+      aircraftPhone: aircraft.phone,
+      crew,
       rawText: compact([
         upper(code),
         desc,
         route,
         checkIn ? `CI ${checkIn.localTime}` : '',
-        `START ${start.dateISO} ${start.localTime}`,
-        end ? `END ${end.dateISO} ${end.localTime}` : ''
+        `START ${stamp(start)}`,
+        end ? `END ${stamp(end)}` : ''
       ].filter(Boolean).join(' • '))
     };
   }
 
+  function richness(a) {
+    return [a.transferNote, a.activityNote, a.dayNote, a.pickup, a.aircraftReg, a.aircraftPhone]
+      .reduce((n, v) => n + (v ? String(v).length : 0), 0) + a.crew.length * 50;
+  }
+
   function extractActivities() {
-    const found = [];
-    const seen = new Set();
+    const bySignature = new Map();
 
     activityTables().forEach((table, sourceIndex) => {
       const text = compact(table.innerText || table.textContent);
       splitLogicalActivities(text).forEach((logical, logicalIndex) => {
         const activity = parseLogicalActivity(logical.code, logical.segment, sourceIndex, logicalIndex);
-        if (!activity || seen.has(activity.sig)) return;
-        seen.add(activity.sig);
-        found.push(activity);
+        if (!activity) return;
+        const existing = bySignature.get(activity.sig);
+        if (!existing || richness(activity) > richness(existing)) {
+          bySignature.set(activity.sig, activity);
+        }
       });
     });
 
+    const found = Array.from(bySignature.values());
     found.sort((a, b) =>
       a.dateISO.localeCompare(b.dateISO) ||
       a.start.localTime.localeCompare(b.start.localTime) ||
@@ -284,6 +405,37 @@
     return ['HOTEL', 'EXPENSE', 'RELOCATION'].includes(cat);
   }
 
+  function publicActivity(a) {
+    return {
+      id: a.sig,
+      code: a.code,
+      category: a.category,
+      title: a.title,
+      description: a.description || '',
+      route: a.route || '',
+      station: a.station || '',
+      checkInLT: stamp(a.checkIn),
+      checkInUTC: utcStamp(a.checkIn),
+      startLT: stamp(a.start),
+      startUTC: utcStamp(a.start),
+      endLT: stamp(a.end),
+      endUTC: utcStamp(a.end),
+      checkOutLT: stamp(a.checkOut),
+      checkOutUTC: utcStamp(a.checkOut),
+      hotelName: a.hotelName || '',
+      pickup: a.pickup || '',
+      transferNote: a.transferNote || '',
+      activityNote: a.activityNote || '',
+      dayNote: a.dayNote || '',
+      aircraftReg: a.aircraftReg || '',
+      aircraftType: a.aircraftType || '',
+      aircraftVersion: a.aircraftVersion || '',
+      aircraftPhone: a.aircraftPhone || '',
+      crew: a.crew || [],
+      rawText: a.rawText || ''
+    };
+  }
+
   function groupDays(activities) {
     const map = new Map();
     for (const a of activities) {
@@ -305,6 +457,12 @@
         ? `${first.start.localTime}${last?.end?.localTime ? `–${last.end.localTime}` : ''}`
         : '';
 
+      const activeHotels = activities.filter(a =>
+        a.category === 'HOTEL' &&
+        a.start?.dateISO <= dateISO &&
+        (a.end?.dateISO || a.start.dateISO) >= dateISO
+      );
+
       return {
         id: `d-${dateISO}`,
         index: dayIndex,
@@ -315,7 +473,9 @@
         route: combineRoute(displayItems),
         timeText: `${ci ? `CI ${ci}  •  ` : ''}${span}`,
         rawText: items.map(i => i.rawText).join('\n'),
-        cells: items.flatMap((i, n) => [`ACTIVITY ${n + 1}: ${i.title}`, ...i.cells])
+        cells: items.flatMap((i, n) => [`ACTIVITY ${n + 1}: ${i.title}`, ...i.cells]),
+        activities: items.map(publicActivity),
+        activeHotels: activeHotels.map(publicActivity)
       };
     }).sort((a, b) => a.dateISO.localeCompare(b.dateISO));
   }
@@ -338,7 +498,7 @@
 
     return {
       isValid: ok,
-      parser: 'raido-logical-activity-2.3',
+      parser: 'raido-logical-activity-2.4',
       month: monthPrefix || (b.days[0]?.dateISO.slice(0, 7) || ''),
       datedRows: b.days.length,
       message: ok
@@ -352,12 +512,12 @@
     const v = validation(b);
     if (!v.isValid) return;
 
-    const digest = hash(b.activities.map(a => a.sig).join('\n'));
+    const digest = hash(b.activities.map(a => `${a.sig}|${a.transferNote}|${a.activityNote}|${a.dayNote}|${a.aircraftReg}`).join('\n'));
     if (digest === lastDigest) return;
     lastDigest = digest;
 
     window.webkit.messageHandlers.rosterCache.postMessage({
-      version: 2.3,
+      version: 2.4,
       parser: v.parser,
       sourceURL: location.origin + location.pathname,
       pageTitle: document.title || 'RAIDO',
@@ -406,10 +566,12 @@
   }
 
   function redact(text) {
-    return compact(text)
+    return cleanNote(text)
       .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
       .replace(/\+\d[\d\s().-]{7,}\d/g, '[phone]')
-      .replace(/https?:\/\/\S+/gi, '[url]');
+      .replace(/https?:\/\/\S+/gi, '[url]')
+      .replace(/(booking ref\.?\s*:?\s*)[A-Z0-9-]+/gi, '$1[redacted]')
+      .replace(/(Reservation(?:No| number)?\s*:?\s*)[A-Z0-9-]{5,}/gi, '$1[redacted]');
   }
 
   function diagnostics() {
@@ -426,14 +588,31 @@
         parsedDayCount: b.days.length,
         validation: validation(b),
         todayISO: `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`,
-        parsedDays: b.days.slice(0, 40),
-        logicalActivities: b.activities.slice(0, 80).map(a => ({
+        parsedDays: b.days.slice(0, 40).map(d => ({
+          id: d.id,
+          dateISO: d.dateISO,
+          category: d.category,
+          title: d.title,
+          route: d.route,
+          timeText: d.timeText,
+          activityCount: d.activities.length,
+          activeHotels: d.activeHotels.map(h => h.hotelName || h.title)
+        })),
+        logicalActivities: b.activities.slice(0, 90).map(a => ({
           dateISO: a.dateISO,
           code: a.code,
           category: a.category,
           title: a.title,
           route: a.route,
           timeText: a.timeText,
+          pickup: a.pickup,
+          hasTransferNote: !!a.transferNote,
+          transferNotePreview: redact(a.transferNote).slice(0, 350),
+          hasActivityNote: !!a.activityNote,
+          hasDayNote: !!a.dayNote,
+          aircraftReg: a.aircraftReg,
+          aircraftType: a.aircraftType,
+          crewCount: a.crew.length,
           rawText: redact(a.rawText)
         }))
       }, null, 2);
