@@ -27,6 +27,14 @@ if [[ ! -d "$APP" ]]; then
   exit 1
 fi
 
+# Xcode's generated plist does not reliably materialize custom INFOPLIST_KEY_*
+# values in unsigned command-line builds. Inject the EventKit purpose strings
+# into the final unsigned bundle before SideStore/AltStore signs it.
+/usr/libexec/PlistBuddy -c "Delete :NSCalendarsFullAccessUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Add :NSCalendarsFullAccessUsageDescription string Allow RAIDO Roster to add and update your duty schedule in Calendar." "$APP/Info.plist"
+/usr/libexec/PlistBuddy -c "Delete :NSCalendarsUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Add :NSCalendarsUsageDescription string Allow RAIDO Roster to add and update your duty schedule in Calendar." "$APP/Info.plist"
+
 mkdir -p "$ROOT/Payload"
 cp -R "$APP" "$ROOT/Payload/"
 (
