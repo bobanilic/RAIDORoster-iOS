@@ -35,6 +35,8 @@ web = web.replace(auto_jump, "", 1)
 WEB.write_text(web)
 
 js = JS.read_text()
+# Remove the stale call in the script's already-loaded guard as well.
+js = js.replace("    window.RAIDOPlus.goToday();\n", "", 1)
 start_marker = "  function todayToken() {"
 end_marker = "  function redact(text) {"
 if start_marker in js and end_marker in js:
