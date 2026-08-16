@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = '2.2.0';
+  const VERSION = '2.3.0';
   if (window.RAIDOPlus?.version === VERSION) {
     window.RAIDOPlus.extractNow();
     window.RAIDOPlus.goToday();
@@ -13,6 +13,7 @@
   const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   const MONTH_NAMES = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
   const WEEKDAYS = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+
   const compact = v => (v || '').replace(/\s+/g, ' ').trim();
   const upper = v => compact(v).toUpperCase();
   const pad2 = n => String(n).padStart(2, '0');
@@ -27,11 +28,15 @@
   }
 
   function pageMonth() {
-    const text = upper(document.body?.innerText || '').slice(0, 70000);
+    const text = upper(document.body?.innerText || '').slice(0, 100000);
     const m = text.match(/\b(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+(20\d{2})\b/);
     if (!m) return null;
     const month = MONTH_NAMES.indexOf(m[1]) + 1;
-    return { year: Number(m[2]), month, label: `${MONTH_NAMES[month - 1][0]}${MONTH_NAMES[month - 1].slice(1).toLowerCase()} ${m[2]}` };
+    return {
+      year: Number(m[2]),
+      month,
+      label: `${MONTH_NAMES[month - 1][0]}${MONTH_NAMES[month - 1].slice(1).toLowerCase()} ${m[2]}`
+    };
   }
 
   function parseDateToken(day, mon, yy) {
@@ -56,117 +61,209 @@
     const local = parseDateToken(m[1], m[2], m[3]);
     if (!local) return null;
     const utc = m[5] ? parseDateToken(m[5], m[6], m[7]) : null;
-    return { parts: local, dateISO: local.iso, localTime: m[4], utcDateISO: utc?.iso || '', utcTime: m[8] || '' };
+    return {
+      parts: local,
+      dateISO: local.iso,
+      localTime: m[4],
+      utcDateISO: utc?.iso || '',
+      utcTime: m[8] || ''
+    };
   }
 
   function activityTables() {
     return Array.from(document.querySelectorAll('table.activity-table'));
   }
 
-  function cells(row) {
-    return Array.from(row.children || [])
-      .filter(el => el.tagName === 'TD' || el.tagName === 'TH')
-      .map(el => compact(el.innerText || el.textContent));
+  function markerMatches(text) {
+    const re = /\bActivity\s+([A-Z0-9][A-Z0-9 ]{0,11}?)(?=,|\s+Departure\b)/gi;
+    const out = [];
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const code = compact(m[1]);
+      if (!code || /^(NOTE|CIS|INFO)$/i.test(code)) continue;
+      out.push({ index: m.index, code });
+    }
+    return out;
   }
 
-  function key(text) {
-    const k = upper(text).replace(/[^A-Z]/g, '');
-    if (k === 'ACTIVITY' || k === 'ACT') return 'ACTIVITY';
-    if (k === 'CHECKIN') return 'CI';
-    if (k === 'DEPARTURE') return 'DEP';
-    if (k === 'ARRIVAL') return 'ARR';
-    return k;
+  function splitLogicalActivities(text) {
+    const markers = markerMatches(text);
+    return markers.map((m, i) => ({
+      code: m.code,
+      segment: text.slice(m.index, markers[i + 1]?.index ?? text.length)
+    }));
   }
 
-  function fieldsFor(table) {
-    const rows = Array.from(table.querySelectorAll(':scope > tbody > tr, :scope > thead > tr, :scope > tr'));
-    const parsed = rows.map(r => cells(r)).filter(r => r.length);
-    if (parsed.length < 2) return { fields: {}, headers: [], values: [] };
-    let headerIndex = parsed.findIndex(r => r.map(key).includes('ACTIVITY'));
-    if (headerIndex < 0) headerIndex = 0;
-    const headers = parsed[headerIndex].map(key);
-    const values = parsed.slice(headerIndex + 1).find(r => r.length >= 2) || [];
-    const fields = {};
-    headers.forEach((h, i) => { if (h) fields[h] = compact(values[i] || ''); });
-    return { fields, headers, values };
+  function airportAfter(segment, label) {
+    const re = new RegExp(`\\b${label}\\s+([A-Z]{3})\\s+-`, 'i');
+    return upper(segment).match(re)?.[1] || '';
   }
 
-  function clock(v) {
-    let m = compact(v).match(/\b([01]\d|2[0-3])([0-5]\d)\b/);
-    if (m) return `${m[1]}:${m[2]}`;
-    m = compact(v).match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
-    return m ? `${pad2(Number(m[1]))}:${m[2]}` : '';
+  function stationFrom(segment) {
+    return upper(segment).match(/\bStation\s+([A-Z]{3})\s+-/i)?.[1] || '';
   }
 
-  function airport(v) {
-    return upper(v).match(/\b([A-Z]{3})\b/)?.[1] || '';
+  function hotelName(segment) {
+    const m = compact(segment).match(/\bHotel\s+(.{2,100}?)(?=\s+ReservationNo\b|\s+Comment\b|\s+Station\b)/i);
+    return m ? compact(m[1]) : '';
   }
 
-  function activityName(fields, text) {
-    let name = compact(fields.ACTIVITY || '');
-    if (name) name = name.split(/\s+Activity\s+/i)[0].trim();
-    if (!name) name = compact(text).match(/\bActivity\s+([^,]{1,50}),/i)?.[1] || '';
-    return compact(name);
+  function description(segment, code) {
+    const escaped = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`\\bActivity\\s+${escaped}\\s*,\\s*([^\\n]{1,90}?)(?=\\s+(?:Departure|Arrival|Station|CheckIn|Start|End|CheckOut|Hotel|ReservationNo|Station Category|Roster Designators|Activity Note|Day Note|Transfer Note|Crew On Board|STC|Aircraft Reg|A\\/C Phone)\\b|$)`, 'i');
+    return compact(segment).match(re)?.[1] || '';
   }
 
-  function category(activity, fields, text) {
-    const a = upper(activity);
-    const t = upper(`${activity} ${text}`);
-    if (/\bDND\b/.test(t)) return 'DND';
-    if (/\b(VAC|VACATION|HOLIDAY|HOL)\b/.test(t)) return 'VACATION';
-    if (/\bLEAVE\b/.test(t)) return 'LEAVE';
-    if (/\bREST\b/.test(t)) return 'REST';
-    if (/\bOFF(?:\s*D)?\b/.test(a) || /\bDAY OFF\b/.test(t)) return 'OFF';
-    if (/\b(TRAINING|TRAIN|SIM|SIMULATOR|RECURRENT)\b/.test(t)) return 'TRAINING';
-    if (/\b(POSITIONING|POSITION|POS|DEADHEAD|DEAD[- ]?HEAD|DH)\b/.test(t)) return 'POSITIONING';
-    if (/\b(STANDBY|STBY|SBY|STB)\b/.test(t)) return 'STANDBY';
-    if (/\b(RESERVE|RES)\b/.test(t)) return 'RESERVE';
-    const dep = airport(fields.DEP), arr = airport(fields.ARR);
-    if (dep && arr && dep !== arr) return 'FLIGHT';
-    if (/\b(FLT|FLIGHT|DUTY|FDP|SECTOR)\b/.test(t)) return 'FLIGHT';
-    if (/^[A-Z0-9]{2,3}\s?\d{2,4}[A-Z]?$/i.test(a)) return 'FLIGHT';
+  function category(code, desc, segment) {
+    const c = upper(code);
+    const d = upper(desc);
+
+    if (c === 'DND' || /\bDND\b/.test(d)) return 'DND';
+    if (/^(VAC|HOL)/.test(c) || /\b(VACATION|HOLIDAY)\b/.test(d)) return 'VACATION';
+    if (c.includes('LEAVE') || /\bLEAVE\b/.test(d)) return 'LEAVE';
+    if (c === 'REST' || /\bREST\b/.test(d)) return 'REST';
+    if (/^OFF/.test(c) || /\bDAY OFF\b/.test(d)) return 'OFF';
+    if (/^(SIM|TRN|TRAIN)/.test(c) || /\b(TRAINING|SIMULATOR|RECURRENT)\b/.test(d)) return 'TRAINING';
+    if (/^(POS|DH)$/.test(c) || /\b(AIR POSITIONING|POSITIONING|DEADHEAD)\b/.test(d)) return 'POSITIONING';
+    if (/^STB/.test(c) || /\bSTB\b|\bSTANDBY\b/.test(d)) return 'STANDBY';
+    if (c === 'RES' || /\bRESERVE\b/.test(d)) return 'RESERVE';
+    if (c === 'HTL' || /\bHOTEL\b/.test(d)) return 'HOTEL';
+    if (c === 'AEP' || /\bADD EXPENSES\b/.test(d)) return 'EXPENSE';
+    if (c === 'RLCN' || /\bHOTEL RELOCATION\b/.test(d)) return 'RELOCATION';
+    if (/^[A-Z0-9]{2,3}\d{2,4}[A-Z]?$/.test(c) || /\bDeparture\s+[A-Z]{3}\s+-/.test(segment)) return 'FLIGHT';
     return 'OTHER';
   }
 
-  function title(activity, cat) {
-    if (cat === 'FLIGHT') return activity && !/^(FLT|FLIGHT|DUTY|FDP)$/i.test(activity) ? activity : 'FLIGHT';
+  function titleFor(code, cat, desc, segment) {
+    if (cat === 'FLIGHT') return upper(code);
     if (cat === 'POSITIONING') return 'POSITIONING';
     if (cat === 'RESERVE') return 'RESERVE';
-    if (cat === 'STANDBY') return 'STANDBY';
+    if (cat === 'STANDBY') return upper(code).startsWith('STBM') ? 'STANDBY MORNING' : upper(code).startsWith('STBA') ? 'STANDBY AFTERNOON' : 'STANDBY';
     if (cat === 'OFF') return 'OFF';
     if (cat === 'DND') return 'DND';
     if (cat === 'REST') return 'REST';
     if (cat === 'VACATION') return 'VACATION';
     if (cat === 'LEAVE') return 'LEAVE';
-    return activity || cat;
+    if (cat === 'TRAINING') return 'TRAINING';
+    if (cat === 'HOTEL') return hotelName(segment) || 'HOTEL';
+    if (cat === 'EXPENSE') return 'EXPENSE';
+    if (cat === 'RELOCATION') return 'HOTEL RELOCATION';
+    return desc || upper(code) || 'OTHER';
   }
 
-  function parseActivity(table, index) {
-    const text = compact(table.innerText || table.textContent);
-    const start = parseMeta(text, 'Start');
+  function parseLogicalActivity(code, segment, sourceIndex, logicalIndex) {
+    const start = parseMeta(segment, 'Start');
     if (!start) return null;
-    const end = parseMeta(text, 'End');
-    const mapped = fieldsFor(table);
-    const f = mapped.fields;
-    const act = activityName(f, text);
-    const cat = category(act, f, text);
-    const dep = airport(f.DEP), arr = airport(f.ARR);
-    const route = ['FLIGHT','POSITIONING'].includes(cat) && dep && arr ? `${dep} → ${arr}` : '';
-    const ci = clock(f.CI), std = clock(f.STD), sta = clock(f.STA);
-    const timeText = [ci && ['FLIGHT','POSITIONING'].includes(cat) ? `CI ${ci}` : '', std && sta ? `${std}–${sta}` : `${start.localTime}–${end?.localTime || ''}`]
-      .filter(Boolean).join('  •  ');
-    const labelled = [];
-    mapped.headers.forEach((h, i) => { if (h && mapped.values[i]) labelled.push(`${h}: ${mapped.values[i]}`); });
-    labelled.push(`START LT: ${start.dateISO} ${start.localTime}`);
-    if (start.utcTime) labelled.push(`START UTC: ${start.utcDateISO} ${start.utcTime}`);
-    if (end?.localTime) labelled.push(`END LT: ${end.dateISO} ${end.localTime}`);
-    if (end?.utcTime) labelled.push(`END UTC: ${end.utcDateISO} ${end.utcTime}`);
-    const sig = `${start.dateISO}|${act}|${f.CI || ''}|${f.STD || ''}|${dep}|${arr}|${f.STA || ''}|${start.localTime}|${end?.localTime || ''}`;
-    return { index, dateISO: start.dateISO, dateText: displayDate(start.parts), category: cat, title: title(act, cat), route, timeText, rawText: text, cells: labelled, sig, start, end };
+
+    const end = parseMeta(segment, 'End');
+    const checkIn = parseMeta(segment, 'CheckIn');
+    const checkOut = parseMeta(segment, 'CheckOut');
+    const desc = description(segment, code);
+    const cat = category(code, desc, segment);
+    const dep = airportAfter(segment, 'Departure');
+    const arr = airportAfter(segment, 'Arrival');
+    const station = stationFrom(segment);
+    const route = ['FLIGHT', 'POSITIONING'].includes(cat) && dep && arr ? `${dep} → ${arr}` : '';
+
+    let timeText = '';
+    if (['FLIGHT', 'POSITIONING'].includes(cat)) {
+      const ci = checkIn?.localTime || '';
+      timeText = `${ci ? `CI ${ci}  •  ` : ''}${start.localTime}${end?.localTime ? `–${end.localTime}` : ''}`;
+    } else if (start.localTime) {
+      const sameDay = !end || start.dateISO === end.dateISO;
+      timeText = sameDay
+        ? `${start.localTime}${end?.localTime ? `–${end.localTime}` : ''}`
+        : `${start.localTime} → ${end?.dateISO || ''} ${end?.localTime || ''}`.trim();
+    }
+
+    const cells = [
+      `ACTIVITY: ${upper(code)}`,
+      desc ? `TYPE: ${desc}` : '',
+      dep ? `DEP: ${dep}` : '',
+      arr ? `ARR: ${arr}` : '',
+      station && !dep ? `STATION: ${station}` : '',
+      checkIn ? `CHECK-IN LT: ${checkIn.dateISO} ${checkIn.localTime}` : '',
+      `START LT: ${start.dateISO} ${start.localTime}`,
+      start.utcTime ? `START UTC: ${start.utcDateISO} ${start.utcTime}` : '',
+      end ? `END LT: ${end.dateISO} ${end.localTime}` : '',
+      end?.utcTime ? `END UTC: ${end.utcDateISO} ${end.utcTime}` : '',
+      checkOut ? `CHECK-OUT LT: ${checkOut.dateISO} ${checkOut.localTime}` : ''
+    ].filter(Boolean);
+
+    const sig = [
+      upper(code), start.dateISO, start.localTime,
+      end?.dateISO || '', end?.localTime || '',
+      dep, arr, cat
+    ].join('|');
+
+    return {
+      sourceIndex,
+      logicalIndex,
+      sig,
+      dateISO: start.dateISO,
+      dateText: displayDate(start.parts),
+      category: cat,
+      title: titleFor(code, cat, desc, segment),
+      route,
+      timeText,
+      cells,
+      start,
+      end,
+      checkIn,
+      checkOut,
+      code: upper(code),
+      description: desc,
+      station,
+      rawText: compact([
+        upper(code),
+        desc,
+        route,
+        checkIn ? `CI ${checkIn.localTime}` : '',
+        `START ${start.dateISO} ${start.localTime}`,
+        end ? `END ${end.dateISO} ${end.localTime}` : ''
+      ].filter(Boolean).join(' • '))
+    };
+  }
+
+  function extractActivities() {
+    const found = [];
+    const seen = new Set();
+
+    activityTables().forEach((table, sourceIndex) => {
+      const text = compact(table.innerText || table.textContent);
+      splitLogicalActivities(text).forEach((logical, logicalIndex) => {
+        const activity = parseLogicalActivity(logical.code, logical.segment, sourceIndex, logicalIndex);
+        if (!activity || seen.has(activity.sig)) return;
+        seen.add(activity.sig);
+        found.push(activity);
+      });
+    });
+
+    found.sort((a, b) =>
+      a.dateISO.localeCompare(b.dateISO) ||
+      a.start.localTime.localeCompare(b.start.localTime) ||
+      a.sourceIndex - b.sourceIndex
+    );
+    return found;
   }
 
   function priority(cat) {
-    return ({ FLIGHT:100, POSITIONING:90, TRAINING:80, RESERVE:70, STANDBY:60, OTHER:50, DND:30, REST:20, VACATION:20, LEAVE:20, OFF:10 })[cat] || 0;
+    return ({
+      FLIGHT: 100,
+      POSITIONING: 95,
+      TRAINING: 90,
+      RESERVE: 80,
+      STANDBY: 75,
+      RELOCATION: 55,
+      HOTEL: 30,
+      EXPENSE: 25,
+      OTHER: 20,
+      DND: 15,
+      REST: 10,
+      VACATION: 10,
+      LEAVE: 10,
+      OFF: 5
+    })[cat] || 0;
   }
 
   function combineRoute(items) {
@@ -174,13 +271,17 @@
     if (!routes.length) return '';
     const chain = [];
     for (const route of routes) {
-      const p = route.split(' → ');
-      if (p.length !== 2) continue;
-      if (!chain.length) chain.push(p[0], p[1]);
-      else if (chain[chain.length - 1] === p[0]) chain.push(p[1]);
-      else chain.push(p[0], p[1]);
+      const [a, b] = route.split(' → ');
+      if (!a || !b) continue;
+      if (!chain.length) chain.push(a, b);
+      else if (chain[chain.length - 1] === a) chain.push(b);
+      else if (!chain.includes(a) || chain[chain.length - 1] !== b) chain.push(a, b);
     }
     return chain.length >= 2 ? chain.join(' → ') : routes[0];
+  }
+
+  function isAuxiliary(cat) {
+    return ['HOTEL', 'EXPENSE', 'RELOCATION'].includes(cat);
   }
 
   function groupDays(activities) {
@@ -189,52 +290,60 @@
       if (!map.has(a.dateISO)) map.set(a.dateISO, []);
       map.get(a.dateISO).push(a);
     }
-    return Array.from(map.entries()).map(([dateISO, items]) => {
-      items.sort((a,b) => a.index - b.index);
-      const primary = [...items].sort((a,b) => priority(b.category) - priority(a.category))[0].category;
-      const names = Array.from(new Set(items.map(i => i.title).filter(Boolean)));
-      const first = items[0], last = items[items.length - 1];
-      const ci = items.map(i => i.timeText.match(/\bCI\s+(\d{2}:\d{2})/)?.[1]).find(Boolean) || '';
-      const span = first.start?.localTime && last.end?.localTime ? `${first.start.localTime}–${last.end.localTime}` : first.timeText;
+
+    return Array.from(map.entries()).map(([dateISO, items], dayIndex) => {
+      items.sort((a, b) => a.start.localTime.localeCompare(b.start.localTime));
+      const primary = [...items].sort((a, b) => priority(b.category) - priority(a.category))[0];
+      const meaningful = items.filter(i => !isAuxiliary(i.category));
+      const displayItems = meaningful.length ? meaningful : items;
+      const names = Array.from(new Set(displayItems.map(i => i.title).filter(Boolean)));
+
+      const first = displayItems[0] || items[0];
+      const last = displayItems[displayItems.length - 1] || items[items.length - 1];
+      const ci = displayItems.map(i => i.checkIn?.localTime).find(Boolean) || '';
+      const span = first?.start?.localTime
+        ? `${first.start.localTime}${last?.end?.localTime ? `–${last.end.localTime}` : ''}`
+        : '';
+
       return {
         id: `d-${dateISO}`,
-        index: first.index,
+        index: dayIndex,
         dateISO,
         dateText: first.dateText,
-        category: primary,
-        title: names.slice(0, 4).join(' + ') || primary,
-        route: combineRoute(items),
+        category: primary.category,
+        title: names.slice(0, 5).join(' + ') || primary.title,
+        route: combineRoute(displayItems),
         timeText: `${ci ? `CI ${ci}  •  ` : ''}${span}`,
-        rawText: items.map((i,n) => `ACTIVITY ${n + 1}: ${i.rawText}`).join('\n\n'),
-        cells: items.flatMap((i,n) => [`ACTIVITY ${n + 1}: ${i.title}`, ...i.cells])
+        rawText: items.map(i => i.rawText).join('\n'),
+        cells: items.flatMap((i, n) => [`ACTIVITY ${n + 1}: ${i.title}`, ...i.cells])
       };
-    }).sort((a,b) => a.dateISO.localeCompare(b.dateISO));
+    }).sort((a, b) => a.dateISO.localeCompare(b.dateISO));
   }
 
   function build() {
+    const month = pageMonth();
     const tables = activityTables();
-    const activities = [];
-    const seen = new Set();
-    tables.forEach((table, index) => {
-      const a = parseActivity(table, index);
-      if (!a || seen.has(a.sig)) return;
-      seen.add(a.sig);
-      activities.push(a);
-    });
-    activities.sort((a,b) => a.dateISO === b.dateISO ? a.index - b.index : a.dateISO.localeCompare(b.dateISO));
-    return { month: pageMonth(), tables, activities, days: groupDays(activities) };
+    const activities = extractActivities();
+    const days = groupDays(activities);
+    return { month, tables, activities, days };
   }
 
   function validation(b) {
-    const other = b.activities.filter(a => a.category === 'OTHER').length;
-    const ratio = b.tables.length ? b.activities.length / b.tables.length : 0;
-    const ok = b.days.length >= 5 && b.activities.length >= 5 && ratio >= 0.65 && other <= Math.max(4, Math.floor(b.activities.length * 0.35));
+    const monthPrefix = b.month ? `${b.month.year}-${pad2(b.month.month)}` : '';
+    const monthDays = monthPrefix ? b.days.filter(d => d.dateISO.startsWith(monthPrefix)).length : b.days.length;
+    const operational = b.activities.filter(a => ['FLIGHT','POSITIONING','RESERVE','STANDBY','OFF','DND','TRAINING'].includes(a.category)).length;
+    const ok = b.days.length >= 5 && b.activities.length >= 5 && operational >= 3;
+    const expected = b.month ? new Date(b.month.year, b.month.month, 0).getDate() : 0;
+    const coverage = expected ? Math.round((monthDays / expected) * 100) : 0;
+
     return {
       isValid: ok,
-      parser: 'raido-activity-table-2.2',
-      month: b.month ? `${b.month.year}-${pad2(b.month.month)}` : (b.days[0]?.dateISO.slice(0,7) || ''),
+      parser: 'raido-logical-activity-2.3',
+      month: monthPrefix || (b.days[0]?.dateISO.slice(0, 7) || ''),
       datedRows: b.days.length,
-      message: ok ? `${b.activities.length} RAIDO activities recognized across ${b.days.length} roster days` : `Parsed ${b.activities.length}/${b.tables.length} activity tables`
+      message: ok
+        ? `${b.activities.length} activities across ${b.days.length} dated days${coverage ? ` • ${coverage}% current-month coverage` : ''}`
+        : `Parser found ${b.activities.length} activities across ${b.days.length} days`
     };
   }
 
@@ -242,11 +351,13 @@
     if (!window.webkit?.messageHandlers?.rosterCache) return;
     const v = validation(b);
     if (!v.isValid) return;
-    const digest = hash(b.activities.map(a => `${a.sig}|${a.rawText}`).join('\n'));
+
+    const digest = hash(b.activities.map(a => a.sig).join('\n'));
     if (digest === lastDigest) return;
     lastDigest = digest;
+
     window.webkit.messageHandlers.rosterCache.postMessage({
-      version: 2.2,
+      version: 2.3,
       parser: v.parser,
       sourceURL: location.origin + location.pathname,
       pageTitle: document.title || 'RAIDO',
@@ -264,19 +375,47 @@
   function goToday() {
     try {
       const token = todayToken();
-      const target = activityTables().find(t => upper(t.innerText || t.textContent).includes(`START ${token}`));
+      const tables = activityTables();
+      let target = tables.find(t => {
+        const text = upper(t.innerText || t.textContent);
+        return text.includes(`CHECKIN ${token}`) || text.includes(`START ${token}`);
+      });
+
+      if (!target) {
+        const built = build();
+        const now = new Date();
+        const todayISO = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+        const hit = built.activities.find(a => a.dateISO === todayISO);
+        if (hit) target = tables[hit.sourceIndex];
+      }
+
       if (!target) return false;
       target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      const old = target.style.outline;
+      const oldOutline = target.style.outline;
+      const oldOffset = target.style.outlineOffset;
       target.style.outline = '3px solid #0A84FF';
-      setTimeout(() => { target.style.outline = old; }, 1200);
+      target.style.outlineOffset = '2px';
+      setTimeout(() => {
+        target.style.outline = oldOutline;
+        target.style.outlineOffset = oldOffset;
+      }, 2200);
       return true;
-    } catch (_) { return false; }
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function redact(text) {
+    return compact(text)
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
+      .replace(/\+\d[\d\s().-]{7,}\d/g, '[phone]')
+      .replace(/https?:\/\/\S+/gi, '[url]');
   }
 
   function diagnostics() {
     try {
       const b = build();
+      const now = new Date();
       return JSON.stringify({
         diagnosticVersion: VERSION,
         title: document.title || '',
@@ -285,38 +424,55 @@
         activityTableCount: b.tables.length,
         parsedActivityCount: b.activities.length,
         parsedDayCount: b.days.length,
-        parsedDays: b.days.slice(0, 20),
-        tables: b.tables.slice(0, 40).map((table, index) => {
-          const text = compact(table.innerText || table.textContent);
-          const mapped = fieldsFor(table);
-          return { index, className: compact(table.className || ''), headers: mapped.headers, values: mapped.values, start: parseMeta(text,'Start'), end: parseMeta(text,'End'), textSample: text.slice(0,900) };
-        })
+        validation: validation(b),
+        todayISO: `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`,
+        parsedDays: b.days.slice(0, 40),
+        logicalActivities: b.activities.slice(0, 80).map(a => ({
+          dateISO: a.dateISO,
+          code: a.code,
+          category: a.category,
+          title: a.title,
+          route: a.route,
+          timeText: a.timeText,
+          rawText: redact(a.rawText)
+        }))
       }, null, 2);
-    } catch (e) { return JSON.stringify({ diagnosticVersion: VERSION, error: String(e) }, null, 2); }
+    } catch (error) {
+      return JSON.stringify({ diagnosticVersion: VERSION, error: String(error) }, null, 2);
+    }
   }
 
   function extractNow() {
     try {
       const b = build();
-      if (b.days.length >= 5) post(b);
+      post(b);
       goToday();
     } catch (_) {}
   }
 
   function schedule() {
     clearTimeout(timer);
-    timer = setTimeout(extractNow, 450);
+    timer = setTimeout(extractNow, 650);
   }
 
   function start() {
     extractNow();
     if (!observer && document.documentElement) {
       observer = new MutationObserver(schedule);
-      observer.observe(document.documentElement, { subtree:true, childList:true, characterData:true });
+      observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
     }
   }
 
-  window.RAIDOPlus = { version: VERSION, extractNow, goToday, diagnostics };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once:true });
-  else start();
+  window.RAIDOPlus = {
+    version: VERSION,
+    extractNow,
+    goToday,
+    diagnostics
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else {
+    start();
+  }
 })();
