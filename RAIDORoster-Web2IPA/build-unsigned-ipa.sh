@@ -11,6 +11,7 @@ mkdir -p "$BUILD/Products" "$BUILD/Intermediates"
 
 python3 "$ROOT/v25_patch.py"
 python3 "$ROOT/v26_patch.py"
+python3 "$ROOT/v27_patch.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
