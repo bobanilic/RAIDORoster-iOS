@@ -13,6 +13,7 @@ python3 "$ROOT/v25_patch.py"
 python3 "$ROOT/v26_patch.py"
 python3 "$ROOT/v27_patch.py"
 python3 "$ROOT/v28_patch.py"
+python3 "$ROOT/v29_patch.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
