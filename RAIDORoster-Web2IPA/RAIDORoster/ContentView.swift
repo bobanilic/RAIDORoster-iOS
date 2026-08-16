@@ -47,6 +47,14 @@ struct RosterActivity: Codable, Equatable, Identifiable {
     var localCheckInTime: String { clockPart(checkInLT) }
     var localCheckOutTime: String { clockPart(checkOutLT) }
 
+    var timeText: String {
+        let span = [localStartTime, localEndTime].filter { !$0.isEmpty }.joined(separator: "–")
+        if !localCheckInTime.isEmpty && ["FLIGHT", "POSITIONING"].contains(category.uppercased()) {
+            return "CI \(localCheckInTime)  •  \(span)"
+        }
+        return span
+    }
+
     var aircraftDisplay: String {
         var pieces: [String] = []
         if !aircraftReg.isEmpty { pieces.append(aircraftReg) }
@@ -900,7 +908,7 @@ struct LogisticsCard: View {
                 )
             }
 
-            ForEach(item.activityList.filter { $0.category.uppercased() == "RELOCATION" }) { relocation in
+            ForEach(item.activityList.filter { $0.category.uppercased() == "RELOCATION" }, id: \.id) { relocation in
                 InfoRow(icon: "arrow.left.arrow.right", title: "Hotel relocation", value: relocation.timeText)
             }
 
@@ -981,7 +989,7 @@ struct CrewCard: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ForEach(Array(item.crewMembers.enumerated()), id: \.element.id) { index, member in
+            ForEach(Array(item.crewMembers.enumerated()), id: \.offset) { index, member in
                 HStack(spacing: 12) {
                     Text(member.role)
                         .font(.caption.bold())
@@ -1248,8 +1256,8 @@ private func categoryColor(_ category: String) -> Color {
 private func timelineIcon(_ category: String) -> String {
     switch category.uppercased() {
     case "POSITIONING": return "airplane.circle"
-    case "RESERVE": return "clock.badge.questionmark"
-    case "STANDBY": return "clock.badge"
+    case "RESERVE": return "clock"
+    case "STANDBY": return "clock"
     case "TRAINING": return "graduationcap"
     case "OFF": return "moon.zzz"
     default: return "circle"
