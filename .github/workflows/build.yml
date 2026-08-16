@@ -13,16 +13,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct source archive
-        run: |
-          python3 - <<'PY'
-          import base64
-          from pathlib import Path
-          data = Path('RAIDORoster-Web2IPA.zip.b64').read_text().strip()
-          Path('source.zip').write_bytes(base64.b64decode(data))
-          PY
-          unzip -q source.zip
-
       - name: Build unsigned IPA
         run: |
           cd RAIDORoster-Web2IPA
@@ -32,7 +22,7 @@ jobs:
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: RAIDORoster-unsigned-IPA
+          name: RAIDORoster-V2.1-unsigned-IPA
           path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
