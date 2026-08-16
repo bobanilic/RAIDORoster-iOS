@@ -1,0 +1,38 @@
+name: Build unsigned IPA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct source archive
+        run: |
+          python3 - <<'PY'
+          import base64
+          from pathlib import Path
+          data = Path('RAIDORoster-Web2IPA.zip.b64').read_text().strip()
+          Path('source.zip').write_bytes(base64.b64decode(data))
+          PY
+          unzip -q source.zip
+
+      - name: Build unsigned IPA
+        run: |
+          cd RAIDORoster-Web2IPA
+          chmod +x build-unsigned-ipa.sh
+          ./build-unsigned-ipa.sh
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: RAIDORoster-unsigned-IPA
+          path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
