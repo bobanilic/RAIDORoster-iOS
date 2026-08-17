@@ -18,6 +18,7 @@ python3 "$ROOT/v29c_fix.py"
 python3 "$ROOT/v210_patch.py"
 python3 "$ROOT/v2101_patch.py"
 python3 "$ROOT/v2102_patch.py"
+python3 "$ROOT/v211_patch.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
