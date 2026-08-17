@@ -22,7 +22,7 @@ jobs:
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: RAIDORoster-V2.11-unsigned-IPA
+          name: RAIDORoster-V2.11.1-unsigned-IPA
           path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
