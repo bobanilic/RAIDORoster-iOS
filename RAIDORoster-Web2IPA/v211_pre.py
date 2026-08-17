@@ -5,7 +5,7 @@ CONTENT = ROOT / "RAIDORoster" / "ContentView.swift"
 
 content = CONTENT.read_text()
 start_marker = "struct RosterDetailView: View {"
-end_marker = "struct CategoryBadge: View {"
+end_marker = "struct PersonalDutyNoteCard: View {"
 
 if start_marker not in content or end_marker not in content:
     raise RuntimeError("V2.11 prepatch detail markers not found")
@@ -13,8 +13,8 @@ if start_marker not in content or end_marker not in content:
 prefix, tail = content.split(start_marker, 1)
 _, suffix = tail.split(end_marker, 1)
 
-# Normalize only RosterDetailView to the V2.8 body expected by v211_patch.py.
-# V2.5 Calendar state/chrome is restored immediately afterward by v211_post.py.
+# Normalize RosterDetailView only. Preserve PersonalDutyNoteCard and everything
+# after it; V2.5 Calendar state/chrome is restored by v211_post.py.
 normalized_detail = '''
     let item: RosterItem
 
