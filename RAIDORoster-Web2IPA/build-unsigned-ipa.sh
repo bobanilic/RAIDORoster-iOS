@@ -24,6 +24,7 @@ python3 "$ROOT/v211_post.py"
 python3 "$ROOT/v211_swift_fix.py"
 python3 "$ROOT/v2111_patch.py"
 python3 "$ROOT/v2112_patch.py"
+python3 "$ROOT/v2113_patch.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
