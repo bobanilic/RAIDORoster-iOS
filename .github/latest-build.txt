@@ -1,6 +1,6 @@
-version=2.11.11
-build=24
-run_id=32186888540
-artifact_id=9342802716
-artifact_digest=2ec59ea9a39e88f7cad9c041eb42417321f42cc146745d468ebb1cc7c05b9340
-commit=3a49cdd7af3104fb36ea7b9409d8a33360de407d
+version=2.11.12
+build=25
+run_id=32187559919
+artifact_id=9343054234
+artifact_digest=b802c15ee3ad1e4e46e78e325b473e8579fbcc5a01614f12b96f816e5abf5ee1
+commit=9bb33d906a65807a752df8cf545ff7e1b05f735c
