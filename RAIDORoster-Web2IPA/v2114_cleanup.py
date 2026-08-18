@@ -32,26 +32,13 @@ if "struct CrewHistoryOccurrence:" in content:
 content = content.replace(
     '    @Published private(set) var crewHistoryMonths: [String: CrewHistoryMonth] = [:]\n',
     '',
-    1,
 )
 
-old_init = '''    init() {
-        load()
-        loadChangeState()
-        // V2.11.3 retires historical crew counting and removes any previously
-        // generated archive from this device.
-        crewHistoryMonths = []
-        try? FileManager.default.removeItem(at: crewHistoryURL)
-    }
-'''
-new_init = '''    init() {
-        load()
-        loadChangeState()
-        try? FileManager.default.removeItem(at: storageFolderURL.appendingPathComponent("crew-history.json"))
-    }
-'''
-if old_init in content:
-    content = content.replace(old_init, new_init, 1)
+# V2.11.3 may generate either [] or [:] depending on the intermediate source.
+# Remove every stale assignment/reference rather than relying on one exact init.
+content = content.replace('        crewHistoryMonths = []\n', '')
+content = content.replace('        crewHistoryMonths = [:]\n', '')
+content = content.replace('        try? FileManager.default.removeItem(at: crewHistoryURL)\n', '')
 
 if "    func crewHistory(for member: CrewMember)" in content:
     content = replace_between(
@@ -61,13 +48,6 @@ if "    func crewHistory(for member: CrewMember)" in content:
         "",
         "crew history lookup",
     )
-
-content = content.replace('        crewHistoryMonths = []\n', '', 1)
-content = content.replace(
-    '        try? FileManager.default.removeItem(at: crewHistoryURL)\n',
-    '        try? FileManager.default.removeItem(at: storageFolderURL.appendingPathComponent("crew-history.json"))\n',
-    1,
-)
 
 if "    private func crewHistoryKey(" in content:
     content = replace_between(
@@ -81,7 +61,6 @@ if "    private func crewHistoryKey(" in content:
 content = content.replace(
     '    private var crewHistoryURL: URL { storageFolderURL.appendingPathComponent("crew-history.json") }\n',
     '',
-    1,
 )
 
 if "    private func saveCrewHistory()" in content:
@@ -93,6 +72,13 @@ if "    private func saveCrewHistory()" in content:
         "crew history persistence helpers",
     )
 
+archive_delete = '        try? FileManager.default.removeItem(at: storageFolderURL.appendingPathComponent("crew-history.json"))\n'
+if archive_delete not in content:
+    marker = '        loadChangeState()\n'
+    if marker not in content:
+        raise RuntimeError("V2.11.4 cleanup marker not found: loadChangeState for archive cleanup")
+    content = content.replace(marker, marker + archive_delete, 1)
+
 CONTENT.write_text(content)
 
 
@@ -101,8 +87,8 @@ CONTENT.write_text(content)
 # Current roster extraction and sanitized diagnostics remain untouched.
 # -----------------------------------------------------------------------------
 web = WEBVIEW.read_text()
-web = web.replace('    @Published var historyBackfillStatus: String?\n', '', 1)
-web = web.replace('    @Published var historyBackfillRunning = false\n', '', 1)
+web = web.replace('    @Published var historyBackfillStatus: String?\n', '')
+web = web.replace('    @Published var historyBackfillRunning = false\n', '')
 
 if "    func backfillCrewHistory()" in web:
     web = replace_between(
@@ -113,7 +99,7 @@ if "    func backfillCrewHistory()" in web:
         "native backfill methods",
     )
 
-web = web.replace('        controller.add(context.coordinator, name: "historyBackfill")\n', '', 1)
+web = web.replace('        controller.add(context.coordinator, name: "historyBackfill")\n', '')
 
 if '            if message.name == "historyBackfill" {' in web:
     handler = '''        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
