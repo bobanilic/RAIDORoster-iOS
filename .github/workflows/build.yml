@@ -16,6 +16,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Record build attempt
+        run: |
+          cat > .github/latest-attempt.txt <<EOF
+          version=2.11.4
+          build=17
+          run_id=${{ github.run_id }}
+          commit=${{ github.sha }}
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/latest-attempt.txt
+          git commit -m "Build attempt 2.11.4 [skip ci]" || true
+          git push || true
+
       - name: Build unsigned IPA
         run: |
           cd RAIDORoster-Web2IPA
