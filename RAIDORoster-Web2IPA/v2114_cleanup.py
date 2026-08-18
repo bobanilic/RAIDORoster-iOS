@@ -25,7 +25,7 @@ if "struct CrewHistoryOccurrence:" in content:
         content,
         "struct CrewHistoryOccurrence:",
         "struct SummaryMetric:",
-        "struct SummaryMetric:",
+        "",
         "crew history models",
     )
 
@@ -58,7 +58,7 @@ if "    func crewHistory(for member: CrewMember)" in content:
         content,
         "    func crewHistory(for member: CrewMember)",
         "    func clearCache()",
-        "    func clearCache()",
+        "",
         "crew history lookup",
     )
 
@@ -74,7 +74,7 @@ if "    private func crewHistoryKey(" in content:
         content,
         "    private func crewHistoryKey(",
         "    private func currentMonthKey()",
-        "    private func currentMonthKey()",
+        "",
         "crew history indexing helpers",
     )
 
@@ -89,7 +89,7 @@ if "    private func saveCrewHistory()" in content:
         content,
         "    private func saveCrewHistory()",
         "    private var cacheURL:",
-        "    private var cacheURL:",
+        "",
         "crew history persistence helpers",
     )
 
@@ -109,7 +109,7 @@ if "    func backfillCrewHistory()" in web:
         web,
         "    func backfillCrewHistory()",
         "    func copyDiagnostics()",
-        "    func copyDiagnostics()",
+        "",
         "native backfill methods",
     )
 
@@ -128,7 +128,7 @@ if '            if message.name == "historyBackfill" {' in web:
         web,
         "        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {",
         "        func webView(_ webView: WKWebView, didStartProvisionalNavigation",
-        handler + "        func webView(_ webView: WKWebView, didStartProvisionalNavigation",
+        handler,
         "history message bridge",
     )
 
@@ -145,7 +145,7 @@ if "  let historyBackfillRunning = false;" in js:
         js,
         "  let historyBackfillRunning = false;",
         "  window.RAIDOPlus = {",
-        "  window.RAIDOPlus = {",
+        "",
         "retired JS history traversal",
     )
 JS.write_text(js)
