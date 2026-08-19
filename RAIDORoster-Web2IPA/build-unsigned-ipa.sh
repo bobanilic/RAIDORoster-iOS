@@ -40,6 +40,7 @@ python3 "$ROOT/v21113_patch.py"
 # V2.12 / V2.12.1 / V2.12.2 were visual-theme experiments. V2.13
 # intentionally returns to the approved classic V2.11.13 visual base.
 python3 "$ROOT/v213_patch.py"
+python3 "$ROOT/v214_patch.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
@@ -61,6 +62,8 @@ fi
 /usr/libexec/PlistBuddy -c "Add :NSCalendarsFullAccessUsageDescription string Allow RAIDO Roster to add and update your duty schedule in Calendar." "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c "Delete :NSCalendarsUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
 /usr/libexec/PlistBuddy -c "Add :NSCalendarsUsageDescription string Allow RAIDO Roster to add and update your duty schedule in Calendar." "$APP/Info.plist"
+/usr/libexec/PlistBuddy -c "Delete :NSLocationWhenInUseUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string Allow RAIDO Roster to use this iPhone's location only while Live GPS tracking is active on the Today route map." "$APP/Info.plist"
 
 mkdir -p "$ROOT/Payload"
 cp -R "$APP" "$ROOT/Payload/"
