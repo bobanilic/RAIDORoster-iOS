@@ -37,9 +37,9 @@ python3 "$ROOT/v21110_patch.py"
 python3 "$ROOT/v21111_patch.py"
 python3 "$ROOT/v21112_patch.py"
 python3 "$ROOT/v21113_patch.py"
-python3 "$ROOT/v212_patch.py"
-python3 "$ROOT/v2121_patch.py"
-python3 "$ROOT/v2122_patch.py"
+# V2.12 / V2.12.1 / V2.12.2 were visual-theme experiments. V2.13
+# intentionally returns to the approved classic V2.11.13 visual base.
+python3 "$ROOT/v213_patch.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
