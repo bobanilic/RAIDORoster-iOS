@@ -63,8 +63,23 @@ fi
 /usr/libexec/PlistBuddy -c "Add :NSCalendarsFullAccessUsageDescription string Allow RAIDO Roster to add and update your duty schedule in Calendar." "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c "Delete :NSCalendarsUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
 /usr/libexec/PlistBuddy -c "Add :NSCalendarsUsageDescription string Allow RAIDO Roster to add and update your duty schedule in Calendar." "$APP/Info.plist"
-/usr/libexec/PlistBuddy -c "Delete :NSLocationWhenInUseUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
-/usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string Allow RAIDO Roster to use this iPhone's location only while Live GPS tracking is active on the Today route map." "$APP/Info.plist"
+
+# PlistBuddy treats apostrophes in free-form strings as quoting characters.
+# Write the foreground-only location usage description with plistlib instead.
+python3 - "$APP/Info.plist" <<'PY'
+import plistlib
+import sys
+
+path = sys.argv[1]
+with open(path, "rb") as handle:
+    plist = plistlib.load(handle)
+plist["NSLocationWhenInUseUsageDescription"] = (
+    "Allow RAIDO Roster to use your location only while Live GPS tracking "
+    "is active on the Today route map."
+)
+with open(path, "wb") as handle:
+    plistlib.dump(plist, handle, fmt=plistlib.FMT_BINARY)
+PY
 
 mkdir -p "$ROOT/Payload"
 cp -R "$APP" "$ROOT/Payload/"
