@@ -41,6 +41,7 @@ python3 "$ROOT/v21113_patch.py"
 # intentionally returns to the approved classic V2.11.13 visual base.
 python3 "$ROOT/v213_patch.py"
 python3 "$ROOT/v214_patch.py"
+python3 "$ROOT/v2141_patch.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
