@@ -1,4 +1,4 @@
-version=2.12.1
-build=28
-run_id=32289144480
-commit=0aa99afa9a662657f35c1340dfbda492793e5c4d
+version=2.12.2
+build=29
+run_id=32289309500
+commit=6cca3a709216b3e0fb93266565ac31d648e5a30e
