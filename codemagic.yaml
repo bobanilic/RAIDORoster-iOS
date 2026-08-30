@@ -13,5 +13,10 @@ workflows:
         script: |
           chmod +x build-unsigned-ipa.sh
           ./build-unsigned-ipa.sh
+      - name: Package IPA for iPhone download
+        script: |
+          rm -f RAIDORoster-V2.16-unsigned.zip
+          /usr/bin/zip -j RAIDORoster-V2.16-unsigned.zip RAIDORoster-unsigned.ipa
     artifacts:
       - RAIDORoster-unsigned.ipa
+      - RAIDORoster-V2.16-unsigned.zip
