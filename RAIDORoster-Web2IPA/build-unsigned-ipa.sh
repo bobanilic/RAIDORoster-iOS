@@ -45,6 +45,7 @@ python3 "$ROOT/v2141_patch.py"
 python3 "$ROOT/v2142_patch.py"
 python3 "$ROOT/v215_patch.py"
 python3 "$ROOT/v216_patch.py"
+python3 "$ROOT/v2161_patch.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
@@ -67,8 +68,6 @@ fi
 /usr/libexec/PlistBuddy -c "Delete :NSCalendarsUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
 /usr/libexec/PlistBuddy -c "Add :NSCalendarsUsageDescription string Allow RAIDO Roster to add and update your duty schedule in Calendar." "$APP/Info.plist"
 
-# PlistBuddy treats apostrophes in free-form strings as quoting characters.
-# Write the foreground-only location usage description with plistlib instead.
 python3 - "$APP/Info.plist" <<'PY'
 import plistlib
 import sys
