@@ -58,6 +58,7 @@ python3 "$ROOT/v2178_fix.py"
 python3 "$ROOT/v2179_fix.py"
 python3 "$ROOT/v2180_fix.py"
 python3 "$ROOT/v2181_fix.py"
+python3 "$ROOT/v2182_fix.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
