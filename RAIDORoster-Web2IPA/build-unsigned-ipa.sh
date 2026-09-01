@@ -58,8 +58,9 @@ python3 "$ROOT/v2178_fix.py"
 python3 "$ROOT/v2179_fix.py"
 python3 "$ROOT/v2180_fix.py"
 python3 "$ROOT/v2181_fix.py"
-# V2.18.2 Calendar reconciliation temporarily disabled after Xcode status 65.
-# Reintroduce after exact compiler diagnostic is captured.
+python3 "$ROOT/v2182_fix.py"
+python3 "$ROOT/v2182b_fix.py"
+python3 "$ROOT/v2182c_fix.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
