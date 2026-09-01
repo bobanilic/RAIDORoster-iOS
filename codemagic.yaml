@@ -15,8 +15,8 @@ workflows:
           ./build-unsigned-ipa.sh
       - name: Package IPA for iPhone download
         script: |
-          rm -f RAIDORoster-V2.19-unsigned.zip
-          /usr/bin/zip -j RAIDORoster-V2.19-unsigned.zip RAIDORoster-unsigned.ipa
+          rm -f RAIDORoster-V2.19.2-unsigned.zip
+          /usr/bin/zip -j RAIDORoster-V2.19.2-unsigned.zip RAIDORoster-unsigned.ipa
     artifacts:
       - RAIDORoster-unsigned.ipa
-      - RAIDORoster-V2.19-unsigned.zip
+      - RAIDORoster-V2.19.2-unsigned.zip
