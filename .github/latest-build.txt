@@ -1,6 +1,5 @@
-version=2.15
-build=33
-run_id=32303235894
-artifact_id=9383809974
-artifact_digest=4fe41c4f463aa4d49008ca5ecd1fbde5160e9f37755ab719723a7c0da12cb489
-commit=e9608d58517eb14fc3d89320646be5705e313b23
+version=2.19.6
+run_id=33821551817
+artifact_id=9918452768
+artifact_digest=26e9bbb0c90edba33160817ac33ed9d154a5695fc5ce71da6e0c72aed0392376
+commit=c669f3bac3de9b1881262ebf32da64cbf47574ac
