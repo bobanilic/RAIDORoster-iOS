@@ -68,6 +68,7 @@ python3 "$ROOT/v2193_feed_backend.py"
 python3 "$ROOT/v2194_month_navigation_fix.py"
 python3 "$ROOT/v2195_month_key_arithmetic_fix.py"
 python3 "$ROOT/v2196_hybrid_position_engine.py"
+python3 "$ROOT/v2197_fleet_intelligence.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
