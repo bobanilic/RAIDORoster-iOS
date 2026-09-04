@@ -22,14 +22,14 @@ jobs:
       - name: Record build attempt
         run: |
           cat > .github/latest-attempt.txt <<EOF
-          version=2.19.6
+          version=2.19.7
           run_id=${{ github.run_id }}
           commit=${{ github.sha }}
           EOF
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/latest-attempt.txt
-          git commit -m "Build attempt 2.19.6 [skip ci]" || true
+          git commit -m "Build attempt 2.19.7 [skip ci]" || true
           git push || true
 
       - name: Build unsigned IPA
@@ -42,7 +42,7 @@ jobs:
         id: upload_ipa
         uses: actions/upload-artifact@v4
         with:
-          name: RAIDORoster-V2.19.6-unsigned-IPA
+          name: RAIDORoster-V2.19.7-unsigned-IPA
           path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
@@ -51,7 +51,7 @@ jobs:
         if: success()
         run: |
           cat > .github/latest-build.txt <<EOF
-          version=2.19.6
+          version=2.19.7
           run_id=${{ github.run_id }}
           artifact_id=${{ steps.upload_ipa.outputs.artifact-id }}
           artifact_digest=${{ steps.upload_ipa.outputs.artifact-digest }}
@@ -60,5 +60,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/latest-build.txt
-          git commit -m "Build receipt 2.19.6 [skip ci]" || exit 0
+          git commit -m "Build receipt 2.19.7 [skip ci]" || exit 0
           git push
