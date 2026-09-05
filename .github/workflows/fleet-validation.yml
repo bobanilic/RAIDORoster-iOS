@@ -1,0 +1,28 @@
+name: Fleet reliability validation
+on:
+  pull_request:
+    paths:
+      - 'RAIDORoster-Web2IPA/**'
+      - 'tests/**'
+      - '.github/workflows/fleet-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise timestamp, identity, and inference policy
+        run: |
+          swiftc RAIDORoster-Web2IPA/RAIDORoster/FleetTrackingPolicy.swift tests/FleetTrackingPolicyChecks.swift -o /tmp/fleet-policy-checks
+          /tmp/fleet-policy-checks
+      - name: Build complete patched iOS app
+        run: bash RAIDORoster-Web2IPA/build-unsigned-ipa.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RAIDO-Fleet-reliability-review-IPA
+          path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
+          retention-days: 7
+          if-no-files-found: error
