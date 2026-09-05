@@ -300,6 +300,12 @@ replace('''                  let aircraft = (root["ac"] as? [[String: Any]])?.fi
                   trackedRegistration == registration else { return }''')
 replace('''            networkObservationAt = Date().addingTimeInterval(-max(0, seen))''', '''            networkObservationAt = reference.addingTimeInterval(-seen)''')
 replace('''            horizontalAccuracy: age <= maximumNetworkObservationAge ? 100 : 500,''', '''            horizontalAccuracy: -1,''')
+replace('''            verticalAccuracy: networkAltitudeMeters == nil ? -1 : 150,''', '''            verticalAccuracy: -1,''')
+replace('''            timestamp: now
+        )
+        return (location, canPropagate)''', '''            timestamp: observedAt
+        )
+        return (location, canPropagate && networkGroundSpeedMPS.map { $0 > 1 } == true && networkTrackDegrees != nil)''')
 
 # Age labels must change even when no new network observation arrives.
 for struct_name in ['private struct FleetAircraftRow: View {', 'private struct FleetAircraftDetailView: View {']:
