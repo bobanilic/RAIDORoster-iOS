@@ -1,0 +1,3 @@
+# Real observations and provider reference data must not enter repository history.
+*
+!.gitignore
