@@ -30,7 +30,16 @@ jobs:
         run: bash RAIDORoster-Web2IPA/build-unsigned-ipa.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-2.20.3-companion-review-IPA
+          name: RAIDO-2.20.7-companion-review-IPA
           path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
+          retention-days: 7
+          if-no-files-found: error
+      - name: Render reader in iPhone simulator
+        run: python3 tools/preview_announcement_reader.py
+      - name: Upload reader screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: RAIDO-reader-2.20.7-screenshots
+          path: /tmp/raido-reader-*.png
           retention-days: 7
           if-no-files-found: error
