@@ -79,6 +79,7 @@ python3 "$ROOT/v2204_blh_compile_fix.py"
 python3 "$ROOT/v2205_announcement_reader_polish.py"
 python3 "$ROOT/v2206_announcement_reader_compact.py"
 python3 "$ROOT/v2207_reader_layout.py"
+python3 "$ROOT/v2208_midnight.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
