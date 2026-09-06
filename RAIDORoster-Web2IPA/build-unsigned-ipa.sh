@@ -75,6 +75,7 @@ python3 "$ROOT/v2200_earnings.py"
 python3 "$ROOT/v2201_daily_pay.py"
 python3 "$ROOT/v2202_pay_policy.py"
 python3 "$ROOT/v2203_raido_blh.py"
+python3 "$ROOT/v2204_blh_compile_fix.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
