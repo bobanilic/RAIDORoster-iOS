@@ -32,9 +32,11 @@ func earningsDailyLines(store: RosterStore, month: String, record: EarningsMonth
             let end = parseUTCStamp(activity.endUTC)
             let day = start.map(EarningsMath.day) ?? rowDay
             let category = activity.category.uppercased()
-            if days[day] == nil { days[day] = EarningsRosterDay(day: day, categories: []) }
-            days[day]?.categories.insert(category)
-            if let station = EarningsDailyPolicy.airport(activity.station) { days[day]?.stations.insert(station) }
+            for covered in EarningsDailyPolicy.coveredDays(fallback: rowDay, start: start, end: end) {
+                if days[covered] == nil { days[covered] = EarningsRosterDay(day: covered, categories: []) }
+                days[covered]?.categories.insert(category)
+                if let station = EarningsDailyPolicy.airport(activity.station) { days[covered]?.stations.insert(station) }
+            }
             if category == "FLIGHT" || category == "POSITIONING" {
                 let (origin, destination) = EarningsDailyPolicy.route(activity.route)
                 let departureOrder = activity.startUTC.isEmpty ? day + " 12:00" : activity.startUTC
@@ -44,10 +46,6 @@ func earningsDailyLines(store: RosterStore, month: String, record: EarningsMonth
                 if seen.insert(key).inserted {
                     events.append(EarningsLocationEvent(day: day, order: departureOrder, origin: origin, destination: nil))
                     events.append(EarningsLocationEvent(day: arrivalDay, order: arrivalOrder, origin: nil, destination: destination))
-                }
-                if let start, let end, end >= start, end.timeIntervalSince(start) <= 86_400, arrivalDay != day {
-                    if days[arrivalDay] == nil { days[arrivalDay] = EarningsRosterDay(day: arrivalDay, categories: []) }
-                    days[arrivalDay]?.categories.insert(category)
                 }
             }
         }

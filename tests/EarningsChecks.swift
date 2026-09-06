@@ -130,6 +130,9 @@ struct EarningsChecks {
         let oldMonthData = try JSONEncoder().encode(EarningsMonth())
         let migrated = try JSONDecoder().decode(EarningsMonth.self, from: oldMonthData)
         expect(migrated.homeAirport == nil && migrated.dailyOverrides == nil, "Legacy monthly records decode with optional daily settings")
+        let midnight = EarningsMath.date("2026-09-06")!
+        expect(EarningsDailyPolicy.coveredDays(fallback: "", start: midnight.addingTimeInterval(-3600), end: midnight) == ["2026-09-05"], "Midnight ending does not create an extra paid day")
+        expect(EarningsDailyPolicy.coveredDays(fallback: "", start: midnight.addingTimeInterval(-3600), end: midnight.addingTimeInterval(3600)) == ["2026-09-05", "2026-09-06"], "Cross-midnight reserve/standby classification spans both UTC days")
         print("Passed \(checks) earnings checks")
     }
 }

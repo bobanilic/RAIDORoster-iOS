@@ -220,6 +220,15 @@ enum EarningsDailyPolicy {
         guard parts.count == 2 else { return (nil, nil) }
         return (airport(parts[0]), airport(parts[1]))
     }
+    static func coveredDays(fallback: String, start: Date?, end: Date?) -> [String] {
+        guard let start else { return [fallback] }
+        let first = EarningsMath.utc.startOfDay(for: start)
+        guard let end, end > start, end.timeIntervalSince(start) <= 31 * 86_400 else { return [EarningsMath.day(start)] }
+        // An end exactly at midnight belongs to the preceding interval, not another paid day.
+        let last = EarningsMath.utc.startOfDay(for: end.addingTimeInterval(-1))
+        let count = EarningsMath.utc.dateComponents([.day], from: first, to: last).day ?? 0
+        return (0...max(0, count)).compactMap { EarningsMath.utc.date(byAdding: .day, value: $0, to: first).map(EarningsMath.day) }
+    }
     static func lines(month: String, days: [EarningsRosterDay], events: [EarningsLocationEvent], record: EarningsMonth) -> [EarningsDailyLine] {
         let home = airport(record.homeAirport ?? "BEG")
         let sortedEvents = events.sorted { $0.order < $1.order }
@@ -243,8 +252,8 @@ enum EarningsDailyPolicy {
             if !categories.isDisjoint(with: ["DND", "VACATION", "LEAVE", "SICK", "SICKNESS"]) {
                 return EarningsDailyLine(day: day, category: label, paid: false, reason: "Unpaid absence", needsReview: false, reserveOnly: false)
             }
-            let previous = sortedEvents.last { $0.day < day && $0.destination != nil }
-            let next = sortedEvents.first { $0.day > day && $0.origin != nil }
+            let previous = sortedEvents.last { $0.day <= day && $0.destination != nil }
+            let next = sortedEvents.first { $0.day >= day && $0.origin != nil }
             func nearby(_ other: String) -> Bool {
                 guard let a = EarningsMath.date(day), let b = EarningsMath.date(other) else { return false }
                 return abs(a.timeIntervalSince(b)) <= 7 * 86_400
