@@ -237,41 +237,94 @@ enum EarningsDailyPolicy {
         return allDays.filter { $0.hasPrefix(month + "-") && EarningsMath.date($0) != nil }.sorted().map { day in
             let rows = grouped[day] ?? []
             let categories = rows.reduce(into: Set<String>()) { $0.formUnion($1.categories.map { $0.uppercased() }) }
-            let direct = !categories.isDisjoint(with: ["FLIGHT", "STANDBY", "POSITIONING"])
+            let isFlight = categories.contains("FLIGHT")
+            let isStandby = categories.contains("STANDBY") || categories.contains("STB")
+            let isPositioning = categories.contains("POSITIONING") || categories.contains("POS")
+            let direct = isFlight || isStandby || isPositioning
             let reserve = !direct && !categories.isDisjoint(with: ["RES", "RESERVE"])
-            let label = direct ? (["FLIGHT", "STANDBY", "POSITIONING"].first { categories.contains($0) } ?? "DUTY") : categories.sorted().joined(separator: " / ")
-            // A reserve-only day is unpaid, even if an older manual trip included it.
+            let label = isFlight ? "FLIGHT" : isStandby ? "STANDBY" : isPositioning ? "POSITIONING" : categories.sorted().joined(separator: " / ")
+
+            // RES is never payable, including away from home and despite stale/manual paid dates.
             if reserve { return EarningsDailyLine(day: day, category: "RES", paid: false, reason: "Reserve · unpaid", needsReview: false, reserveOnly: true) }
+
+            // Explicit crew correction is authoritative for every non-RES day.
             if let override = record.dailyOverrides?[day] {
                 return EarningsDailyLine(day: day, category: label, paid: override, reason: override ? "Manually included" : "Manually excluded", needsReview: false, reserveOnly: false)
             }
-            if record.perDiemDays.contains(day) {
-                return EarningsDailyLine(day: day, category: label, paid: true, reason: "Confirmed trip date", needsReview: false, reserveOnly: false)
-            }
-            if direct { return EarningsDailyLine(day: day, category: label, paid: true, reason: "One daily payment", needsReview: false, reserveOnly: false) }
+
             if !categories.isDisjoint(with: ["DND", "VACATION", "LEAVE", "SICK", "SICKNESS"]) {
                 return EarningsDailyLine(day: day, category: label, paid: false, reason: "Unpaid absence", needsReview: false, reserveOnly: false)
             }
-            let previous = sortedEvents.last { $0.day <= day && $0.destination != nil }
-            let next = sortedEvents.first { $0.day >= day && $0.origin != nil }
-            func nearby(_ other: String) -> Bool {
-                guard let a = EarningsMath.date(day), let b = EarningsMath.date(other) else { return false }
-                return abs(a.timeIntervalSince(b)) <= 7 * 86_400
+
+            // Payroll practice confirmed by the crew member: STB receives the EUR50 daily payment even at home base.
+            if isStandby {
+                return EarningsDailyLine(day: day, category: "STANDBY", paid: true, reason: "Standby · daily payment", needsReview: false, reserveOnly: false)
             }
-            let before = previous.flatMap { nearby($0.day) ? $0.destination : nil }
-            let after = next.flatMap { nearby($0.day) ? $0.origin : nil }
-            let stations = rows.reduce(into: Set<String>()) { $0.formUnion($1.stations.compactMap(airport)) }
-            let location: String?
-            if let before, let after { location = before == after ? before : nil }
-            else if let before { location = before }
-            else if let after { location = after }
-            else { location = stations.count == 1 ? stations.first : nil }
-            guard let home, let location, !rows.isEmpty else {
-                return EarningsDailyLine(day: day, category: label, paid: false, reason: "Location unclear · review", needsReview: true, reserveOnly: false)
+
+            // Positioning is treated as a paid operational day. It does not earn block-hour pay.
+            if isPositioning {
+                return EarningsDailyLine(day: day, category: "POSITIONING", paid: true, reason: "Positioning · daily payment", needsReview: false, reserveOnly: false)
             }
-            let away = location != home
-            return EarningsDailyLine(day: day, category: label, paid: away,
-                reason: away ? "Away from home · \(location)" : "At home · \(home) · unpaid", needsReview: false, reserveOnly: false)
+
+            // Resolve whether the crew member was at home base or away. Same-day first-origin/last-destination
+            // is strongest evidence: a home-base round trip starts and finishes at home and gets no per diem.
+            let sameDay = sortedEvents.filter { $0.day == day }
+            let firstOrigin = sameDay.compactMap(\.origin).first
+            let lastDestination = sameDay.compactMap(\.destination).last
+            var location: String?
+            var away: Bool?
+            if let home {
+                if firstOrigin == home && lastDestination == home {
+                    location = home; away = false
+                } else if let origin = firstOrigin, origin != home {
+                    location = origin; away = true
+                } else if let destination = lastDestination, destination != home {
+                    location = destination; away = true
+                }
+            }
+
+            if away == nil {
+                let previous = sortedEvents.last { $0.day <= day && $0.destination != nil }
+                let next = sortedEvents.first { $0.day >= day && $0.origin != nil }
+                func nearby(_ other: String) -> Bool {
+                    guard let a = EarningsMath.date(day), let b = EarningsMath.date(other) else { return false }
+                    return abs(a.timeIntervalSince(b)) <= 7 * 86_400
+                }
+                let before = previous.flatMap { nearby($0.day) ? $0.destination : nil }
+                let after = next.flatMap { nearby($0.day) ? $0.origin : nil }
+                let stations = rows.reduce(into: Set<String>()) { $0.formUnion($1.stations.compactMap(airport)) }
+                if let before, let after, before == after { location = before }
+                else if let before, after == nil { location = before }
+                else if let after, before == nil { location = after }
+                else if stations.count == 1 { location = stations.first }
+                if let home, let location { away = location != home }
+            }
+
+            // FLIGHT at home base earns only block-hour pay. Any flight day away from home also earns the daily payment.
+            if isFlight {
+                if away == true {
+                    return EarningsDailyLine(day: day, category: "FLIGHT", paid: true, reason: "Flight duty away from home · \(location ?? "away")", needsReview: false, reserveOnly: false)
+                }
+                if away == false {
+                    return EarningsDailyLine(day: day, category: "FLIGHT", paid: false, reason: "Home-base flight duty · BLH only", needsReview: false, reserveOnly: false)
+                }
+                if record.perDiemDays.contains(day) {
+                    return EarningsDailyLine(day: day, category: "FLIGHT", paid: true, reason: "Confirmed away duty date", needsReview: false, reserveOnly: false)
+                }
+                return EarningsDailyLine(day: day, category: "FLIGHT", paid: false, reason: "Duty location unclear · review", needsReview: true, reserveOnly: false)
+            }
+
+            // OFF/other non-absence days receive per diem whenever the crew member remains outside home base.
+            if away == true {
+                return EarningsDailyLine(day: day, category: label, paid: true, reason: "Away from home · \(location ?? "away")", needsReview: false, reserveOnly: false)
+            }
+            if away == false {
+                return EarningsDailyLine(day: day, category: label, paid: false, reason: "At home · \(home ?? "home") · unpaid", needsReview: false, reserveOnly: false)
+            }
+            if record.perDiemDays.contains(day) {
+                return EarningsDailyLine(day: day, category: label, paid: true, reason: "Confirmed away date", needsReview: false, reserveOnly: false)
+            }
+            return EarningsDailyLine(day: day, category: label, paid: false, reason: "Location unclear · review", needsReview: true, reserveOnly: false)
         }
     }
     static func recordForCalculation(_ record: EarningsMonth, lines: [EarningsDailyLine]) -> EarningsMonth {
