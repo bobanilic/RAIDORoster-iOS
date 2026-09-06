@@ -4,10 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 BUILD="$ROOT/build"
 APP="$BUILD/Products/Release-iphoneos/RAIDORoster.app"
+PAYLOAD="$ROOT/Payload"
 IPA="$ROOT/RAIDORoster-unsigned.ipa"
 
-rm -rf "$BUILD" "$ROOT/Payload" "$IPA"
-mkdir -p "$BUILD/Products" "$BUILD/Intermediates"
+rm -rf "$BUILD" "$PAYLOAD" "$IPA"
 
 python3 "$ROOT/v25_patch.py"
 python3 "$ROOT/v26_patch.py"
@@ -37,8 +37,6 @@ python3 "$ROOT/v21110_patch.py"
 python3 "$ROOT/v21111_patch.py"
 python3 "$ROOT/v21112_patch.py"
 python3 "$ROOT/v21113_patch.py"
-# V2.12 / V2.12.1 / V2.12.2 were visual-theme experiments. V2.13
-# intentionally returns to the approved classic V2.11.13 visual base.
 python3 "$ROOT/v213_patch.py"
 python3 "$ROOT/v214_patch.py"
 python3 "$ROOT/v2141_patch.py"
@@ -75,6 +73,7 @@ python3 "$ROOT/v2198_fleet_reliability.py"
 python3 "$ROOT/v2199_announcements.py"
 python3 "$ROOT/v2200_earnings.py"
 python3 "$ROOT/v2201_daily_pay.py"
+python3 "$ROOT/v2202_pay_policy.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
@@ -93,32 +92,16 @@ if [[ ! -d "$APP" ]]; then
 fi
 
 /usr/libexec/PlistBuddy -c "Delete :NSCalendarsFullAccessUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
-/usr/libexec/PlistBuddy -c "Add :NSCalendarsFullAccessUsageDescription string Allow RAIDO Roster to add and update your duty schedule in Calendar." "$APP/Info.plist"
-/usr/libexec/PlistBuddy -c "Delete :NSCalendarsUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
-/usr/libexec/PlistBuddy -c "Add :NSCalendarsUsageDescription string Allow RAIDO Roster to add and update your duty schedule in Calendar." "$APP/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :NSCalendarsFullAccessUsageDescription string RAIDORoster can add your roster duties to Calendar when you ask it to." "$APP/Info.plist"
+/usr/libexec/PlistBuddy -c "Delete :NSLocationWhenInUseUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string RAIDORoster uses your location to show your live position during a flight when you open Flight Companion." "$APP/Info.plist"
 
-python3 - "$APP/Info.plist" <<'PY'
-import plistlib
-import sys
-
-path = sys.argv[1]
-with open(path, "rb") as handle:
-    plist = plistlib.load(handle)
-plist["NSLocationWhenInUseUsageDescription"] = (
-    "Allow RAIDO Roster to use your location only while Live GPS tracking "
-    "is active on the Today route map."
-)
-with open(path, "wb") as handle:
-    plistlib.dump(plist, handle, fmt=plistlib.FMT_BINARY)
-PY
-
-mkdir -p "$ROOT/Payload"
-cp -R "$APP" "$ROOT/Payload/"
+mkdir -p "$PAYLOAD"
+cp -R "$APP" "$PAYLOAD/"
 (
   cd "$ROOT"
   /usr/bin/zip -qry "$IPA" Payload
 )
-rm -rf "$ROOT/Payload"
+rm -rf "$PAYLOAD"
 
-echo "Unsigned IPA created: $IPA"
-echo "Sign/install it with SideStore, AltStore, Sideloadly, or your Apple certificate workflow."
+echo "Unsigned IPA: $IPA"
