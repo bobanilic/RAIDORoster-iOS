@@ -74,6 +74,7 @@ python3 "$ROOT/v2197c_initializer_fix.py"
 python3 "$ROOT/v2198_fleet_reliability.py"
 python3 "$ROOT/v2199_announcements.py"
 python3 "$ROOT/v2200_earnings.py"
+python3 "$ROOT/v2201_daily_pay.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \

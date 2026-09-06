@@ -15,6 +15,7 @@ final class EarningsStore: ObservableObject {
         var value = EarningsMonth()
         if let earlier = archive.months.keys.filter({ $0 < month }).sorted().last {
             value.rates = archive.months[earlier]!.rates
+            value.homeAirport = archive.months[earlier]!.homeAirport
         }
         return value
     }
@@ -31,7 +32,9 @@ final class EarningsStore: ObservableObject {
         var next = archive
         for (month, values) in Dictionary(grouping: days, by: { String($0.prefix(7)) }) {
             var record = self.record(month)
-            record.perDiemDays.formUnion(values); next.months[month] = record
+            record.perDiemDays.formUnion(values)
+            for day in values { record.dailyOverrides?[day] = nil }
+            next.months[month] = record
         }
         do { try persistence.save(next); archive = next; error = nil }
         catch { self.error = "Trip dates could not be saved. Please try again." }
@@ -44,7 +47,8 @@ struct MonthlyEarningsCard: View {
     let month: String
     @AppStorage("RAIDORoster.Earnings.HideAmount") private var hideAmount = false
     private var flights: [EarningsFlight] { earningsFlights(store: roster, month: month) }
-    private var summary: EarningsSummary { EarningsMath.summarize(month: month, flights: flights, record: earnings.record(month)) }
+    private var daily: [EarningsDailyLine] { earningsDailyLines(store: roster, month: month, record: earnings.record(month)) }
+    private var summary: EarningsSummary { EarningsMath.summarize(month: month, flights: flights, record: EarningsDailyPolicy.recordForCalculation(earnings.record(month), lines: daily)) }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -64,6 +68,11 @@ struct MonthlyEarningsCard: View {
                                 .font(.headline.monospacedDigit())
                             Text("Monthly earnings ›").font(.caption).foregroundStyle(.secondary)
                         }
+                    }
+                    Text("Block pay + \(daily.filter(\.paid).count) daily payments")
+                        .font(.caption2).foregroundStyle(.secondary)
+                    if daily.contains(where: \.needsReview) {
+                        Text("Some daily payments need review").font(.caption2).foregroundStyle(.orange)
                     }
                 }.foregroundStyle(.primary)
             }.buttonStyle(.plain)
@@ -98,7 +107,8 @@ private struct MonthlyEarningsView: View {
     @State private var removePayment = false
     private var flights: [EarningsFlight] { earningsFlights(store: roster, month: month) }
     private var record: EarningsMonth { earnings.record(month) }
-    private var summary: EarningsSummary { EarningsMath.summarize(month: month, flights: flights, record: record) }
+    private var daily: [EarningsDailyLine] { earningsDailyLines(store: roster, month: month, record: record) }
+    private var summary: EarningsSummary { EarningsMath.summarize(month: month, flights: flights, record: EarningsDailyPolicy.recordForCalculation(record, lines: daily)) }
     private var isPast: Bool { month < String(EarningsMath.day(Date()).prefix(7)) }
 
     var body: some View {
@@ -145,23 +155,50 @@ private struct MonthlyEarningsView: View {
             Section("Breakdown") {
                 LabeledContent("Block-hour pay", value: EarningsMath.money(summary.flightCents))
                 LabeledContent("Line-check fees", value: EarningsMath.money(summary.lineCheckCents))
-                LabeledContent("Per diems · \(record.perDiemDays.count) days", value: EarningsMath.money(summary.perDiemCents))
+                LabeledContent("Daily pay · \(daily.filter(\.paid).count) days", value: EarningsMath.money(summary.perDiemCents))
                 LabeledContent("Extra pay / deductions", value: EarningsMath.money(summary.adjustmentCents))
                 LabeledContent("Reimbursements", value: EarningsMath.money(summary.reimbursementCents))
                 Button("Edit this month’s rates", systemImage: "slider.horizontal.3") { editor = .rates }
             }
             Section {
-                Button("Add eligible away-trip dates", systemImage: "calendar.badge.plus") { editor = .trip }
-                if record.perDiemDays.isEmpty { Text("No per-diem dates confirmed yet.").foregroundStyle(.secondary) }
-                ForEach(record.perDiemDays.sorted(), id: \.self) { day in
-                    LabeledContent(day, value: EarningsMath.money(record.rates.perDiem))
-                        .swipeActions { Button("Remove", role: .destructive) { earnings.change(month) { $0.perDiemDays.remove(day) } } }
+                LabeledContent("Paid days", value: "\(daily.filter(\.paid).count) × \(EarningsMath.money(record.rates.perDiem))")
+                LabeledContent("Unpaid days", value: "\(daily.filter { !$0.paid && !$0.needsReview }.count)")
+                if daily.contains(where: \.needsReview) {
+                    Text("\(daily.filter(\.needsReview).count) day(s) need a location check and are not included yet.").foregroundStyle(.orange)
                 }
-            } header: { Text("Per-diem dates · UTC") } footer: {
-                Text("Confirm eligible operational days on trips away from home base. Same-day trips do not qualify under this preset. Review arrival, return, rest and reserve dates; swipe to remove exceptions. Trip dates spanning months are assigned to each month once.")
+                DisclosureGroup("Review daily payments") {
+                    ForEach(daily) { line in
+                        Toggle(isOn: Binding(get: { line.paid }, set: { paid in
+                            earnings.change(month) { record in
+                                var overrides = record.dailyOverrides ?? [:]
+                                overrides[line.day] = paid; record.dailyOverrides = overrides
+                            }
+                        })) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("\(line.day) · \(line.category)")
+                                Text(line.reason).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .disabled(line.reserveOnly)
+                        .swipeActions {
+                            Button("Automatic") {
+                                earnings.change(month) {
+                                    $0.dailyOverrides?[line.day] = nil
+                                    $0.perDiemDays.remove(line.day)
+                                }
+                            }.tint(.blue)
+                        }
+                    }
+                }
+                Button("Add away-trip dates manually", systemImage: "calendar.badge.plus") { editor = .trip }
+            } header: { Text("Daily payments · UTC") } footer: {
+                Text("Flight, standby and positioning: one daily payment. OFF and other days away from home: one daily payment. OFF at home and RES: unpaid. Home airport: \(record.homeAirport ?? "BEG"). Route-based location estimates can be corrected above. Swipe a date to restore automatic calculation.")
             }
             Section("Other payments") {
                 Button("Add payment or adjustment", systemImage: "plus.circle") { editor = .adjustment }
+                if record.adjustments.contains(where: { $0.kind == .standby }) && daily.contains(where: { $0.category == "STANDBY" && $0.paid }) {
+                    Text("Previous manual standby amounts are excluded because standby is already counted in daily pay. Remove those entries, or re-enter a genuine additional payment as Extra pay.").font(.caption).foregroundStyle(.orange)
+                }
                 ForEach(record.adjustments) { item in
                     VStack(alignment: .leading, spacing: 4) {
                         LabeledContent(item.kind.label, value: EarningsMath.money(item.signedCents))
@@ -218,8 +255,10 @@ private struct EarningsRatesEditor: View {
     @State private var scc: String
     @State private var perDiem: String
     @State private var lineCheck: String
+    @State private var homeAirport: String
     init(earnings: EarningsStore, month: String, rates: EarningsRates) {
         self.earnings = earnings; self.month = month
+        _homeAirport = State(initialValue: earnings.record(month).homeAirport ?? "BEG")
         _cc = State(initialValue: EarningsMath.amountText(rates.cc)); _scc = State(initialValue: EarningsMath.amountText(rates.scc))
         _perDiem = State(initialValue: EarningsMath.amountText(rates.perDiem)); _lineCheck = State(initialValue: EarningsMath.amountText(rates.lineCheck))
     }
@@ -232,7 +271,8 @@ private struct EarningsRatesEditor: View {
             Section("EUR · " + EarningsMath.monthTitle(month)) {
                 moneyField("JCC / CC per hour", text: $cc)
                 moneyField("SCC per hour", text: $scc)
-                moneyField("Per eligible day", text: $perDiem)
+                moneyField("Per paid day", text: $perDiem)
+                TextField("Home airport · IATA", text: $homeAirport).textInputAutocapitalization(.characters).autocorrectionDisabled()
                 moneyField("Instructor line check / sector", text: $lineCheck)
             }
             Section { Text("Rates are personal and saved per month. New months inherit the most recent earlier saved rates. Earlier saved months keep their own rates. A briefing role never changes your pay role automatically.") }
@@ -241,9 +281,12 @@ private struct EarningsRatesEditor: View {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) { Button("Save") {
                 guard let v = values else { return }
-                earnings.change(month) { $0.rates = EarningsRates(cc: v[0], scc: v[1], perDiem: v[2], lineCheck: v[3]) }
+                earnings.change(month) {
+                    $0.rates = EarningsRates(cc: v[0], scc: v[1], perDiem: v[2], lineCheck: v[3])
+                    $0.homeAirport = EarningsDailyPolicy.airport(homeAirport)
+                }
                 if earnings.error == nil { dismiss() }
-            }.disabled(values == nil) }
+            }.disabled(values == nil || EarningsDailyPolicy.airport(homeAirport) == nil) }
         }
     }
 }
@@ -313,8 +356,8 @@ private struct EarningsTripEditor: View {
                         if on { excluded.remove(day) } else { excluded.insert(day) }
                     }))
                 }
-            } header: { Text("Confirm eligible operational days") } footer: {
-                Text("Dates are suggestions from the trip you enter. Turn off any non-payable dates before adding. Existing dates will not be counted twice. Each UTC date goes to its own calendar month.")
+            } header: { Text("Confirm paid away days") } footer: {
+                Text("RES dates are always excluded by the monthly calculation. Dates are suggestions from the trip you enter. Turn off any non-payable dates before adding. Existing dates will not be counted twice. Each UTC date goes to its own calendar month.")
             }
         }.environment(\.timeZone, EarningsMath.utc.timeZone)
         .navigationTitle("Per-diem dates")
@@ -337,10 +380,10 @@ private struct EarningsAdjustmentEditor: View {
     @State private var note = ""
     var body: some View {
         Form {
-            Picker("Payment type", selection: $kind) { ForEach(EarningsAdjustmentKind.allCases) { Text($0.label).tag($0) } }
+            Picker("Payment type", selection: $kind) { ForEach(EarningsAdjustmentKind.allCases.filter { $0 != .standby }) { Text($0.label).tag($0) } }
             moneyField("Amount · EUR", text: $amount)
             TextField("Description", text: $note)
-            Text("Add agreed payments only. Standby and reserve are not assigned an automatic rate.").font(.caption).foregroundStyle(.secondary)
+            Text("Standby is already included once in daily pay. RES is unpaid. Add only genuine extra payments here.").font(.caption).foregroundStyle(.secondary)
         }.navigationTitle("Add adjustment")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

@@ -78,6 +78,9 @@ struct EarningsMonth: Codable {
     var perDiemDays: Set<String> = []
     var adjustments: [EarningsAdjustment] = []
     var payment: EarningsPayment?
+    // Optional fields preserve decoding of existing 2.20.0 records and paid comparisons.
+    var homeAirport: String?
+    var dailyOverrides: [String: Bool]?
 }
 
 struct EarningsArchive: Codable {
@@ -181,5 +184,93 @@ final class EarningsPersistence {
     }
     func save(_ archive: EarningsArchive) throws {
         defaults.set(try JSONEncoder().encode(archive), forKey: key)
+    }
+}
+
+struct EarningsLocationEvent {
+    let day: String
+    let order: String
+    let origin: String?
+    let destination: String?
+}
+
+struct EarningsRosterDay {
+    let day: String
+    var categories: Set<String>
+    var stations: Set<String> = []
+}
+
+struct EarningsDailyLine: Identifiable {
+    var id: String { day }
+    let day: String
+    let category: String
+    let paid: Bool
+    let reason: String
+    let needsReview: Bool
+    let reserveOnly: Bool
+}
+
+enum EarningsDailyPolicy {
+    static func airport(_ value: String) -> String? {
+        let key = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return key.count == 3 && key.allSatisfy { $0.isASCII && $0.isLetter } ? key : nil
+    }
+    static func route(_ value: String) -> (String?, String?) {
+        let parts = value.uppercased().components(separatedBy: CharacterSet.letters.inverted).filter { $0.count == 3 }
+        guard parts.count == 2 else { return (nil, nil) }
+        return (airport(parts[0]), airport(parts[1]))
+    }
+    static func lines(month: String, days: [EarningsRosterDay], events: [EarningsLocationEvent], record: EarningsMonth) -> [EarningsDailyLine] {
+        let home = airport(record.homeAirport ?? "BEG")
+        let sortedEvents = events.sorted { $0.order < $1.order }
+        let grouped = Dictionary(grouping: days.filter { EarningsMath.date($0.day) != nil }, by: \.day)
+        let allDays = Set(grouped.keys).union(record.perDiemDays).union((record.dailyOverrides ?? [:]).keys)
+        return allDays.filter { $0.hasPrefix(month + "-") && EarningsMath.date($0) != nil }.sorted().map { day in
+            let rows = grouped[day] ?? []
+            let categories = rows.reduce(into: Set<String>()) { $0.formUnion($1.categories.map { $0.uppercased() }) }
+            let direct = !categories.isDisjoint(with: ["FLIGHT", "STANDBY", "POSITIONING"])
+            let reserve = !direct && !categories.isDisjoint(with: ["RES", "RESERVE"])
+            let label = direct ? (["FLIGHT", "STANDBY", "POSITIONING"].first { categories.contains($0) } ?? "DUTY") : categories.sorted().joined(separator: " / ")
+            // A reserve-only day is unpaid, even if an older manual trip included it.
+            if reserve { return EarningsDailyLine(day: day, category: "RES", paid: false, reason: "Reserve · unpaid", needsReview: false, reserveOnly: true) }
+            if let override = record.dailyOverrides?[day] {
+                return EarningsDailyLine(day: day, category: label, paid: override, reason: override ? "Manually included" : "Manually excluded", needsReview: false, reserveOnly: false)
+            }
+            if record.perDiemDays.contains(day) {
+                return EarningsDailyLine(day: day, category: label, paid: true, reason: "Confirmed trip date", needsReview: false, reserveOnly: false)
+            }
+            if direct { return EarningsDailyLine(day: day, category: label, paid: true, reason: "One daily payment", needsReview: false, reserveOnly: false) }
+            if !categories.isDisjoint(with: ["DND", "VACATION", "LEAVE", "SICK", "SICKNESS"]) {
+                return EarningsDailyLine(day: day, category: label, paid: false, reason: "Unpaid absence", needsReview: false, reserveOnly: false)
+            }
+            let previous = sortedEvents.last { $0.day < day && $0.destination != nil }
+            let next = sortedEvents.first { $0.day > day && $0.origin != nil }
+            func nearby(_ other: String) -> Bool {
+                guard let a = EarningsMath.date(day), let b = EarningsMath.date(other) else { return false }
+                return abs(a.timeIntervalSince(b)) <= 7 * 86_400
+            }
+            let before = previous.flatMap { nearby($0.day) ? $0.destination : nil }
+            let after = next.flatMap { nearby($0.day) ? $0.origin : nil }
+            let stations = rows.reduce(into: Set<String>()) { $0.formUnion($1.stations.compactMap(airport)) }
+            let location: String?
+            if let before, let after { location = before == after ? before : nil }
+            else if let before { location = before }
+            else if let after { location = after }
+            else { location = stations.count == 1 ? stations.first : nil }
+            guard let home, let location, !rows.isEmpty else {
+                return EarningsDailyLine(day: day, category: label, paid: false, reason: "Location unclear · review", needsReview: true, reserveOnly: false)
+            }
+            let away = location != home
+            return EarningsDailyLine(day: day, category: label, paid: away,
+                reason: away ? "Away from home · \(location)" : "At home · \(home) · unpaid", needsReview: false, reserveOnly: false)
+        }
+    }
+    static func recordForCalculation(_ record: EarningsMonth, lines: [EarningsDailyLine]) -> EarningsMonth {
+        var result = record
+        result.perDiemDays = Set(lines.filter(\.paid).map(\.day))
+        if lines.contains(where: { $0.category == "STANDBY" && $0.paid }) {
+            result.adjustments.removeAll { $0.kind == .standby }
+        }
+        return result
     }
 }
