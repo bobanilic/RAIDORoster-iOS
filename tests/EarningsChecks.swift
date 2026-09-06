@@ -71,6 +71,30 @@ struct EarningsChecks {
         expect(loaded.months["2026-08"] == nil, "Month edits do not create unrelated month payments")
         defaults.set(Data("corrupt".utf8), forKey: "RAIDORoster.Earnings.V1")
         expect((try? persistence.load()) == nil, "Corruption cannot silently reset pay records")
+
+        // Confirmed payroll policy around the home base.
+        let homeFlightDay = [EarningsRosterDay(day: "2026-09-02", categories: ["FLIGHT"])]
+        let homeFlightEvents = [
+            EarningsLocationEvent(day: "2026-09-02", order: "2026-09-02 06:00", origin: "BEG", destination: nil),
+            EarningsLocationEvent(day: "2026-09-02", order: "2026-09-02 10:00", origin: nil, destination: "TLV"),
+            EarningsLocationEvent(day: "2026-09-02", order: "2026-09-02 12:00", origin: "TLV", destination: nil),
+            EarningsLocationEvent(day: "2026-09-02", order: "2026-09-02 16:00", origin: nil, destination: "BEG")
+        ]
+        let homeFlight = EarningsDailyPolicy.lines(month: "2026-09", days: homeFlightDay, events: homeFlightEvents, record: EarningsMonth()).first!
+        expect(!homeFlight.paid && homeFlight.reason.contains("BLH only"), "Home-base flight duty earns BLH only, no daily payment")
+        let awayFlightDay = [EarningsRosterDay(day: "2026-09-03", categories: ["FLIGHT"])]
+        let awayFlightEvents = [
+            EarningsLocationEvent(day: "2026-09-03", order: "2026-09-03 06:00", origin: "TLV", destination: nil),
+            EarningsLocationEvent(day: "2026-09-03", order: "2026-09-03 10:00", origin: nil, destination: "TLV")
+        ]
+        expect(EarningsDailyPolicy.lines(month: "2026-09", days: awayFlightDay, events: awayFlightEvents, record: EarningsMonth()).first!.paid, "Flight duty outside home base earns daily payment plus BLH")
+        let homeStandby = [EarningsRosterDay(day: "2026-09-04", categories: ["STANDBY"], stations: ["BEG"])]
+        expect(EarningsDailyPolicy.lines(month: "2026-09", days: homeStandby, events: [], record: EarningsMonth()).first!.paid, "Home-base standby earns EUR50 daily payment")
+        let homePos = [EarningsRosterDay(day: "2026-09-05", categories: ["POSITIONING"], stations: ["BEG"])]
+        expect(EarningsDailyPolicy.lines(month: "2026-09", days: homePos, events: [], record: EarningsMonth()).first!.paid, "Positioning earns one daily payment")
+        let awayReserve = [EarningsRosterDay(day: "2026-09-06", categories: ["RESERVE"], stations: ["TLV"])]
+        expect(!EarningsDailyPolicy.lines(month: "2026-09", days: awayReserve, events: [], record: EarningsMonth()).first!.paid, "RES is unpaid even outside home base")
+
         // User's September calendar: 15 flight days, 4 standby, 2 POS,
         // 5 away OFF, 1 OTHER, 3 home OFF. Synthetic sector durations preserve 73:54 total.
         let flightDays = [1,3,5,7,8,10,11,13,14,15,18,19,22,24,25]
@@ -114,7 +138,11 @@ struct EarningsChecks {
         let reserveTotal = EarningsMath.summarize(month: "2026-09", flights: septemberFlights, record: EarningsDailyPolicy.recordForCalculation(september, lines: reserve))
         expect(reserveTotal.totalCents == 314750, "One RES removes exactly EUR50")
         septemberDays[3].categories = ["RESERVE", "FLIGHT"]
-        expect(EarningsDailyPolicy.lines(month: "2026-09", days: septemberDays, events: septemberEvents, record: EarningsMonth()).first { $0.day == "2026-09-04" }!.paid, "Activated reserve with a real flight pays once")
+        let activatedEvents = septemberEvents + [
+            EarningsLocationEvent(day: "2026-09-04", order: "2026-09-04 12:00", origin: "TLV", destination: nil),
+            EarningsLocationEvent(day: "2026-09-04", order: "2026-09-04 20:00", origin: nil, destination: "TLV")
+        ]
+        expect(EarningsDailyPolicy.lines(month: "2026-09", days: septemberDays, events: activatedEvents, record: EarningsMonth()).first { $0.day == "2026-09-04" }!.paid, "Activated reserve with a real flight pays once when away")
         let unknown = [EarningsRosterDay(day: "2026-09-09", categories: ["OFF"])]
         expect(EarningsDailyPolicy.lines(month: "2026-09", days: unknown, events: [], record: EarningsMonth()).first!.needsReview, "Unknown OFF location is not silently paid")
         let homeOff = [EarningsRosterDay(day: "2026-09-09", categories: ["OFF"], stations: ["BEG"])]
