@@ -4,6 +4,7 @@ on:
     paths:
       - 'RAIDORoster-Web2IPA/**'
       - 'tests/**'
+      - 'tools/preview_announcement_reader.py'
       - '.github/workflows/fleet-validation.yml'
   workflow_dispatch:
 permissions:

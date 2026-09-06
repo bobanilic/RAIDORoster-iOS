@@ -44,7 +44,9 @@ def run(args, **kwargs):
 try:
     view.write_text(original_view + preview)
     assert original_app.count('ContentView()') == 1
-    app.write_text(original_app.replace('ContentView()', 'AnnouncementPreviewRoot()'))
+    app.write_text(original_app.replace('ContentView()', 'AnnouncementPreviewRoot()').replace(
+        '.preferredColorScheme(preferredScheme)',
+        '.preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--light") ? .light : .dark)'))
     run(['xcodebuild', '-project', str(root / 'RAIDORoster.xcodeproj'), '-scheme', 'RAIDORoster',
          '-configuration', 'Debug', '-sdk', 'iphonesimulator', '-destination', 'generic/platform=iOS Simulator',
          '-derivedDataPath', '/tmp/raido-reader-preview', 'CODE_SIGNING_ALLOWED=NO', 'build'],
@@ -61,6 +63,7 @@ try:
     run(['xcrun', 'simctl', 'install', udid, str(product)])
     run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '9:41', '--batteryState', 'charged', '--batteryLevel', '100'])
     for theme in ['dark', 'light']:
+        run(['xcrun', 'simctl', 'ui', udid, 'appearance', theme])
         run(['xcrun', 'simctl', 'launch', udid, bundle] + (['--light'] if theme == 'light' else []))
         time.sleep(4)
         path = Path('/tmp/raido-reader-' + theme + '.png')
