@@ -19,7 +19,7 @@ new = '''    func readingSegments(language: AnnouncementLanguage, aircraft: Anno
         func endsSentence(_ text: String) -> Bool {
             let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let last = value.last else { return true }
-            return #".?!:;”\"'»."#.contains(last)
+            return ".?!:;”'».".contains(last)
         }
 
         for segment in filtered {
