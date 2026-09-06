@@ -22,11 +22,15 @@ jobs:
         run: |
           swiftc RAIDORoster-Web2IPA/RAIDORoster/AnnouncementModels.swift tests/AnnouncementChecks.swift -o /tmp/announcement-checks
           /tmp/announcement-checks RAIDORoster-Web2IPA/RAIDORoster/GetJetAnnouncements.json
+      - name: Check monthly earnings, hours and payment records
+        run: |
+          swiftc RAIDORoster-Web2IPA/RAIDORoster/EarningsModels.swift tests/EarningsChecks.swift -o /tmp/earnings-checks
+          /tmp/earnings-checks
       - name: Build complete patched iOS app
         run: bash RAIDORoster-Web2IPA/build-unsigned-ipa.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-2.19.9-companion-review-IPA
+          name: RAIDO-2.20.0-companion-review-IPA
           path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
           retention-days: 7
           if-no-files-found: error
