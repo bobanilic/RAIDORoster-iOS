@@ -41,6 +41,9 @@ import CryptoKit
         let nextSession = UUID()
         items = try await vault.unlock(keyData: key, session: nextSession)
         check(items.count == 1, "reopen persisted index")
+        await vault.lock(session: session)
+        let stillOpen = try await vault.pdf(id, session: nextSession)
+        check(stillOpen == payload, "late old-session lock cannot close new unlock")
         await rejects("stale session write") { _ = try await vault.add(pdf: payload, title: "late import", category: .other, session: session) }
         await rejects("stale session read") { _ = try await vault.pdf(id, session: session) }
         var edited = items[0]; edited.category = .vaccination; edited.pinned = true; edited.expiryDay = "2028-02-29"; edited.reminders = true

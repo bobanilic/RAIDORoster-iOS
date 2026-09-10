@@ -95,8 +95,8 @@ struct CrewDocumentsView: View {
                         guard token == store.sessionID, store.unlocked else { return }
                         destination = nil
                         switch result {
-                        case .success(let images):
-                            if !images.isEmpty { Task { await store.importScan(images, category: category ?? .other) } }
+                        case .success(let data):
+                            if let data { Task { await store.importData(data, title: "Scan " + Date().formatted(date: .abbreviated, time: .omitted), category: category ?? .other) } }
                         case .failure(let error): store.message = error.localizedDescription
                         }
                     }
@@ -331,7 +331,7 @@ private struct CrewDocumentExport: Transferable {
 }
 
 private struct CrewDocumentScanner: UIViewControllerRepresentable {
-    let completion: (Result<[UIImage], Error>) -> Void
+    let completion: (Result<Data?, Error>) -> Void
     func makeCoordinator() -> Coordinator { Coordinator(completion: completion) }
     func makeUIViewController(context: Context) -> VNDocumentCameraViewController {
         let controller = VNDocumentCameraViewController(); controller.delegate = context.coordinator
@@ -339,15 +339,21 @@ private struct CrewDocumentScanner: UIViewControllerRepresentable {
     }
     func updateUIViewController(_ controller: VNDocumentCameraViewController, context: Context) {}
     final class Coordinator: NSObject, VNDocumentCameraViewControllerDelegate {
-        let completion: (Result<[UIImage], Error>) -> Void
-        init(completion: @escaping (Result<[UIImage], Error>) -> Void) { self.completion = completion }
-        func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) { completion(.success([])) }
+        let completion: (Result<Data?, Error>) -> Void
+        init(completion: @escaping (Result<Data?, Error>) -> Void) { self.completion = completion }
+        func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) { completion(.success(nil)) }
         func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError error: Error) {
             completion(.failure(CrewDocumentError.invalidFile))
         }
         func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
             guard scan.pageCount <= 20 else { completion(.failure(CrewDocumentError.invalidFile)); return }
-            completion(.success((0..<scan.pageCount).map { scan.imageOfPage(at: $0) }))
+            // Normalize one page at a time instead of retaining every full-resolution image.
+            Task {
+                do {
+                    let data = try await Task.detached { try CrewDocumentImport.scan(scan) }.value
+                    completion(.success(data))
+                } catch { completion(.failure(error)) }
+            }
         }
     }
 }

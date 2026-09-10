@@ -3,6 +3,7 @@ import LocalAuthentication
 import Security
 import CryptoKit
 import PDFKit
+import VisionKit
 import ImageIO
 import UserNotifications
 
@@ -59,23 +60,37 @@ enum CrewDocumentImport {
         return try images([UIImage(cgImage: image)])
     }
     static func images(_ images: [UIImage]) throws -> Data {
-        guard !images.isEmpty, images.count <= 20 else { throw CrewDocumentError.invalidFile }
-        let document = PDFDocument()
-        for image in images {
-            let size = image.size
-            guard size.width > 0, size.height > 0 else { throw CrewDocumentError.invalidFile }
-            let scale = min(1, 2400 / max(size.width, size.height))
-            let target = CGSize(width: size.width * scale, height: size.height * scale)
-            let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true
-            let normalized = UIGraphicsImageRenderer(size: target, format: format).image { ctx in
-                UIColor.white.setFill(); ctx.fill(CGRect(origin: .zero, size: target))
-                image.draw(in: CGRect(origin: .zero, size: target))
+        try renderPages(count: images.count) { images[$0] }
+    }
+    static func scan(_ scan: VNDocumentCameraScan) throws -> Data {
+        try renderPages(count: scan.pageCount) { scan.imageOfPage(at: $0) }
+    }
+    private static func renderPages(count: Int, imageAt: (Int) -> UIImage) throws -> Data {
+        guard count > 0, count <= 20 else { throw CrewDocumentError.invalidFile }
+        var invalid = false
+        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 612, height: 792))
+        let data = renderer.pdfData { context in
+            for index in 0..<count {
+                autoreleasepool {
+                    let image = imageAt(index)
+                    let size = image.size
+                    guard size.width > 0, size.height > 0 else { invalid = true; return }
+                    let scale = min(1, 2400 / max(size.width, size.height))
+                    let target = CGSize(width: size.width * scale, height: size.height * scale)
+                    let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true
+                    let normalized = UIGraphicsImageRenderer(size: target, format: format).image { ctx in
+                        UIColor.white.setFill(); ctx.fill(CGRect(origin: .zero, size: target))
+                        image.draw(in: CGRect(origin: .zero, size: target))
+                    }
+                    guard let jpeg = normalized.jpegData(compressionQuality: 0.82), let compressed = UIImage(data: jpeg) else { invalid = true; return }
+                    let pageScale = 612 / max(size.width, size.height)
+                    let page = CGRect(x: 0, y: 0, width: size.width * pageScale, height: size.height * pageScale)
+                    context.beginPage(withBounds: page, pageInfo: [:])
+                    compressed.draw(in: page)
+                }
             }
-            guard let jpeg = normalized.jpegData(compressionQuality: 0.82), let compressed = UIImage(data: jpeg),
-                  let page = PDFPage(image: compressed) else { throw CrewDocumentError.invalidFile }
-            document.insert(page, at: document.pageCount)
         }
-        guard let data = document.dataRepresentation() else { throw CrewDocumentError.invalidFile }
+        guard !invalid, !data.isEmpty else { throw CrewDocumentError.invalidFile }
         guard data.count <= CrewDocumentVault.maxFileBytes else { throw CrewDocumentError.tooLarge }
         return data
     }
@@ -151,11 +166,14 @@ final class CrewDocumentStore: ObservableObject {
             guard auth.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else { throw CrewDocumentError.noPasscode }
             guard try await auth.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Open your private crew documents.") else { return }
             guard token == generation else { return }
-            let exists = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil))?.contains(where: { $0.pathExtension == "sealed" }) ?? false
+            let exists: Bool
+            if FileManager.default.fileExists(atPath: root.path) {
+                exists = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil).contains { $0.pathExtension == "sealed" }
+            } else { exists = false }
             let data = try await Task.detached { try CrewDocumentKeychain.key(context: auth, existingVault: exists) }.value
             guard token == generation else { return }
             let items = try await vault.unlock(keyData: data, session: token)
-            guard token == generation else { await vault.lock(); return }
+            guard token == generation else { await vault.lock(session: token); return }
             documents = items; unlocked = true
             await refreshReminders(items, token: token)
         } catch {
@@ -166,9 +184,10 @@ final class CrewDocumentStore: ObservableObject {
         }
     }
     func lock() {
+        let prior = generation
         generation = UUID(); context?.invalidate(); context = nil
         unlocked = false; busy = false; documents = []; preview = nil; message = nil; reminderNotice = nil
-        Task { await vault.lock() }
+        Task { await vault.lock(session: prior) }
     }
     func importURL(_ url: URL, category: CrewDocumentCategory) async {
         await perform { token in
@@ -180,12 +199,6 @@ final class CrewDocumentStore: ObservableObject {
         await perform { token in
             let pdf = try await Task.detached { try CrewDocumentImport.pdf(data) }.value
             return try await self.vault.add(pdf: pdf, title: title, category: category, session: token)
-        }
-    }
-    func importScan(_ images: [UIImage], category: CrewDocumentCategory) async {
-        await perform { token in
-            let data = try await Task.detached { try CrewDocumentImport.images(images) }.value
-            return try await self.vault.add(pdf: data, title: "Scan " + Date().formatted(date: .abbreviated, time: .omitted), category: category, session: token)
         }
     }
     func update(_ document: CrewDocument) async {

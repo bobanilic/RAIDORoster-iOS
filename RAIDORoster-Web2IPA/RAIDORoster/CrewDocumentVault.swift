@@ -123,7 +123,11 @@ actor CrewDocumentVault {
         key = candidate; self.session = session; index = loaded
         return loaded.items
     }
-    func lock() { key = nil; self.session = nil; index = Index() }
+    func lock(session: UUID? = nil) {
+        // A delayed lock from an old view must not close a newer authorization.
+        guard session == nil || self.session == session else { return }
+        key = nil; self.session = nil; index = Index()
+    }
 
     func add(pdf: Data, title: String, category: CrewDocumentCategory, session: UUID) throws -> [CrewDocument] {
         guard let key, self.session == session else { throw CrewDocumentError.locked }
