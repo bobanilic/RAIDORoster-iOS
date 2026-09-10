@@ -27,11 +27,15 @@ jobs:
         run: |
           swiftc RAIDORoster-Web2IPA/RAIDORoster/EarningsModels.swift tests/EarningsChecks.swift -o /tmp/earnings-checks
           /tmp/earnings-checks
+      - name: Check encrypted Documents storage and expiry policy
+        run: |
+          swiftc RAIDORoster-Web2IPA/RAIDORoster/CrewDocumentVault.swift tests/CrewDocumentChecks.swift -o /tmp/crew-document-checks
+          /tmp/crew-document-checks
       - name: Build complete patched iOS app
         run: bash RAIDORoster-Web2IPA/build-unsigned-ipa.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-2.20.9-companion-review-IPA
+          name: RAIDO-2.21.0-companion-review-IPA
           path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
           retention-days: 7
           if-no-files-found: error
@@ -40,7 +44,7 @@ jobs:
       - name: Upload reader screenshots
         uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-reader-2.20.9-screenshots
+          name: RAIDO-reader-2.21.0-screenshots
           path: /tmp/raido-reader-*.png
           retention-days: 7
           if-no-files-found: error
