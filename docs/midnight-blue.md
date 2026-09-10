@@ -23,4 +23,4 @@ The reader now caches prepared paragraphs per language and saves reading positio
 
 These are code-level fixes for identified issues. The reported device-specific button failures and scrolling need owner confirmation; a successful build is not a substitute for that check.
 
-Salary starts hidden and is hidden again when the roster card is left or the app becomes inactive. Visibility is intentionally not persisted. Offline readiness is a non-interactive green checkmark only when cached roster data is validated.
+Salary starts hidden and is hidden again when the roster card is left or the app becomes inactive. Visibility is intentionally not persisted. Offline readiness is a non-interactive green cloud-with-checkmark only when cached roster data is validated.

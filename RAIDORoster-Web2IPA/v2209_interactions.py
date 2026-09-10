@@ -56,7 +56,7 @@ def repair():
         return t[:a] + '''    var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             HStack(spacing: 9) {
-                Image(systemName: store.hasCache && store.isCacheValidated ? "checkmark" : "exclamationmark.circle")
+                Image(systemName: store.hasCache && store.isCacheValidated ? "checkmark.icloud" : "icloud.slash")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(statusColor)
                     .accessibilityHidden(true)
