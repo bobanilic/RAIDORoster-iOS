@@ -119,6 +119,11 @@ actor CrewDocumentVault {
         } else {
             let existing = try manager.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
             guard !existing.contains(where: { $0.pathExtension == "sealed" }) else { throw CrewDocumentError.unavailable }
+            // Establish an empty manifest before the first import, so a power
+            // interruption between blob and index writes leaves a valid vault.
+            let empty = try JSONEncoder().encode(loaded)
+            let sealed = try AES.GCM.seal(empty, using: candidate, authenticating: aad("index")).combined!
+            try write(sealed, to: manifest)
         }
         key = candidate; self.session = session; index = loaded
         return loaded.items

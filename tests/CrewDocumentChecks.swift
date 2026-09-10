@@ -21,6 +21,7 @@ import CryptoKit
         await rejects("locked add") { _ = try await vault.add(pdf: payload, title: "Passport", category: .passport, session: session) }
         let empty = try await vault.unlock(keyData: key, session: session)
         check(empty.isEmpty, "new vault")
+        check(FileManager.default.fileExists(atPath: root.appendingPathComponent("index.sealed").path), "empty manifest precedes first file write")
         var items = try await vault.add(pdf: payload, title: "  Private passport  ", category: .passport, session: session)
         let id = items[0].id
         check(items[0].title == "Private passport", "name trimming")
