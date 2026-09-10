@@ -84,6 +84,7 @@ python3 "$ROOT/v2209_interactions.py"
 python3 "$ROOT/v2210_documents.py"
 python3 "$ROOT/v2211_crew_dedup.py"
 python3 "$ROOT/v2212_pay_profile.py"
+python3 "$ROOT/v2213_pay_profile_compile_fix.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
