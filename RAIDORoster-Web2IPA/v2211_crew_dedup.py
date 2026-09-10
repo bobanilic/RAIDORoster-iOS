@@ -43,7 +43,13 @@ new = '''    var crewMembers: [CrewMember] {
 
             guard !identity.hasSuffix("|"), !seen.contains(identity) else { continue }
             seen.insert(identity)
-            unique.append(CrewMember(role: member.role, code: member.code, name: cleanName.isEmpty ? member.name : cleanName))
+            unique.append(CrewMember(
+                role: member.role,
+                code: member.code,
+                name: cleanName.isEmpty ? member.name : cleanName,
+                country: member.country,
+                phone: member.phone
+            ))
         }
         return unique
     }
