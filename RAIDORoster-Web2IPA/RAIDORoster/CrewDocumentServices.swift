@@ -192,20 +192,28 @@ final class CrewDocumentStore: ObservableObject {
     func importURL(_ url: URL, category: CrewDocumentCategory) async {
         await perform { token in
             let value = try await Task.detached { try CrewDocumentImport.fromURL(url) }.value
+            guard token == self.generation, self.unlocked else { throw CrewDocumentError.locked }
             return try await self.vault.add(pdf: value.0, title: value.1, category: category, session: token)
         }
     }
     func importData(_ data: Data, title: String, category: CrewDocumentCategory) async {
         await perform { token in
             let pdf = try await Task.detached { try CrewDocumentImport.pdf(data) }.value
+            guard token == self.generation, self.unlocked else { throw CrewDocumentError.locked }
             return try await self.vault.add(pdf: pdf, title: title, category: category, session: token)
         }
     }
     func update(_ document: CrewDocument) async {
-        await perform { token in try await self.vault.update(document, session: token) }
+        await perform { token in
+            guard token == self.generation, self.unlocked else { throw CrewDocumentError.locked }
+            return try await self.vault.update(document, session: token)
+        }
     }
     func remove(_ id: UUID) async {
-        await perform { token in try await self.vault.remove(id, session: token) }
+        await perform { token in
+            guard token == self.generation, self.unlocked else { throw CrewDocumentError.locked }
+            return try await self.vault.remove(id, session: token)
+        }
         if !documents.contains(where: { $0.id == id }) { CrewDocumentReminders.removeDelivered(id) }
     }
     func open(_ id: UUID) async {
@@ -214,6 +222,7 @@ final class CrewDocumentStore: ObservableObject {
         let token = generation
         defer { if token == generation { busy = false } }
         do {
+            guard token == generation, unlocked else { throw CrewDocumentError.locked }
             let data = try await vault.pdf(id, session: token)
             guard token == generation, unlocked else { return }
             preview = data
