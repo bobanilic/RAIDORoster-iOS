@@ -299,14 +299,28 @@ private struct CrewDocumentEditor: View {
         defer { saving = false }
         document.expiryDay = hasExpiry ? CrewDocumentDates.day(expiry) : nil
         document.reminders = hasExpiry && document.reminders
+        var keepOpen = false
         if document.reminders {
             do {
                 let allowed = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
-                if !allowed { document.reminders = false; notice = "Notifications are disabled. The date can still be saved; enable notifications in iPhone Settings for reminders."; return }
-            } catch { notice = "Notification permission could not be checked. Try again or switch reminders off."; return }
+                if !allowed {
+                    document.reminders = false
+                    notice = "Notifications are disabled. The date was saved without reminders; enable notifications in iPhone Settings to turn reminders on later."
+                    keepOpen = true
+                }
+            } catch {
+                document.reminders = false
+                notice = "Notification permission could not be checked. The date was saved without reminders; you can enable reminders later."
+                keepOpen = true
+            }
         }
         await store.update(document)
-        if store.message == nil { dismiss() } else { notice = store.message; store.message = nil }
+        if let message = store.message {
+            notice = message
+            store.message = nil
+        } else if !keepOpen {
+            dismiss()
+        }
     }
 }
 
