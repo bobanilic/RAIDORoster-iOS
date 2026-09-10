@@ -50,10 +50,39 @@ def repair():
                 }
             }''' + t[b:]
     s = region(s, 'struct TodayView:', 'struct RestToNextDutyCard:', today)
+    def sync_status(t):
+        a = t.index('    var body: some View {')
+        b = t.index('    private var statusColor:', a)
+        return t[:a] + '''    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            HStack(spacing: 9) {
+                Image(systemName: store.hasCache && store.isCacheValidated ? "checkmark" : "exclamationmark.circle")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(statusColor)
+                    .accessibilityHidden(true)
+                Text(statusText(at: context.date))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 8)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+''' + t[b:]
+    s = region(s, 'struct SyncFreshnessStrip:', 'private func compactRelativeAge', sync_status)
     p.write_text(s)
 
     p = APP / 'EarningsView.swift'
     s = region(p.read_text(), 'struct MonthlyEarningsCard:', 'private enum EarningsEditor:', lambda _: EARNINGS_CARD)
+    s = once(s, '@AppStorage("RAIDORoster.Earnings.HideAmount") private var hideAmount = false', '''@State private var hideAmount = true
+    @Environment(\\.scenePhase) private var scenePhase''')
+    s = once(s, '        .midnightCard(radius: 16)', '''        .midnightCard(radius: 16)
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { hideAmount = true }
+        }
+        .onDisappear { hideAmount = true }''')
     p.write_text(s)
 
     p = APP / 'AnnouncementsView.swift'

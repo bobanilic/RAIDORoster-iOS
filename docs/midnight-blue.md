@@ -22,3 +22,5 @@ Owner testing found reduced calendar usefulness, unresponsive controls and chopp
 The reader now caches prepared paragraphs per language and saves reading position after a 400 ms quiet period, also flushing it when leaving, switching language or backgrounding. This removes paragraph preparation and immediate persistence from scroll-position changes while retaining eager layout, original source text, reading controls and saved positions.
 
 These are code-level fixes for identified issues. The reported device-specific button failures and scrolling need owner confirmation; a successful build is not a substitute for that check.
+
+Salary starts hidden and is hidden again when the roster card is left or the app becomes inactive. Visibility is intentionally not persisted. Offline readiness is a non-interactive green checkmark only when cached roster data is validated.
