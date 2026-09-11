@@ -86,6 +86,7 @@ python3 "$ROOT/v2211_crew_dedup.py"
 python3 "$ROOT/v2212_pay_profile.py"
 python3 "$ROOT/v2213_pay_profile_compile_fix.py"
 python3 "$ROOT/v2214_fleet_v2.py"
+python3 "$ROOT/v2215_fleet_v2_compile_fix.py"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
