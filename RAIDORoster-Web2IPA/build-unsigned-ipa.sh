@@ -98,6 +98,7 @@ python3 "$ROOT/v2218b_fleet_hierarchy.py"
 python3 "$ROOT/v2219_flight_companion_reliability.py"
 python3 "$ROOT/v2220_flight_companion_v2.py"
 python3 "$ROOT/v2221_measured_trail_only.py"
+python3 "$ROOT/v2222_roster_auto_arm.py"
 
 bash "$ROOT/../tools/run_generated_checks.sh"
 
@@ -120,7 +121,9 @@ fi
 /usr/libexec/PlistBuddy -c "Delete :NSCalendarsFullAccessUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
 /usr/libexec/PlistBuddy -c "Add :NSCalendarsFullAccessUsageDescription string RAIDORoster can add your roster duties to Calendar when you ask it to." "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c "Delete :NSLocationWhenInUseUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
-/usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string RAIDORoster uses your location during a Flight Companion session you start, including while the app is in the background." "$APP/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string RAIDORoster uses your location for Flight Companion position and automatic flight detection." "$APP/Info.plist"
+/usr/libexec/PlistBuddy -c "Delete :NSLocationAlwaysAndWhenInUseUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Add :NSLocationAlwaysAndWhenInUseUsageDescription string RAIDORoster uses low-power background location near a rostered departure to arm Flight Companion automatically, then stops after the flight session." "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c "Delete :UIBackgroundModes" "$APP/Info.plist" >/dev/null 2>&1 || true
 /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string location" "$APP/Info.plist"
