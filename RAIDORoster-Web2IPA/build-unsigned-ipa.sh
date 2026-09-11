@@ -95,6 +95,7 @@ python3 "$ROOT/v2216_fleet_status_fusion.py"
 python3 "$ROOT/v2217_fleet_photo_store_fix.py"
 python3 "$ROOT/v2218a_fleet_recency.py"
 python3 "$ROOT/v2218b_fleet_hierarchy.py"
+python3 "$ROOT/v2219_flight_companion_reliability.py"
 
 bash "$ROOT/../tools/run_generated_checks.sh"
 
