@@ -97,6 +97,7 @@ python3 "$ROOT/v2218a_fleet_recency.py"
 python3 "$ROOT/v2218b_fleet_hierarchy.py"
 python3 "$ROOT/v2219_flight_companion_reliability.py"
 python3 "$ROOT/v2220_flight_companion_v2.py"
+python3 "$ROOT/v2221_measured_trail_only.py"
 
 bash "$ROOT/../tools/run_generated_checks.sh"
 
