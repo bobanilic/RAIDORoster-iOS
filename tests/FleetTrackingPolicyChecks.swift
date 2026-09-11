@@ -62,6 +62,30 @@ struct FleetTrackingPolicyChecks {
         expect(FleetTrackingPolicy.canInferTransition(previousAt: t, currentAt: t.addingTimeInterval(30),
                    previousKnown: true, currentKnown: true, previousCallsign: "ISR123", currentCallsign: "ISR123"),
                "Contiguous observations can contribute event evidence")
+
+        expect(FleetTrackingPolicy.validAirport(" tlv ") == "TLV", "Airport normalization")
+        expect(FleetTrackingPolicy.validAirport("TELAVIV") == nil, "Only IATA-like station codes are accepted")
+        expect(FleetTrackingPolicy.routeAirports("ATH → TLV")?.origin == "ATH", "Route origin parsing")
+        expect(FleetTrackingPolicy.routeAirports("ATH → TLV")?.destination == "TLV", "Route destination parsing")
+        expect(FleetTrackingPolicy.routeAirports("GJT123") == nil, "Flight numbers are not routes")
+        expect(FleetTrackingPolicy.rotationRelation(route: "ATH-TLV", airport: "TLV") == .inbound,
+               "Inbound rotation relation")
+        expect(FleetTrackingPolicy.rotationRelation(route: "TLV-LCA", airport: "TLV") == .outbound,
+               "Outbound rotation relation")
+        expect(FleetTrackingPolicy.rotationRelation(route: "ATH-LCA", airport: "TLV") == .unrelated,
+               "Unrelated route relation")
+        expect(FleetTrackingPolicy.dominantRotationAirport(
+                   routes: ["TLV-ATH", "ATH-TLV", "TLV-LCA", "LCA-TLV"],
+                   stations: ["TLV"], preferredAirports: ["TLV"]) == "TLV",
+               "Tel Aviv rotation is dominant")
+        expect(FleetTrackingPolicy.dominantRotationAirport(
+                   routes: ["AUH-CAI", "CAI-AUH", "AUH-CMB"],
+                   stations: ["AUH"], preferredAirports: ["AUH"]) == "AUH",
+               "Abu Dhabi rotation is dominant")
+        expect(FleetTrackingPolicy.dominantRotationAirport(
+                   routes: ["ATH-LCA"], stations: [], preferredAirports: []) == nil,
+               "Weak one-off route does not invent a rotation")
+
         print("Passed \(checks) Fleet tracking policy checks")
     }
 }
