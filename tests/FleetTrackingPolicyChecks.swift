@@ -34,6 +34,14 @@ struct FleetTrackingPolicyChecks {
         expect(!FleetTrackingPolicy.validCoordinate(latitude: 91, longitude: 34), "Invalid latitude")
         expect(!FleetTrackingPolicy.validCoordinate(latitude: 32, longitude: .infinity), "Nonfinite longitude")
         expect(FleetTrackingPolicy.validHex("~12345") == nil, "Non-ICAO identity rejected")
+        expect(FleetTrackingPolicy.canonicalRegistration("LYTEN") == "LY-TEN",
+               "RAIDO compact LY registration restored for provider lookup")
+        expect(FleetTrackingPolicy.canonicalRegistration("ly wsa") == "LY-WSA",
+               "Spaced LY registration canonicalized")
+        expect(FleetTrackingPolicy.canonicalRegistration("9hgts") == "9H-GTS",
+               "Compact Malta registration restored for provider lookup")
+        expect(FleetTrackingPolicy.normalizedRegistration(FleetTrackingPolicy.canonicalRegistration("LYTEN")) == "LYTEN",
+               "Canonical display form preserves registration identity")
         expect(FleetTrackingPolicy.matches(registration: "ly now", hex: "503123",
                    requested: "LY-NOW", expectedHex: nil), "Registration normalization")
         expect(!FleetTrackingPolicy.matches(registration: "LY-UNO", hex: "503123",
