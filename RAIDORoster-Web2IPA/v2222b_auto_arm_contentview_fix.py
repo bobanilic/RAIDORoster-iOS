@@ -28,17 +28,11 @@ if vs < 0 or ve < 0:
 v = s[vs:ve]
 mods = '''        .onAppear { TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items) }\n        .onChange(of: appState.rosterStore.snapshot) { _, _ in\n            TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)\n        }'''
 
-# v2222 originally used the last closing brace in ContentView. Later patches add
-# helper/computed properties after body, so that can attach SwiftUI modifiers to
-# a String or another computed property instead of the body expression. Remove
-# the misplaced copy first, then attach it specifically to body.
 v = v.replace('\n' + mods, '')
-
 body_start = v.find('    var body: some View {')
 body_end = block_end(v, body_start) if body_start >= 0 else -1
 if body_start < 0 or body_end < 0:
     raise RuntimeError('auto-arm fix: ContentView body bounds missing')
-
 body = v[body_start:body_end]
 if 'TodayLiveFlightLocationManager.shared.configureAutomaticFlight' not in body:
     close = body.rfind('\n    }')
@@ -46,8 +40,6 @@ if 'TodayLiveFlightLocationManager.shared.configureAutomaticFlight' not in body:
         raise RuntimeError('auto-arm fix: ContentView body close missing')
     body = body[:close] + '\n' + mods + body[close:]
     v = v[:body_start] + body + v[body_end:]
-
-# Fail closed if the automatic configuration escaped body again.
 body_start = v.find('    var body: some View {')
 body_end = block_end(v, body_start)
 body = v[body_start:body_end]
@@ -55,7 +47,32 @@ if mods not in body:
     raise RuntimeError('auto-arm fix: modifiers are not attached to ContentView body')
 if v.count('TodayLiveFlightLocationManager.shared.configureAutomaticFlight') != 2:
     raise RuntimeError('auto-arm fix: unexpected automatic-flight configuration copies')
-
 s = s[:vs] + v + s[ve:]
+
+ms = s.find('private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {')
+me = s.find('\nstruct TodayRouteMapCard: View {', ms)
+if ms < 0 or me < 0:
+    raise RuntimeError('companion state: manager bounds missing')
+m = s[ms:me]
+anchor = '    func start() {\n'
+if anchor not in m:
+    raise RuntimeError('companion state: start anchor missing')
+if 'func companionStateText' not in m:
+    helper = '''    func companionStateText() -> String {\n        [\n            "version=2.23.0-companion-state",\n            "phase=\\(flightPhaseText)",\n            "tracking=\\(isTracking)",\n            "source=\\(positionSourceText)",\n            "estimated=\\(positionIsEstimated)"\n        ].joined(separator: "\\n")\n    }\n\n'''
+    m = m.replace(anchor, helper + anchor, 1)
+s = s[:ms] + m + s[me:]
+
+ss = s.find('struct SettingsView: View {')
+se = s.find('\nstruct DutyHeroCard: View {', ss)
+if ss < 0 or se < 0:
+    raise RuntimeError('companion state: SettingsView bounds missing')
+settings = s[ss:se]
+section = '                Section("Diagnostics") {\n'
+if section not in settings:
+    raise RuntimeError('companion state: Diagnostics section missing')
+if 'Flight Companion state' not in settings:
+    settings = settings.replace(section, section + '''                    DisclosureGroup("Flight Companion state") {\n                        Text(TodayLiveFlightLocationManager.shared.companionStateText())\n                            .font(.caption.monospaced())\n                            .textSelection(.enabled)\n                    }\n''', 1)
+s = s[:ss] + settings + s[se:]
+
 CONTENT.write_text(s)
-print('Flight Companion ContentView auto-arm placement fixed')
+print('Flight Companion ContentView fix + state panel applied')
