@@ -4,6 +4,22 @@ ROOT = Path(__file__).resolve().parent
 CONTENT = ROOT / "RAIDORoster/ContentView.swift"
 s = CONTENT.read_text()
 
+
+def block_end(text: str, start: int) -> int:
+    brace = text.find('{', start)
+    if brace < 0:
+        return -1
+    depth = 0
+    for i in range(brace, len(text)):
+        if text[i] == '{':
+            depth += 1
+        elif text[i] == '}':
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return -1
+
+
 manager_start = s.find('private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {')
 manager_end = s.find('\nstruct TodayRouteMapCard: View {', manager_start)
 if manager_start < 0 or manager_end < 0:
@@ -66,24 +82,24 @@ if 'func configureTrailPersistence(sessionKey:' not in manager:
     manager = manager[:idx] + helpers + manager[idx:]
 
 # Canonicalize RAIDO's compact tail forms (for example LYTEN -> LY-TEN) before
-# network lookup. This is the same identity policy used by Fleet.
-old_config = r'''    func configureAircraftTracking(registration: String?) {
-        let normalized = (registration ?? "")
-            .uppercased()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        trackedRegistration = normalized.isEmpty ? nil : normalized
-        if isTracking { restartHybridTask() }
-    }
-'''
+# network lookup. Locate the function structurally instead of requiring the exact
+# V2.19.6 text: earlier patches are allowed to reformat or extend the block.
 new_config = r'''    func configureAircraftTracking(registration: String?) {
         let canonical = FleetTrackingPolicy.canonicalRegistration(registration ?? "")
         trackedRegistration = canonical.isEmpty ? nil : canonical
         if isTracking { restartHybridTask() }
-    }
-'''
-if old_config not in manager:
-    raise RuntimeError('Flight Companion reliability: registration canonicalization anchor missing')
-manager = manager.replace(old_config, new_config, 1)
+    }'''
+config_start = manager.find(configure_anchor)
+config_end = block_end(manager, config_start) if config_start >= 0 else -1
+if config_start < 0 or config_end < 0:
+    raise RuntimeError('Flight Companion reliability: registration function boundaries missing')
+config_block = manager[config_start:config_end]
+if 'FleetTrackingPolicy.canonicalRegistration' in config_block:
+    pass
+elif 'trackedRegistration' in config_block and 'restartHybridTask' in config_block:
+    manager = manager[:config_start] + new_config + manager[config_end:]
+else:
+    raise RuntimeError('Flight Companion reliability: configureAircraftTracking semantics changed; refusing unsafe replacement')
 
 # Replace the single-provider fallback with a conservative multi-provider
 # cascade. Only one roster aircraft is queried and secondary providers are used
@@ -189,16 +205,20 @@ if 'private var trackingSessionKey:' not in card:
 auto = '''        .onAppear {\n            gps.configureAircraftTracking(registration: trackedAircraftRegistration)\n            gps.startIfAuthorized()\n        }\n        .onChange(of: trackedAircraftRegistration) { _, value in\n            gps.configureAircraftTracking(registration: value)\n        }'''
 manual = '''        .onAppear {\n            gps.configureAircraftTracking(registration: trackedAircraftRegistration)\n            gps.configureTrailPersistence(sessionKey: trackingSessionKey)\n        }\n        .onChange(of: trackedAircraftRegistration) { _, value in\n            gps.configureAircraftTracking(registration: value)\n        }\n        .onChange(of: trackingSessionKey) { _, value in\n            gps.configureTrailPersistence(sessionKey: value)\n        }'''
 if auto not in card:
-    raise RuntimeError('Flight Companion reliability: automatic-start anchor missing')
-card = card.replace(auto, manual, 1)
+    if manual not in card:
+        raise RuntimeError('Flight Companion reliability: automatic-start anchor missing')
+else:
+    card = card.replace(auto, manual, 1)
 
 # When tracking is active, expose an explicit Stop control in the same place as
 # Start. This makes battery use entirely opt-in for each tracking session.
 start_anchor = '''                    if !gps.isTracking {\n                        Button {\n                            gps.start()\n'''
 stop_then_start = '''                    if gps.isTracking {\n                        Button {\n                            gps.stop()\n                        } label: {\n                            HStack(spacing: 7) {\n                                Image(systemName: "stop.circle.fill")\n                                Text("Stop Live Tracking")\n                                    .font(.subheadline.weight(.semibold))\n                            }\n                            .foregroundStyle(Color.orange)\n                            .padding(.horizontal, 12)\n                            .padding(.vertical, 9)\n                            .background(Color(uiColor: .systemBackground).opacity(0.94), in: Capsule())\n                        }\n                        .buttonStyle(.plain)\n                        .padding(.bottom, 12)\n                        .accessibilityLabel("Stop live flight tracking")\n                    } else {\n                        Button {\n                            gps.start()\n'''
 if start_anchor not in card:
-    raise RuntimeError('Flight Companion reliability: Start Live GPS anchor missing')
-card = card.replace(start_anchor, stop_then_start, 1)
+    if 'Stop Live Tracking' not in card:
+        raise RuntimeError('Flight Companion reliability: Start Live GPS anchor missing')
+else:
+    card = card.replace(start_anchor, stop_then_start, 1)
 
 s = s[:card_start] + card + s[card_end:]
 s += '\n// Flight Companion manual persistent hybrid tracking\n'
