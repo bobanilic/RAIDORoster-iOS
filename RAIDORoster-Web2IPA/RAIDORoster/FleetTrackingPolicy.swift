@@ -14,6 +14,23 @@ enum FleetTrackingPolicy {
         value.uppercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber) }
     }
 
+    static func canonicalRegistration(_ value: String) -> String {
+        let normalized = normalizedRegistration(value)
+        guard !normalized.isEmpty else { return "" }
+
+        // RAIDO occasionally supplies registrations without punctuation (for
+        // example LYTEN). Lithuanian GetJet/Airhub registrations are LY-XXX, so
+        // restore the display/API form while keeping normalizedRegistration for
+        // identity comparisons. Other formats are left conservatively unchanged.
+        if normalized.hasPrefix("LY"), normalized.count == 5 {
+            return "LY-" + String(normalized.dropFirst(2))
+        }
+        if normalized.hasPrefix("9H"), normalized.count == 5 {
+            return "9H-" + String(normalized.dropFirst(2))
+        }
+        return value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    }
+
     static func validHex(_ value: String?) -> String? {
         guard let value, value.count == 6,
               value.allSatisfy({ $0.isHexDigit && $0.isASCII }) else { return nil }
