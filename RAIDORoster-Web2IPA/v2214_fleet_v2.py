@@ -139,17 +139,32 @@ new_fetch = r'''    private let primaryFleetProvider = FleetProviderSpec(
 
     private func fetchAircraft(_ registration: String) async throws -> FleetLiveSnapshot? {
         let expectedHex = FleetTrackingPolicy.validHex(snapshots[registration]?.icaoHex)
+        var lastKnown: FleetLiveSnapshot?
+
+        func remember(_ value: FleetLiveSnapshot) {
+            if lastKnown == nil || value.effectivePositionAge < lastKnown!.effectivePositionAge {
+                lastKnown = value
+            }
+        }
 
         let primary = await fetchAircraft(registration, expectedHex: expectedHex, provider: primaryFleetProvider)
-        if case .snapshot(let value) = primary { return value }
+        try Task.checkCancellation()
+        if case .snapshot(let value) = primary {
+            if value.isFresh { return value }
+            remember(value)
+        }
 
         let secondary = await fetchAircraft(registration, expectedHex: expectedHex, provider: secondaryFleetProvider)
+        try Task.checkCancellation()
         switch secondary {
-        case .snapshot(let value): return value
+        case .snapshot(let value):
+            if value.isFresh { return value }
+            remember(value)
+            return lastKnown
         case .empty:
-            // Two independent public networks agree there is no current target.
-            // Do not turn silence into an operational/AOG conclusion.
-            return nil
+            // The secondary completed successfully. Retain any older observation
+            // with its original timestamp; silence never implies AOG.
+            return lastKnown
         case .failed:
             break
         }
@@ -157,8 +172,18 @@ new_fetch = r'''    private let primaryFleetProvider = FleetProviderSpec(
         // Tertiary is outage resilience, not a normal third request for every
         // parked aircraft.
         let tertiary = await fetchAircraft(registration, expectedHex: expectedHex, provider: tertiaryFleetProvider)
-        if case .snapshot(let value) = tertiary { return value }
-        return nil
+        try Task.checkCancellation()
+        switch tertiary {
+        case .snapshot(let value):
+            if value.isFresh { return value }
+            remember(value)
+            return lastKnown
+        case .empty: return lastKnown
+        case .failed:
+            if let lastKnown { return lastKnown }
+            if case .empty = primary { return nil }
+            throw URLError(.cannotConnectToHost)
+        }
     }
 
     private func fetchAircraft(_ registration: String, expectedHex: String?,
@@ -374,7 +399,8 @@ fleet_view = r'''struct FleetView: View {
             return live.snapshot(for: aircraft.registration).map { $0.isFresh && $0.isAirborne } == true ? 20 : 30
         }
         let intelligence = live.intelligence(for: aircraft.registration)
-        if let route = intelligence?.currentRoute {
+        if live.snapshot(for: aircraft.registration).map({ $0.isFresh && $0.isAirborne }) == true,
+           let route = intelligence?.currentRoute {
             switch FleetTrackingPolicy.rotationRelation(route: route, airport: airport) {
             case .inbound: return 1
             case .outbound: return 3
@@ -393,18 +419,16 @@ fleet_view = r'''struct FleetView: View {
     private func rotationContext(_ aircraft: FleetAircraftDefinition) -> String? {
         guard let airport = rotationAirport else { return nil }
         let intelligence = live.intelligence(for: aircraft.registration)
-        if let route = intelligence?.currentRoute {
-            switch FleetTrackingPolicy.rotationRelation(route: route, airport: airport) {
-            case .inbound: return "Inbound \(airport) · \(route)"
-            case .outbound: return "Outbound \(airport) · \(route)"
-            case .touches: return "Rotation route · \(route)"
-            case .unrelated: break
-            }
+        let snapshot = live.snapshot(for: aircraft.registration)
+        if let route = intelligence?.currentRoute,
+           let label = FleetTrackingPolicy.rotationRouteLabel(route: route, airport: airport,
+                isFresh: snapshot?.isFresh == true, isAirborne: snapshot?.isAirborne == true) {
+            return label
         }
         if live.snapshot(for: aircraft.registration)?.isFresh == true,
            live.snapshot(for: aircraft.registration)?.onGround == true,
            intelligence?.nearestAirport == airport { return "On ground · \(airport)" }
-        if intelligence?.nearestAirport == airport { return "Near \(airport)" }
+        if intelligence?.nearestAirport == airport { return "Last seen near \(airport)" }
         if rosterRotationRegistrations.contains(normalizedRegistration(aircraft.registration)) {
             return "Used on your \(airport) rotation"
         }
@@ -415,8 +439,8 @@ fleet_view = r'''struct FleetView: View {
         guard let airport = rotationAirport else { return nil }
         let names = ["TLV": "Tel Aviv", "AUH": "Abu Dhabi", "BEG": "Belgrade",
                      "VNO": "Vilnius", "RIX": "Riga", "LCA": "Larnaca"]
-        if let name = names[airport] { return "YOUR ROTATION · \(name) · \(airport)" }
-        return "YOUR ROTATION · \(airport)"
+        if let name = names[airport] { return "INFERRED ROTATION · \(name) · \(airport)" }
+        return "INFERRED ROTATION · \(airport)"
     }
 
     var body: some View {
@@ -435,7 +459,7 @@ fleet_view = r'''struct FleetView: View {
                         ForEach(assignedAircraft) { aircraft in
                             FleetAircraftRow(aircraft: aircraft,
                                 snapshot: live.snapshot(for: aircraft.registration), isAssigned: true,
-                                contextText: rotationContext(aircraft))
+                                contextText: { rotationContext(aircraft) })
                                 .contentShape(Rectangle())
                                 .onTapGesture { selectedAircraft = aircraft }
                         }
@@ -447,7 +471,7 @@ fleet_view = r'''struct FleetView: View {
                         ForEach(rotationAircraft) { aircraft in
                             FleetAircraftRow(aircraft: aircraft,
                                 snapshot: live.snapshot(for: aircraft.registration), isAssigned: false,
-                                contextText: rotationContext(aircraft))
+                                contextText: { rotationContext(aircraft) })
                                 .contentShape(Rectangle())
                                 .onTapGesture { selectedAircraft = aircraft }
                         }
@@ -495,7 +519,7 @@ fleet_view = r'''struct FleetView: View {
                 FleetAircraftDetailView(aircraft: aircraft, live: live,
                     isAssigned: currentDutyRegistrations.contains(normalizedRegistration(aircraft.registration)))
             }
-            .task(id: refreshAircraft.map(\.registration).joined(separator: "|")) {
+            .task(id: allAircraft.map(\.registration).sorted().joined(separator: "|")) {
                 await live.refresh(definitions: refreshAircraft)
                 while !Task.isCancelled {
                     do { try await Task.sleep(for: .seconds(60)) }
@@ -517,14 +541,14 @@ content = once(content,
 
     private var status:''',
 '''    let isAssigned: Bool
-    var contextText: String? = nil
+    var contextText: (() -> String?)? = nil
 
     private var status:''',
 "row context property")
 content = once(content,
 '''                    Text(snapshot.map { "Position " + fleetCompactAge($0.effectivePositionAge) } ?? "No recent position received")
                         .font(.caption).foregroundStyle(.secondary)''',
-'''                    if let contextText, !contextText.isEmpty {
+'''                    if let contextText = contextText?(), !contextText.isEmpty {
                         Text(contextText).font(.caption.weight(.medium)).foregroundStyle(MidnightTheme.accent)
                     }
                     Text(snapshot.map { "Position " + fleetCompactAge($0.effectivePositionAge) } ?? "No recent position received")

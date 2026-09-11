@@ -86,6 +86,20 @@ struct FleetTrackingPolicyChecks {
                    routes: ["ATH-LCA"], stations: [], preferredAirports: []) == nil,
                "Weak one-off route does not invent a rotation")
 
+        expect(FleetTrackingPolicy.dominantRotationAirport(
+                   routes: ["ATH-LCA", "LCA-ATH", "ATH-LCA"], stations: [], preferredAirports: []) == nil,
+               "Equal evidence must not invent a rotation by alphabetical order")
+        expect(FleetTrackingPolicy.rotationRouteLabel(route: "ATH-TLV", airport: "TLV",
+                   isFresh: false, isAirborne: true) == "Last reported route · ATH-TLV",
+               "Stale airborne observation must not claim inbound now")
+        expect(FleetTrackingPolicy.rotationRouteLabel(route: "TLV-ATH", airport: "TLV",
+                   isFresh: true, isAirborne: false) == "Last reported route · TLV-ATH",
+               "Ground observation must not claim outbound now")
+        expect(FleetTrackingPolicy.rotationRouteLabel(route: "ATH-TLV", airport: "TLV",
+                   isFresh: true, isAirborne: true) == "Likely inbound TLV · ATH-TLV",
+               "Fresh public route remains explicitly inferred")
+        expect(FleetTrackingPolicy.rotationRouteLabel(route: "ATH-LCA", airport: "TLV",
+                   isFresh: true, isAirborne: true) == nil, "Unrelated route has no rotation label")
         print("Passed \(checks) Fleet tracking policy checks")
     }
 }

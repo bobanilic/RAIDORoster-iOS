@@ -20,6 +20,8 @@ workflows:
         script: xcodebuild -version
       - name: Run regression checks
         script: |
+          set -euo pipefail
+          python3 -m unittest discover -s ../tests -p 'test_*.py'
           swiftc RAIDORoster/FleetTrackingPolicy.swift ../tests/FleetTrackingPolicyChecks.swift -o /tmp/fleet-policy-checks
           /tmp/fleet-policy-checks
           swiftc RAIDORoster/AnnouncementModels.swift ../tests/AnnouncementChecks.swift -o /tmp/announcement-checks
@@ -32,12 +34,17 @@ workflows:
           /tmp/crew-document-checks
       - name: Build unsigned IPA
         script: |
+          set -euo pipefail
           chmod +x build-unsigned-ipa.sh
-          ./build-unsigned-ipa.sh
+          ./build-unsigned-ipa.sh 2>&1 | tee xcode-build.log
       - name: Package IPA for iPhone download
         script: |
+          set -euo pipefail
           rm -f RAIDO-2.23.0-fleet-v2-review-IPA.zip
           /usr/bin/zip -j RAIDO-2.23.0-fleet-v2-review-IPA.zip RAIDORoster-unsigned.ipa
+          python3 ../tools/verify_raido_artifacts.py
     artifacts:
       - RAIDORoster-unsigned.ipa
       - RAIDO-2.23.0-fleet-v2-review-IPA.zip
+      - artifact-verification.json
+      - xcode-build.log

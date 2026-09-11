@@ -58,11 +58,26 @@ enum FleetTrackingPolicy {
         for station in stations { add(validAirport(station), weight: 3) }
         for airport in preferredAirports { add(validAirport(airport), weight: 6) }
 
-        guard let best = scores.sorted(by: {
+        let ranked = scores.sorted(by: {
             if $0.value == $1.value { return $0.key < $1.key }
             return $0.value > $1.value
-        }).first, best.value >= 3 else { return nil }
+        })
+        guard let best = ranked.first, best.value >= 3,
+              ranked.count == 1 || best.value > ranked[1].value else { return nil }
         return best.key
+    }
+
+    static func rotationRouteLabel(route: String, airport: String,
+                                   isFresh: Bool, isAirborne: Bool) -> String? {
+        let relation = rotationRelation(route: route, airport: airport)
+        guard relation != .unrelated else { return nil }
+        guard isFresh && isAirborne else { return "Last reported route · \(route)" }
+        switch relation {
+        case .inbound: return "Likely inbound \(airport) · \(route)"
+        case .outbound: return "Likely outbound \(airport) · \(route)"
+        case .touches: return "Possible rotation route · \(route)"
+        case .unrelated: return nil
+        }
     }
 
     static func validCoordinate(latitude: Double?, longitude: Double?) -> Bool {

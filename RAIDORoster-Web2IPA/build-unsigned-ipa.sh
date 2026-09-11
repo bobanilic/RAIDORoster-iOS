@@ -83,10 +83,16 @@ python3 "$ROOT/v2208_midnight.py"
 python3 "$ROOT/v2209_interactions.py"
 python3 "$ROOT/v2210_documents.py"
 python3 "$ROOT/v2211_crew_dedup.py"
+# Capture the real pre-profile engine, including authoritative RAIDO BLH.
+mkdir -p "$BUILD/validation"
+swiftc "$ROOT/RAIDORoster/EarningsModels.swift" "$ROOT/../tests/PayProfileParityChecks.swift" -o "$BUILD/validation/legacy-parity"
+"$BUILD/validation/legacy-parity" > "$BUILD/validation/legacy.json"
 python3 "$ROOT/v2212_pay_profile.py"
 python3 "$ROOT/v2213_pay_profile_compile_fix.py"
 python3 "$ROOT/v2214_fleet_v2.py"
 python3 "$ROOT/v2215_fleet_v2_compile_fix.py"
+
+bash "$ROOT/../tools/run_generated_checks.sh"
 
 xcodebuild \
   -project "$ROOT/RAIDORoster.xcodeproj" \
