@@ -3,6 +3,13 @@ import Foundation
 // Deterministic policy shared by the native Fleet UI and its regression checks.
 // These rules assess observations; they never determine dispatchability or AOG.
 enum FleetTrackingPolicy {
+    enum RotationRelation: String, Equatable {
+        case inbound
+        case outbound
+        case touches
+        case unrelated
+    }
+
     static func normalizedRegistration(_ value: String) -> String {
         value.uppercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber) }
     }
@@ -11,6 +18,51 @@ enum FleetTrackingPolicy {
         guard let value, value.count == 6,
               value.allSatisfy({ $0.isHexDigit && $0.isASCII }) else { return nil }
         return value.uppercased()
+    }
+
+    static func validAirport(_ value: String) -> String? {
+        let airport = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard airport.count == 3,
+              airport.allSatisfy({ $0.isASCII && $0.isLetter }) else { return nil }
+        return airport
+    }
+
+    static func routeAirports(_ value: String) -> (origin: String, destination: String)? {
+        let parts = value.uppercased()
+            .components(separatedBy: CharacterSet.letters.inverted)
+            .compactMap(validAirport)
+        guard parts.count == 2 else { return nil }
+        return (parts[0], parts[1])
+    }
+
+    static func rotationRelation(route: String, airport: String) -> RotationRelation {
+        guard let target = validAirport(airport), let pair = routeAirports(route) else { return .unrelated }
+        if pair.destination == target && pair.origin != target { return .inbound }
+        if pair.origin == target && pair.destination != target { return .outbound }
+        if pair.origin == target || pair.destination == target { return .touches }
+        return .unrelated
+    }
+
+    static func dominantRotationAirport(routes: [String], stations: [String], preferredAirports: [String]) -> String? {
+        var scores: [String: Int] = [:]
+        func add(_ airport: String?, weight: Int) {
+            guard let airport else { return }
+            scores[airport, default: 0] += weight
+        }
+
+        for route in routes {
+            guard let pair = routeAirports(route) else { continue }
+            add(pair.origin, weight: 1)
+            add(pair.destination, weight: 1)
+        }
+        for station in stations { add(validAirport(station), weight: 3) }
+        for airport in preferredAirports { add(validAirport(airport), weight: 6) }
+
+        guard let best = scores.sorted(by: {
+            if $0.value == $1.value { return $0.key < $1.key }
+            return $0.value > $1.value
+        }).first, best.value >= 3 else { return nil }
+        return best.key
     }
 
     static func validCoordinate(latitude: Double?, longitude: Double?) -> Bool {
