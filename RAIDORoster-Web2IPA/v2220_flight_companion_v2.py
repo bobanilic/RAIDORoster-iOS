@@ -16,13 +16,36 @@ if pub not in m:
 if 'flightPhaseText' not in m:
     m = m.replace(pub, pub + '''    @Published private(set) var flightPhaseText = "Parked"\n    @Published private(set) var taxiOutDurationText: String?\n    @Published private(set) var airborneDurationText: String?\n    @Published private(set) var taxiInDurationText: String?\n    @Published private(set) var takeoffTimeText: String?\n    @Published private(set) var landingTimeText: String?\n\n''', 1)
 
+# The original V2.19.6 constant is not a reliable insertion point anymore because
+# later Flight Companion reliability patches can legitimately reshape that state
+# region. v2219 guarantees lastFusedTrailAt exists, so prefer the old constant
+# when available and otherwise insert next to that stable state field.
 state = '    private let maximumExtrapolationAge: TimeInterval = 120\n'
-if state not in m:
-    raise RuntimeError('V2 state anchor missing')
+state_fallback = '    private var lastFusedTrailAt: Date?\n'
 if 'private enum CompanionPhase' not in m:
-    m = m.replace(state, state + '''    private enum CompanionPhase { case parked, taxiOut, takeoffRoll, airborne, descent, taxiIn, complete }\n    private var companionPhase: CompanionPhase = .parked\n    private var routeCoordinates: [CLLocationCoordinate2D] = []\n    private var taxiOutStartedAt: Date?\n    private var airborneAt: Date?\n    private var landedAt: Date?\n    private var stationarySince: Date?\n    private var groundAltitude: CLLocationDistance?\n    private var lastMeasuredProgress = 0.0\n    private var lastMeasuredProgressAt: Date?\n    private var previousMeasuredSpeed: CLLocationSpeed?\n\n''', 1)
+    state_anchor = state if state in m else state_fallback if state_fallback in m else None
+    if state_anchor is None:
+        raise RuntimeError('V2 state anchor missing: neither extrapolation nor fused-trail state found')
+    m = m.replace(state_anchor, state_anchor + '''    private enum CompanionPhase { case parked, taxiOut, takeoffRoll, airborne, descent, taxiIn, complete }\n    private var companionPhase: CompanionPhase = .parked\n    private var routeCoordinates: [CLLocationCoordinate2D] = []\n    private var taxiOutStartedAt: Date?\n    private var airborneAt: Date?\n    private var landedAt: Date?\n    private var stationarySince: Date?\n    private var groundAltitude: CLLocationDistance?\n    private var lastMeasuredProgress = 0.0\n    private var lastMeasuredProgressAt: Date?\n    private var previousMeasuredSpeed: CLLocationSpeed?\n\n''', 1)
 
-m = m.replace('        manager.pausesLocationUpdatesAutomatically = false\n        manager.allowsBackgroundLocationUpdates = false\n        manager.showsBackgroundLocationIndicator = false\n', '        manager.pausesLocationUpdatesAutomatically = true\n        manager.allowsBackgroundLocationUpdates = true\n        manager.showsBackgroundLocationIndicator = true\n', 1)
+# Background tracking is session-scoped and only starts after explicit user
+# action. Patch the individual Core Location knobs rather than relying on one
+# formatting-sensitive three-line block, then fail closed if any expected knob
+# cannot be established.
+for old, new in [
+    ('manager.pausesLocationUpdatesAutomatically = false', 'manager.pausesLocationUpdatesAutomatically = true'),
+    ('manager.allowsBackgroundLocationUpdates = false', 'manager.allowsBackgroundLocationUpdates = true'),
+    ('manager.showsBackgroundLocationIndicator = false', 'manager.showsBackgroundLocationIndicator = true'),
+]:
+    if old in m:
+        m = m.replace(old, new, 1)
+for required in [
+    'manager.pausesLocationUpdatesAutomatically = true',
+    'manager.allowsBackgroundLocationUpdates = true',
+    'manager.showsBackgroundLocationIndicator = true',
+]:
+    if required not in m:
+        raise RuntimeError('V2 background-location configuration missing: ' + required)
 
 idx = m.find('    func start() {\n')
 if idx < 0:
@@ -132,12 +155,20 @@ m = m.replace(acq, acq + '''        companionPhase = .parked\n        flightPhas
 old = '''        if let location {\n            // Keep the last physical fix visible but explicitly stale rather\n            // than inventing a long dead-reckoning solution from phone sensors.\n            publishFused(location, source: "Last GNSS fix", estimated: true, now: now)\n            return\n        }\n'''
 new = '''        if let estimate = estimatedRouteLocation(now: now) {\n            publishFused(estimate, source: "Estimated · route model", estimated: true, now: now)\n            return\n        }\n        if let location { publishFused(location, source: "Last GNSS fix", estimated: true, now: now); return }\n'''
 if old not in m:
-    raise RuntimeError('V2 fallback anchor missing')
-m = m.replace(old, new, 1)
+    # Tolerate the compact equivalent if an earlier reliability patch already
+    # condensed the stale-GNSS fallback, but still require a recognizable last
+    # GNSS fallback so we do not patch an unrelated function.
+    compact = '        if let location { publishFused(location, source: "Last GNSS fix", estimated: true, now: now); return }\n'
+    if compact not in m:
+        raise RuntimeError('V2 fallback anchor missing')
+    m = m.replace(compact, new, 1)
+else:
+    m = m.replace(old, new, 1)
 anchor = '        positionIsEstimated = estimated\n\n'
 if anchor not in m:
     raise RuntimeError('V2 publish anchor missing')
-m = m.replace(anchor, anchor + '        updatePhase(value, estimated: estimated, now: now)\n\n', 1)
+if 'updatePhase(value, estimated: estimated, now: now)' not in m:
+    m = m.replace(anchor, anchor + '        updatePhase(value, estimated: estimated, now: now)\n\n', 1)
 s = s[:ms] + m + s[me:]
 
 cs = s.find('struct TodayRouteMapCard: View {'); ce = s.find('\nprivate struct CrewCompanionPhase', cs)
@@ -146,10 +177,25 @@ if cs < 0 or ce < 0: raise RuntimeError('V2 map boundaries missing')
 c = s[cs:ce]
 old = '''        .onAppear {\n            gps.configureAircraftTracking(registration: trackedAircraftRegistration)\n            gps.configureTrailPersistence(sessionKey: trackingSessionKey)\n        }'''
 new = '''        .onAppear {\n            gps.configureAircraftTracking(registration: trackedAircraftRegistration)\n            gps.configureFlightRoute(coordinates: points.map(\\.coordinate))\n            gps.configureTrailPersistence(sessionKey: trackingSessionKey)\n        }'''
-if old not in c: raise RuntimeError('V2 map onAppear anchor missing')
-c = c.replace(old, new, 1)
+if old in c:
+    c = c.replace(old, new, 1)
+elif new not in c:
+    raise RuntimeError('V2 map onAppear anchor missing')
 metric = 'liveMetric("Position", positionSourceDetailText)'
 if metric in c and 'liveMetric("Phase", gps.flightPhaseText)' not in c: c = c.replace(metric, 'liveMetric("Phase", gps.flightPhaseText)\n                        ' + metric, 1)
+
+# Final semantic guards catch silent no-op drift before xcodebuild.
+for required in [
+    'private enum CompanionPhase',
+    'func configureFlightRoute(coordinates:',
+    'estimatedRouteLocation(now:',
+    'updatePhase(value, estimated: estimated, now: now)',
+]:
+    if required not in m:
+        raise RuntimeError('V2 semantic guard missing: ' + required)
+if 'gps.configureFlightRoute(coordinates: points.map(\\.coordinate))' not in c:
+    raise RuntimeError('V2 route configuration guard missing')
+
 s = s[:cs] + c + s[ce:]
 s += '\n// Flight Companion V2 adaptive tracking and phase estimator\n'
 CONTENT.write_text(s)
