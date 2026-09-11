@@ -87,7 +87,7 @@ if 'func configureFlightRoute(coordinates:' not in m:
         guard d > 0.000001 else { return a }
         let x = sin((1-t)*d)/sin(d), y = sin(t*d)/sin(d)
         let vx = x*cos(p1)*cos(l1)+y*cos(p2)*cos(l2), vy = x*cos(p1)*sin(l1)+y*cos(p2)*sin(l2), vz = x*sin(p1)+y*sin(p2)
-        return .init(latitude: atan2(vz, sqrt(vx*vx+vy*vy))*180/.pi, longitude: atan2(vy, vx)*180/.pi)
+        return .init(latitude: atan2(vz, sqrt(vx*vx+vy*vy)) * 180 / .pi, longitude: atan2(vy, vx) * 180 / .pi)
     }
 
     private func estimatedRouteLocation(now: Date) -> CLLocation? {
