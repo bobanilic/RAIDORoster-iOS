@@ -93,6 +93,8 @@ python3 "$ROOT/v2214_fleet_v2.py"
 python3 "$ROOT/v2215_fleet_v2_compile_fix.py"
 python3 "$ROOT/v2216_fleet_status_fusion.py"
 python3 "$ROOT/v2217_fleet_photo_store_fix.py"
+python3 "$ROOT/v2218a_fleet_recency.py"
+python3 "$ROOT/v2218b_fleet_hierarchy.py"
 
 bash "$ROOT/../tools/run_generated_checks.sh"
 
