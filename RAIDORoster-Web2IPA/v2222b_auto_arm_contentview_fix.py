@@ -57,9 +57,30 @@ m = s[ms:me]
 anchor = '    func start() {\n'
 if anchor not in m:
     raise RuntimeError('companion state: start anchor missing')
-if 'func companionStateText' not in m:
-    helper = '''    func companionStateText() -> String {\n        [\n            "version=2.23.0-companion-state",\n            "phase=\\(flightPhaseText)",\n            "tracking=\\(isTracking)",\n            "source=\\(positionSourceText)",\n            "estimated=\\(positionIsEstimated)"\n        ].joined(separator: "\\n")\n    }\n\n'''
-    m = m.replace(anchor, helper + anchor, 1)
+
+old_helper_start = m.find('    func companionStateText() -> String {')
+if old_helper_start >= 0:
+    old_helper_end = block_end(m, old_helper_start)
+    m = m[:old_helper_start] + m[old_helper_end:]
+
+helper = r'''    func companionStateText(now: Date = Date()) -> String {
+        let departure = automaticDepartureAt.map { ISO8601DateFormatter().string(from: $0) } ?? "none"
+        let origin = automaticRegionID?.split(separator: ".").last.map(String.init) ?? "none"
+        return [
+            "version=2.23.0-companion-state",
+            "scheduledDepartureUTC=\(departure)",
+            "originAirport=\(origin)",
+            "automaticMonitoring=\(automaticMonitoring)",
+            "activeWindow=\(insideAutoWindow(now))",
+            "phase=\(flightPhaseText)",
+            "tracking=\(isTracking)",
+            "source=\(positionSourceText)",
+            "estimated=\(positionIsEstimated)"
+        ].joined(separator: "\n")
+    }
+
+'''
+m = m.replace(anchor, helper + anchor, 1)
 s = s[:ms] + m + s[me:]
 
 ss = s.find('struct SettingsView: View {')
@@ -74,5 +95,9 @@ if 'Flight Companion state' not in settings:
     settings = settings.replace(section, section + '''                    DisclosureGroup("Flight Companion state") {\n                        Text(TodayLiveFlightLocationManager.shared.companionStateText())\n                            .font(.caption.monospaced())\n                            .textSelection(.enabled)\n                    }\n''', 1)
 s = s[:ss] + settings + s[se:]
 
+for required in ['scheduledDepartureUTC=', 'originAirport=', 'automaticMonitoring=', 'activeWindow=', 'Flight Companion state']:
+    if required not in s:
+        raise RuntimeError('companion state guard missing: ' + required)
+
 CONTENT.write_text(s)
-print('Flight Companion ContentView fix + state panel applied')
+print('Flight Companion ContentView fix + expanded state diagnostics applied')
