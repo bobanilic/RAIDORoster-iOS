@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Exercise timestamp, identity, and inference policy
+      - name: Exercise timestamp, identity, rotation and inference policy
         run: |
           swiftc RAIDORoster-Web2IPA/RAIDORoster/FleetTrackingPolicy.swift tests/FleetTrackingPolicyChecks.swift -o /tmp/fleet-policy-checks
           /tmp/fleet-policy-checks
@@ -39,7 +39,7 @@ jobs:
         run: bash RAIDORoster-Web2IPA/build-unsigned-ipa.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-2.22.0-companion-review-IPA
+          name: RAIDO-2.23.0-fleet-v2-review-IPA
           path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
           retention-days: 7
           if-no-files-found: error
@@ -48,7 +48,7 @@ jobs:
       - name: Upload reader screenshots
         uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-reader-2.22.0-screenshots
+          name: RAIDO-reader-2.23.0-screenshots
           path: /tmp/raido-reader-*.png
           retention-days: 7
           if-no-files-found: error
