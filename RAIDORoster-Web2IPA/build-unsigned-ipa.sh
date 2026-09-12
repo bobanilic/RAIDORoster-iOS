@@ -100,6 +100,7 @@ python3 "$ROOT/v2220_flight_companion_v2.py"
 python3 "$ROOT/v2221_measured_trail_only.py"
 python3 "$ROOT/v2222_roster_auto_arm.py"
 python3 "$ROOT/v2222b_auto_arm_contentview_fix.py"
+python3 "$ROOT/v2222c_return_measurement.py"
 
 bash "$ROOT/../tools/run_generated_checks.sh"
 
