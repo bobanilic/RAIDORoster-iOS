@@ -7,6 +7,22 @@ APP="$BUILD/Products/Release-iphoneos/RAIDORoster.app"
 PAYLOAD="$ROOT/Payload"
 IPA="$ROOT/RAIDORoster-unsigned.ipa"
 
+# Fail early if the patch chain is accidentally written with a literal "\\n"
+# between commands; this previously turned two valid script names into one.
+if grep -Fq '\\npython3' "$0"; then
+  echo "Malformed patch-chain newline detected in $0" >&2
+  exit 2
+fi
+
+# Validate every root-level Python patch referenced by this script before
+# mutating generated sources, so missing/garbled patch names fail clearly.
+while IFS= read -r patch_script; do
+  if [[ ! -f "$ROOT/$patch_script" ]]; then
+    echo "Missing patch script: $ROOT/$patch_script" >&2
+    exit 2
+  fi
+done < <(sed -n 's/^python3 "\$ROOT\/\([^"]*\.py\)"$/\1/p' "$0")
+
 rm -rf "$BUILD" "$PAYLOAD" "$IPA"
 
 python3 "$ROOT/v25_patch.py"
