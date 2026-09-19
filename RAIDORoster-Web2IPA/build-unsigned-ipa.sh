@@ -10,7 +10,7 @@ IPA="$ROOT/RAIDORoster-unsigned.ipa"
 # Fail early if two patch commands are accidentally joined by a literal
 # escaped newline sequence. Build the token in pieces so this check cannot
 # match its own source text.
-bad_patch_join='\\n''python3'
+bad_patch_join='\n''python3'
 if grep -Fq "$bad_patch_join" "$0"; then
   echo "Malformed patch-chain newline detected in $0" >&2
   exit 2
