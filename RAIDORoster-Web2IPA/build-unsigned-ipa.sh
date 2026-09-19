@@ -7,9 +7,11 @@ APP="$BUILD/Products/Release-iphoneos/RAIDORoster.app"
 PAYLOAD="$ROOT/Payload"
 IPA="$ROOT/RAIDORoster-unsigned.ipa"
 
-# Fail early if the patch chain is accidentally written with a literal "\\n"
-# between commands; this previously turned two valid script names into one.
-if grep -Fq '\\npython3' "$0"; then
+# Fail early if two patch commands are accidentally joined by a literal
+# escaped newline sequence. Build the token in pieces so this check cannot
+# match its own source text.
+bad_patch_join='\\n''python3'
+if grep -Fq "$bad_patch_join" "$0"; then
   echo "Malformed patch-chain newline detected in $0" >&2
   exit 2
 fi
