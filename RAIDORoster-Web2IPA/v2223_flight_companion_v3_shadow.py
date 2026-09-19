@@ -190,7 +190,7 @@ private final class FlightCompanionV3ShadowEngine: ObservableObject {
         }
 
         guard let proposed else { candidateSince = nil; return }
-        candidateSince = candidateSince ?? now
+        if candidateSince == nil { candidateSince = now }
         if now.timeIntervalSince(candidateSince ?? now) >= dwell {
             phase = proposed
             enteredPhaseAt = now
