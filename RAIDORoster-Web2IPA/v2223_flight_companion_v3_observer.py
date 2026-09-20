@@ -239,20 +239,20 @@ final class FlightCompanionV3Observer: ObservableObject {
 '''
     s = s[:idx] + code + s[idx:]
 
-# Start observation beside the already-shared Flight Companion manager initialization.
+# Start observation inside the existing ContentView onAppear closure created by
+# the preceding V3 shadow patch. Anchoring to the shadow-engine startup avoids
+# inserting a second SwiftUI modifier in the middle of a closure.
 content_anchor = "struct ContentView: View {"
 cv = s.find(content_anchor)
 if cv < 0:
     raise RuntimeError("ContentView missing")
-if "FlightCompanionV3Observer.shared.startObservation()" not in s:
-    needle = "TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)"
-    pos = s.find(needle, cv)
+observer_start = "FlightCompanionV3Observer.shared.startObservation()"
+if observer_start not in s:
+    shadow_start = "            FlightCompanionV3ShadowEngine.shared.startShadowObservation()"
+    pos = s.find(shadow_start, cv)
     if pos < 0:
-        raise RuntimeError("automatic flight configuration anchor missing")
-    line_start = s.rfind("\n", 0, pos) + 1
-    indent = s[line_start:pos]
-    line_end = s.find("\n", pos)
-    s = s[:line_end] + "\n" + indent + "FlightCompanionV3Observer.shared.startObservation()" + s[line_end:]
+        raise RuntimeError("V3 shadow startup anchor missing")
+    s = s[:pos + len(shadow_start)] + "\n            " + observer_start + s[pos + len(shadow_start):]
 
 for required in ["import CoreMotion", "final class FlightCompanionV3Observer", "CMAltimeter", "CMMotionActivityManager", "mode=observe-only"]:
     if required not in s:
