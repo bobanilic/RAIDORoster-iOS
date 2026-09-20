@@ -148,6 +148,10 @@ fi
 /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string RAIDORoster uses your location for Flight Companion position and automatic flight detection." "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c "Delete :NSLocationAlwaysAndWhenInUseUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
 /usr/libexec/PlistBuddy -c "Add :NSLocationAlwaysAndWhenInUseUsageDescription string RAIDORoster uses low-power background location near a rostered departure to arm Flight Companion automatically, then stops after the flight session." "$APP/Info.plist"
+/usr/libexec/PlistBuddy -c "Delete :NSMotionUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Add :NSMotionUsageDescription string RAIDORoster uses Motion & Fitness sensors for Flight Companion phase detection and flight-state diagnostics." "$APP/Info.plist"
+/usr/libexec/PlistBuddy -c "Delete :NSFaceIDUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Add :NSFaceIDUsageDescription string RAIDORoster uses Face ID to unlock your private Crew Documents vault." "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c "Delete :UIBackgroundModes" "$APP/Info.plist" >/dev/null 2>&1 || true
 /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string location" "$APP/Info.plist"
