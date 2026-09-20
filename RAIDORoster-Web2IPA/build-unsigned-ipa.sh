@@ -122,6 +122,7 @@ python3 "$ROOT/v2222c_return_measurement.py"
 python3 "$ROOT/v2222d_today_and_future_crew_fix.py"
 python3 "$ROOT/v2223_flight_companion_v3_shadow.py"
 python3 "$ROOT/v2223_flight_companion_v3_observer.py"
+python3 "$ROOT/v2224_contentview_scope_fix.py"
 
 bash "$ROOT/../tools/run_generated_checks.sh"
 
