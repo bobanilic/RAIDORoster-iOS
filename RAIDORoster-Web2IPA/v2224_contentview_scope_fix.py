@@ -81,24 +81,38 @@ def swift_brace_balance(text: str) -> int:
 
 
 vs = s.find("struct ContentView: View {")
-ve = s.find("\nstruct RosterHomeView: View {", vs)
-if vs < 0 or ve < 0:
-    raise RuntimeError("ContentView scope fix: bounds missing")
+if vs < 0:
+    raise RuntimeError("ContentView scope fix: ContentView missing")
 
-content_view = s[vs:ve]
-balance = swift_brace_balance(content_view)
+# V2.11.x inserts reusable file-scope helper views between ContentView and
+# RosterHomeView. Use the earliest of those helpers as the ContentView boundary;
+# closing only at RosterHomeView would incorrectly nest the helpers.
+boundary_markers = [
+    "\nstruct SyncFreshnessStrip: View {",
+    "\nprivate struct SyncFreshnessStrip: View {",
+    "\nstruct RosterHeaderPrincipal: View {",
+    "\nprivate struct RosterHeaderPrincipal: View {",
+    "\nstruct RosterHomeView: View {",
+]
+boundaries = [s.find(marker, vs) for marker in boundary_markers]
+boundaries = [pos for pos in boundaries if pos >= 0]
+if not boundaries:
+    raise RuntimeError("ContentView scope fix: no following file-scope boundary found")
+boundary = min(boundaries)
 
+balance = swift_brace_balance(s[vs:boundary])
 if balance == 1:
-    # The opening ContentView brace is still live at the next top-level type.
-    # Close only that struct; do not alter any body or nested declaration.
-    s = s[:ve] + "\n}" + s[ve:]
+    # Only the ContentView opening brace remains live. Close it immediately
+    # before the first reusable helper view.
+    s = s[:boundary] + "\n}" + s[boundary:]
 elif balance != 0:
     raise RuntimeError(f"ContentView scope fix: unexpected brace balance {balance}")
 
-# Re-check after repair. RosterHomeView must start at file scope.
-ve2 = s.find("\nstruct RosterHomeView: View {", vs)
-if ve2 < 0 or swift_brace_balance(s[vs:ve2]) != 0:
-    raise RuntimeError("ContentView scope fix: ContentView still not closed")
+# Every known reusable helper following ContentView must now be at file scope.
+for marker in boundary_markers:
+    pos = s.find(marker, vs)
+    if pos >= 0 and swift_brace_balance(s[vs:pos]) != 0:
+        raise RuntimeError("ContentView scope fix: helper still nested: " + marker.strip())
 
 CONTENT.write_text(s)
 print("ContentView file-scope structural validation applied")
