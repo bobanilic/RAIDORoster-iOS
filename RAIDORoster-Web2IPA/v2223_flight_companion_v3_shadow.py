@@ -234,11 +234,19 @@ else:
 # Feed accepted GNSS into V3 evidence without changing V2 behavior.
 needle2 = "evaluateAuto(now: Date(), location: candidate)"
 if needle2 in s:
-    s = s.replace(needle2, needle2 + "\n        FlightCompanionV3ShadowEngine.shared.recordGNSS(candidate)", 1)
+    s = s.replace(
+        needle2,
+        needle2 + "\n        Task { @MainActor in FlightCompanionV3ShadowEngine.shared.recordGNSS(candidate) }",
+        1,
+    )
 else:
     needle2 = "evaluateAuto(now: Date(), location: newest)"
     if needle2 in s:
-        s = s.replace(needle2, needle2 + "\n        FlightCompanionV3ShadowEngine.shared.recordGNSS(newest)", 1)
+        s = s.replace(
+            needle2,
+            needle2 + "\n        Task { @MainActor in FlightCompanionV3ShadowEngine.shared.recordGNSS(newest) }",
+            1,
+        )
 
 for required in [
     "final class FlightCompanionV3ShadowEngine",
