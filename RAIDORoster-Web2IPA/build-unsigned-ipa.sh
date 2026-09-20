@@ -152,6 +152,20 @@ fi
 /usr/libexec/PlistBuddy -c "Add :NSMotionUsageDescription string RAIDORoster uses Motion & Fitness sensors for Flight Companion phase detection and flight-state diagnostics." "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c "Delete :NSFaceIDUsageDescription" "$APP/Info.plist" >/dev/null 2>&1 || true
 /usr/libexec/PlistBuddy -c "Add :NSFaceIDUsageDescription string RAIDORoster uses Face ID to unlock your private Crew Documents vault." "$APP/Info.plist"
+
+for privacy_key in \
+  NSCalendarsFullAccessUsageDescription \
+  NSLocationWhenInUseUsageDescription \
+  NSLocationAlwaysAndWhenInUseUsageDescription \
+  NSMotionUsageDescription \
+  NSFaceIDUsageDescription
+do
+  /usr/libexec/PlistBuddy -c "Print :$privacy_key" "$APP/Info.plist" >/dev/null || {
+    echo "Required privacy key missing from packaged app: $privacy_key" >&2
+    exit 1
+  }
+done
+
 /usr/libexec/PlistBuddy -c "Delete :UIBackgroundModes" "$APP/Info.plist" >/dev/null 2>&1 || true
 /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" "$APP/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string location" "$APP/Info.plist"
