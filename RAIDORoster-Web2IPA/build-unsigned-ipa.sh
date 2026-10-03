@@ -125,6 +125,7 @@ python3 "$ROOT/v2223_flight_companion_v3_observer.py"
 python3 "$ROOT/v2224_contentview_scope_fix.py"
 python3 "$ROOT/v2225_global_airport_index.py"
 python3 "$ROOT/v2226_sensor_driver.py"
+python3 "$ROOT/v2227_fleet_responsiveness.py"
 
 bash "$ROOT/../tools/run_generated_checks.sh"
 

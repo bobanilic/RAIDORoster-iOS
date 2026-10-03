@@ -20,6 +20,10 @@ jobs:
           swiftc RAIDORoster-Web2IPA/RAIDORoster/FlightSensorPolicy.swift tests/FlightSensorPolicyChecks.swift -o /tmp/flight-sensor-checks
           /tmp/flight-sensor-checks
           python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Check bounded refresh, cancellation and indexed roster
+        run: |
+          swiftc RAIDORoster-Web2IPA/RAIDORoster/FleetTrackingPolicy.swift RAIDORoster-Web2IPA/RAIDORoster/FleetRefreshPolicy.swift tests/FleetRefreshChecks.swift -o /tmp/fleet-refresh-checks
+          /tmp/fleet-refresh-checks
       - name: Exercise timestamp, identity, rotation and inference policy
         run: |
           swiftc RAIDORoster-Web2IPA/RAIDORoster/FleetTrackingPolicy.swift tests/FleetTrackingPolicyChecks.swift -o /tmp/fleet-policy-checks
@@ -44,7 +48,7 @@ jobs:
         run: bash RAIDORoster-Web2IPA/build-unsigned-ipa.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-2.26.0-sensor-driver-IPA
+          name: RAIDO-2.26.1-fleet-responsiveness-IPA
           path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
           retention-days: 7
           if-no-files-found: error
@@ -53,7 +57,7 @@ jobs:
       - name: Upload reader screenshots
         uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-reader-2.26.0-screenshots
+          name: RAIDO-reader-2.26.1-screenshots
           path: /tmp/raido-reader-*.png
           retention-days: 7
           if-no-files-found: error

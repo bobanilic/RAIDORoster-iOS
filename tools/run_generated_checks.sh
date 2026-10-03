@@ -4,6 +4,8 @@ ROOT="$(cd "$(dirname "$0")/../RAIDORoster-Web2IPA" && pwd)"
 CHECKS="$ROOT/build/validation"
 mkdir -p "$CHECKS"
 
+python3 "$ROOT/../tools/check_fleet_refresh_store.py"
+
 # The patch chain changes these models. Check the exact generated sources too.
 run_check() {
   local name="$1"
@@ -12,6 +14,7 @@ run_check() {
   "$CHECKS/$name" "$ROOT/RAIDORoster/GetJetAnnouncements.json"
 }
 run_check FlightSensorPolicyChecks "$ROOT/RAIDORoster/FlightSensorPolicy.swift"
+run_check FleetRefreshChecks "$ROOT/RAIDORoster/FleetTrackingPolicy.swift" "$ROOT/RAIDORoster/FleetRefreshPolicy.swift"
 run_check FleetTrackingPolicyChecks "$ROOT/RAIDORoster/FleetTrackingPolicy.swift"
 run_check AnnouncementChecks "$ROOT/RAIDORoster/AnnouncementModels.swift"
 run_check EarningsChecks "$ROOT/RAIDORoster/EarningsModels.swift" "$ROOT/RAIDORoster/PayProfileModels.swift"

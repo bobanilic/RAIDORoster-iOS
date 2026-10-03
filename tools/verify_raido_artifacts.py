@@ -9,7 +9,7 @@ import zipfile
 
 def verify(root: Path) -> dict:
     ipa = root / 'RAIDORoster-unsigned.ipa'
-    bundle = root / 'RAIDO-2.26.0-sensor-driver-IPA.zip'
+    bundle = root / 'RAIDO-2.26.1-fleet-responsiveness-IPA.zip'
     for path in (ipa, bundle):
         if not path.is_file() or path.stat().st_size == 0:
             raise ValueError(f'Missing or empty artifact: {path.name}')
@@ -18,8 +18,8 @@ def verify(root: Path) -> dict:
             raise ValueError('IPA CRC validation failed')
         prefix = 'Payload/RAIDORoster.app/'
         info = plistlib.loads(archive.read(prefix + 'Info.plist'))
-        if info.get('CFBundleShortVersionString') != '2.26.0':
-            raise ValueError('IPA version is not 2.26.0')
+        if info.get('CFBundleShortVersionString') != '2.26.1':
+            raise ValueError('IPA version is not 2.26.1')
         if 'iPhoneOS' not in info.get('CFBundleSupportedPlatforms', []):
             raise ValueError('IPA is not an iPhoneOS build')
         executable = info.get('CFBundleExecutable')
@@ -49,7 +49,7 @@ def verify(root: Path) -> dict:
     if commit and (len(commit) != 40 or any(c not in '0123456789abcdefABCDEF' for c in commit)):
         raise ValueError('Unexpected commit metadata')
     return {
-        'version': '2.26.0', 'commit': commit or None,
+        'version': '2.26.1', 'commit': commit or None,
         'artifacts': [
             {'name': path.name, 'bytes': path.stat().st_size,
              'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
@@ -61,4 +61,4 @@ def verify(root: Path) -> dict:
 if __name__ == '__main__':
     result = verify(Path.cwd())
     Path('artifact-verification.json').write_text(json.dumps(result, indent=2) + '\n')
-    print('Verified RAIDO 2.26.0 iPhoneOS executable, permissions, IPA and matching review ZIP')
+    print('Verified RAIDO 2.26.1 iPhoneOS executable, permissions, IPA and matching review ZIP')
