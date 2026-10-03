@@ -18,9 +18,13 @@ private final class FleetStubProtocol: URLProtocol {
             let data: Data
             if self.request.httpMethod == "POST" { data = Data("[]".utf8) }
             else {
+                var aircraft: [String: Any] = ["hex": hex, "lat": 32.0, "lon": 34.0,
+                    "alt_baro": "ground", "seen": 0, "seen_pos": 0]
+                // Hex queries may omit registration. Returning the hex as a
+                // registration would correctly fail the real identity guard.
+                if !self.request.url!.path.contains("/hex/") { aircraft["r"] = registration }
                 data = try! JSONSerialization.data(withJSONObject: ["now": Date().timeIntervalSince1970,
-                    "ac": [["r": registration, "hex": hex, "lat": 32.0, "lon": 34.0,
-                             "alt_baro": "ground", "seen": 0, "seen_pos": 0]]])
+                    "ac": [aircraft]])
             }
             self.client?.urlProtocol(self, didReceive: HTTPURLResponse(url: self.request.url!, statusCode: 200,
                 httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
