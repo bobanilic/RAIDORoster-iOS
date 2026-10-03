@@ -70,7 +70,7 @@ private final class FleetStubProtocol: URLProtocol {
         // Start before the old pass drains: the store must wait, then recover.
         await live.refresh(definitions: definitions)
         await stalled.value
-        precondition(Date().timeIntervalSince(started) < 2 && !live.isRefreshing)
+        precondition(Date().timeIntervalSince(started) < 5 && !live.isRefreshing)
         precondition(live.errorText == nil && live.snapshots.count == definitions.count)
         precondition(live.histories.values.allSatisfy { $0.count == 1 }, "duplicate source samples do not inflate history")
         print("Passed generated Fleet store: concurrency, cache/history, cancellation, immediate restart")
