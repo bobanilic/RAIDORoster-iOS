@@ -11,11 +11,14 @@ spec.loader.exec_module(module)
 
 
 class ArtifactChecks(unittest.TestCase):
-    def make_pair(self, root, version='2.23.0', platform='iPhoneOS', camera=True):
+    def make_pair(self, root, version='2.26.0', platform='iPhoneOS', camera=True):
         info = {
             'CFBundleShortVersionString': version,
             'CFBundleSupportedPlatforms': [platform], 'CFBundleExecutable': 'RAIDORoster',
             'NSFaceIDUsageDescription': 'Synthetic test',
+            'NSMotionUsageDescription': 'Synthetic test',
+            'NSLocationAlwaysAndWhenInUseUsageDescription': 'Synthetic test',
+            'UIBackgroundModes': ['location'],
             'NSCalendarsFullAccessUsageDescription': 'Synthetic test',
             'NSLocationWhenInUseUsageDescription': 'Synthetic test'
         }
@@ -25,7 +28,7 @@ class ArtifactChecks(unittest.TestCase):
         with zipfile.ZipFile(ipa, 'w') as archive:
             archive.writestr('Payload/RAIDORoster.app/Info.plist', plistlib.dumps(info))
             archive.writestr('Payload/RAIDORoster.app/RAIDORoster', b'\xcf\xfa\xed\xfe' + bytes(32))
-        with zipfile.ZipFile(root / 'RAIDO-2.23.0-fleet-v2-review-IPA.zip', 'w') as archive:
+        with zipfile.ZipFile(root / 'RAIDO-2.26.0-sensor-driver-IPA.zip', 'w') as archive:
             archive.write(ipa, ipa.name)
 
     def test_pair_and_hashes(self):
@@ -33,7 +36,7 @@ class ArtifactChecks(unittest.TestCase):
             root = Path(directory)
             self.make_pair(root)
             result = module.verify(root)
-            self.assertEqual(result['version'], '2.23.0')
+            self.assertEqual(result['version'], '2.26.0')
             self.assertEqual(len(result['artifacts']), 2)
             self.assertEqual(len(result['artifacts'][0]['sha256']), 64)
 
@@ -49,7 +52,7 @@ class ArtifactChecks(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.make_pair(root)
-            with zipfile.ZipFile(root / 'RAIDO-2.23.0-fleet-v2-review-IPA.zip', 'w') as archive:
+            with zipfile.ZipFile(root / 'RAIDO-2.26.0-sensor-driver-IPA.zip', 'w') as archive:
                 archive.writestr('RAIDORoster-unsigned.ipa', b'wrong build')
             with self.assertRaisesRegex(ValueError, 'different IPA'):
                 module.verify(root)

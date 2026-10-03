@@ -1,6 +1,6 @@
 workflows:
   raido-ios-unsigned:
-    name: RAIDO Roster 2.23.0 unsigned IPA
+    name: RAIDO Roster 2.26.0 unsigned IPA
     instance_type: mac_mini_m2
     max_build_duration: 20
     working_directory: RAIDORoster-Web2IPA
@@ -22,6 +22,8 @@ workflows:
         script: |
           set -euo pipefail
           python3 -m unittest discover -s ../tests -p 'test_*.py'
+          swiftc RAIDORoster/FlightSensorPolicy.swift ../tests/FlightSensorPolicyChecks.swift -o /tmp/flight-sensor-checks
+          /tmp/flight-sensor-checks
           swiftc RAIDORoster/FleetTrackingPolicy.swift ../tests/FleetTrackingPolicyChecks.swift -o /tmp/fleet-policy-checks
           /tmp/fleet-policy-checks
           swiftc RAIDORoster/AnnouncementModels.swift ../tests/AnnouncementChecks.swift -o /tmp/announcement-checks
@@ -40,11 +42,11 @@ workflows:
       - name: Package IPA for iPhone download
         script: |
           set -euo pipefail
-          rm -f RAIDO-2.23.0-fleet-v2-review-IPA.zip
-          /usr/bin/zip -j RAIDO-2.23.0-fleet-v2-review-IPA.zip RAIDORoster-unsigned.ipa
+          rm -f RAIDO-2.26.0-sensor-driver-IPA.zip
+          /usr/bin/zip -j RAIDO-2.26.0-sensor-driver-IPA.zip RAIDORoster-unsigned.ipa
           python3 ../tools/verify_raido_artifacts.py
     artifacts:
       - RAIDORoster-unsigned.ipa
-      - RAIDO-2.23.0-fleet-v2-review-IPA.zip
+      - RAIDO-2.26.0-sensor-driver-IPA.zip
       - artifact-verification.json
       - xcode-build.log

@@ -11,6 +11,7 @@ run_check() {
   swiftc "$@" "$ROOT/../tests/$name.swift" -o "$CHECKS/$name"
   "$CHECKS/$name" "$ROOT/RAIDORoster/GetJetAnnouncements.json"
 }
+run_check FlightSensorPolicyChecks "$ROOT/RAIDORoster/FlightSensorPolicy.swift"
 run_check FleetTrackingPolicyChecks "$ROOT/RAIDORoster/FleetTrackingPolicy.swift"
 run_check AnnouncementChecks "$ROOT/RAIDORoster/AnnouncementModels.swift"
 run_check EarningsChecks "$ROOT/RAIDORoster/EarningsModels.swift" "$ROOT/RAIDORoster/PayProfileModels.swift"
