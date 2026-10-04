@@ -9,7 +9,7 @@ PBX = ROOT / 'RAIDORoster.xcodeproj/project.pbxproj'
 MARKER = '// V2.28 Ice presentation.'
 s, pbx = CONTENT.read_text(), PBX.read_text()
 if MARKER in s:
-    if 'case today, roster, fleet, more' not in s or 'B22800000000000000000001' not in pbx:
+    if 'case today, roster, fleet, more' not in s or any(key not in pbx for key in ['B22800000000000000000001', 'B22800000000000000000002']):
         raise RuntimeError('Incomplete Ice installation')
     print('V2.28 Ice redesign already applied')
     raise SystemExit(0)
@@ -167,21 +167,38 @@ s = region(s, 'struct TodayRouteMapCard:', 'private struct OfflineAviationMapCan
 def fleet(t):
     t = once(t, '    @ObservedObject var store: RosterStore', '    @ObservedObject var store: RosterStore\n    var tabActive = true\n    var showsDismissButton = true')
     t = once(t, '            List {', '''            List {
-                IcePageHeading(title: "Fleet", subtitle: "Your aircraft, rotation & live observations")
-                    .padding(.vertical, 8).listRowSeparator(.hidden).listRowBackground(Color.clear)''')
-    t = once(t, '            .searchable(text: $query', '''            .listStyle(.plain)
-            .listRowSeparator(.hidden)
-            .midnightCanvas()
-            .searchable(text: $query''')
-    t = t.replace('.navigationTitle("Fleet")', '.navigationTitle("")')
-    t = once(t, 'ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }',
-             'ToolbarItem(placement: .cancellationAction) { if showsDismissButton { Button("Done") { dismiss() } } }')
+                HStack(alignment: .top) {
+                    IcePageHeading(title: "Fleet", subtitle: "Your aircraft, rotation & live observations")
+                    Button { refreshNonce += 1 } label: {
+                        if live.isRefreshing { ProgressView().frame(width: 44, height: 44) }
+                        else { Image(systemName: "arrow.clockwise").font(.title3).frame(width: 44, height: 44) }
+                    }.buttonStyle(.plain).accessibilityLabel("Refresh fleet")
+                    if showsDismissButton { Button("Done") { dismiss() }.frame(minHeight: 44) }
+                }.padding(.vertical, 8).listRowSeparator(.hidden).listRowBackground(Color.clear)
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Registration or aircraft type", text: $query)
+                        .textInputAutocapitalization(.characters).autocorrectionDisabled()
+                        .accessibilityLabel("Search Fleet")
+                }.font(.subheadline).padding(11).background(MidnightTheme.elevated, in: RoundedRectangle(cornerRadius: 11))
+                    .listRowBackground(Color.clear).listRowSeparator(.hidden)''')
+    a = t.index('            .searchable(text: $query')
+    b = t.index('            .sheet(item: $selectedAircraft)', a)
+    t = t[:a] + '''            .listStyle(.plain).midnightCanvas()
+            .toolbar(.hidden, for: .navigationBar)
+''' + t[b:]
     # In a tab the lifetime exceeds visibility. Explicitly cancel polling when
     # another tab is selected, preserving the bounded refresh policy.
     t = t.replace('.task(id: "\\(scenePhase)-\\(refreshNonce)-"', '.task(id: "\\(tabActive)-\\(scenePhase)-\\(refreshNonce)-"')
     t = once(t, 'guard scenePhase == .active else { return }', 'guard tabActive, scenePhase == .active else { return }')
     t = t.replace('                                .contentShape(Rectangle())',
                   '                                .listRowBackground(Color.clear).listRowSeparator(.hidden)\n                                .contentShape(Rectangle())')
+    t = once(t, '                                    .font(.subheadline.weight(.semibold))\n                            }\n                        }',
+             '                                    .font(.subheadline.weight(.semibold))\n                            }.listRowBackground(Color.clear).listRowSeparator(.hidden)\n                        }')
+    t = t.replace('Text(error).font(.caption).foregroundStyle(.secondary)',
+                  'Text(error).font(.caption).foregroundStyle(.secondary).listRowBackground(Color.clear)')
+    t = once(t, '                        .font(.caption).foregroundStyle(.secondary)\n                }\n            }',
+             '                        .font(.caption).foregroundStyle(.secondary).listRowBackground(Color.clear)\n                }\n            }')
     return t
 s = region(s, 'struct FleetView:', 'private func fleetDuration', fleet)
 def fleet_row(t):
@@ -228,6 +245,35 @@ s = region(s, 'private struct MidnightCard:', 'extension View {\n    func midnig
 
 ''')
 s = once(s, '.font(.system(size: 23, weight: .medium))', '.font(.system(size: 21, weight: .regular))')
+
+# Reproduce the approved geographic header in airplane mode as well as online.
+s = region(s, 'private enum OfflineAviationBasemap {', 'private final class TodayMapConnectivityMonitor:',
+           lambda _: (ROOT / 'v2228_land.swift.inc').read_text() + '\n')
+s = once(s, 'let latSpan = max(7.0, maxLat - minLat)', 'let latSpan = max(2.0, maxLat - minLat)')
+s = once(s, 'let lonSpan = max(7.0, maxLon - minLon)', 'let lonSpan = max(2.0, maxLon - minLon)')
+s = once(s, 'let latPadding = max(2.0, latSpan * 0.30)', 'let latPadding = max(0.7, latSpan * 0.25)')
+s = once(s, 'let lonPadding = max(2.0, lonSpan * 0.30)', 'let lonPadding = max(0.7, lonSpan * 0.25)')
+def canvas(t):
+    t = once(t, 'Canvas { context, size in', 'Canvas(rendersAsynchronously: true) { context, size in')
+    a, b = t.index('            let sea ='), t.index('\n            context.fill(', t.index('            let sea ='))
+    t = t[:a] + '''            let sea = MidnightTheme.mapSea
+            let land = Color(uiColor: MidnightTheme.adaptive(0x213943, 0xF4F5EB))
+            let border = Color(uiColor: MidnightTheme.adaptive(0x385361, 0xBDCED2))
+''' + t[b:]
+    a, b = t.index('            let step = viewport.gridStep()'), t.index('                var path = Path()', t.index('            for polygon in OfflineAviationBasemap.land'))
+    t = t[:a] + '''            for outline in OfflineAviationBasemap.outlines
+                where outline.isVisible(viewport: viewport, size: size, zoom: zoom, pan: pan) {
+                let polygon = outline.coordinates
+                guard polygon.count >= 3 else { continue }
+''' + t[b:]
+    t = once(t, 'style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)',
+             'style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [4, 5])')
+    return t
+s = region(s, 'private struct OfflineAviationMapCanvas:', 'private struct CrewCompanionPhase', canvas)
+s = region(s, 'private func categoryColor(', 'private func timelineIcon(', lambda t:
+           t.replace('case "FLIGHT": return .blue', 'case "FLIGHT": return MidnightTheme.accent')
+            .replace('case "STANDBY": return .purple', 'case "STANDBY": return Color(uiColor: MidnightTheme.adaptive(0xDBB477, 0xAD783A))')
+            .replace('case "OFF", "REST": return .green', 'case "OFF", "REST": return Color(uiColor: MidnightTheme.adaptive(0x98AFBC, 0x718A9B))'))
 CONTENT.write_text(s)
 
 earnings = APP / 'EarningsView.swift'
@@ -288,5 +334,15 @@ pbx = once(pbx, 'B00000000000000000000002 /* ContentView.swift */,', f'B00000000
 pbx = once(pbx, 'A00000000000000000000004 /* RosterEnhancements.js in Resources */,', f'A00000000000000000000004 /* RosterEnhancements.js in Resources */, {build_id} /* {name} in Resources */,')
 pbx = re.sub(r'MARKETING_VERSION = [^;]+;', 'MARKETING_VERSION = 2.28.0;', pbx)
 pbx = re.sub(r'CURRENT_PROJECT_VERSION = [^;]+;', 'CURRENT_PROJECT_VERSION = 2280;', pbx)
+PBX.write_text(pbx)
+
+# Global detailed offline land is a second independent resource.
+name = 'OfflineLand.json'
+if not (APP / name).is_file(): raise RuntimeError(name + ' missing')
+build_id, file_id = 'A22800000000000000000002', 'B22800000000000000000002'
+pbx = once(pbx, '/* End PBXBuildFile section */', f'\t\t{build_id} /* {name} in Resources */ = {{isa = PBXBuildFile; fileRef = {file_id} /* {name} */; }};\n/* End PBXBuildFile section */')
+pbx = once(pbx, '/* End PBXFileReference section */', f'\t\t{file_id} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = text.json; path = {name}; sourceTree = "<group>"; }};\n/* End PBXFileReference section */')
+pbx = once(pbx, 'B00000000000000000000002 /* ContentView.swift */,', f'B00000000000000000000002 /* ContentView.swift */,\n\t\t\t\t{file_id} /* {name} */,')
+pbx = once(pbx, 'A00000000000000000000004 /* RosterEnhancements.js in Resources */,', f'A00000000000000000000004 /* RosterEnhancements.js in Resources */, {build_id} /* {name} in Resources */,')
 PBX.write_text(pbx)
 print('V2.28 Ice redesign applied')

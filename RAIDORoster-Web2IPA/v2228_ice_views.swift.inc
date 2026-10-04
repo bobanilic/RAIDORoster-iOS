@@ -156,6 +156,8 @@ private struct IceReadinessView: View {
 
 private struct IceDutyAgenda: View {
     let item: RosterItem
+    var onCalendarExport: (() -> Void)? = nil
+    var canExport = true
     @State private var crewSector: RosterActivity?
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -164,6 +166,13 @@ private struct IceDutyAgenda: View {
                 Spacer()
                 Text(item.aircraft.first?.aircraftType ?? prettyCategory(item.category))
                     .font(.caption).foregroundStyle(.secondary)
+                if let onCalendarExport {
+                    Menu {
+                        Button("Sync duty to Calendar", systemImage: "calendar.badge.plus", action: onCalendarExport)
+                            .disabled(!canExport)
+                    } label: { Image(systemName: "ellipsis").frame(width: 36, height: 44) }
+                        .accessibilityLabel("Duty options")
+                }
             }
             if let first = item.operationalActivities.first, !first.localCheckInTime.isEmpty {
                 agendaRow(time: first.localCheckInTime, title: "Report", detail: first.station, arrival: "", sector: nil)
@@ -266,16 +275,7 @@ struct TodayView: View {
                         if store.isCacheValidated, let item = store.todayPrimaryItem {
                             IcePickupCard(item: item)
                             IceReadinessView(item: item, store: store)
-                            HStack {
-                                Text("Duty briefing").font(.headline)
-                                Spacer()
-                                Menu {
-                                    Button("Sync duty to Calendar", systemImage: "calendar.badge.plus") { calendarExporter.export(item) }
-                                        .disabled(calendarExporter.isWorking)
-                                } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
-                                    .accessibilityLabel("Duty options")
-                            }
-                            IceDutyAgenda(item: item)
+                            IceDutyAgenda(item: item, onCalendarExport: { calendarExporter.export(item) }, canExport: !calendarExporter.isWorking)
                             TodayPersonalNoteDisclosure(item: item)
                             if let sector = crewCompanionSector(item, at: Date()) {
                                 HStack { Text("My position").font(.caption).foregroundStyle(.secondary); Spacer()

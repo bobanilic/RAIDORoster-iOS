@@ -50,6 +50,17 @@
                     } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
                     .accessibilityLabel("Flight Companion controls")
                 }.padding(13).midnightCard(radius: 14).padding(.horizontal, 18).padding(.bottom, 14)
+                DisclosureGroup("Flight details") {
+                    VStack(alignment: .leading, spacing: 9) {
+                        HStack {
+                            liveMetric("Altitude", altitudeText)
+                            liveMetric("Track", courseText)
+                            liveMetric("Position", horizontalAccuracyText)
+                        }
+                        Text(gpsQualityDetailText).font(.caption).foregroundStyle(.secondary)
+                        if let error = gps.errorText { Text(error).font(.caption).foregroundStyle(MidnightTheme.warningInk) }
+                    }.padding(.top, 10)
+                }.font(.caption).padding(.horizontal, 18).padding(.bottom, 14)
             }
         }
         .contentShape(Rectangle())

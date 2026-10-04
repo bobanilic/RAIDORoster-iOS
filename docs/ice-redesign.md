@@ -12,6 +12,13 @@ another location session. Pickup appears first, followed by alcohol/rest
 awareness and the duty agenda. Crew is available per sector; role selections,
 documents, notes, transport, announcements and Calendar export remain available.
 
+The offline basemap now uses bundled Natural Earth 1:50m land outlines rather
+than rough silhouettes, with the same Ice sea/land colors as the approved
+header. Outlines are decoded once, culled by bounds before projection and drawn
+asynchronously. Source: https://github.com/nvkelso/natural-earth-vector/blob/master/geojson/ne_50m_land.geojson
+Natural Earth data is public domain: https://www.naturalearthdata.com/about/terms-of-use/.
+Only land outlines are drawn; this is a route overview, not a navigation chart.
+
 Roster has a borderless month calendar with round date selection, existing duty
 codes and report times, change indicators and accessible labels. Its selected
 day uses the same pickup/agenda cards as Today. Full briefings, calendar/list

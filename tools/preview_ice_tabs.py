@@ -36,15 +36,15 @@ extension RosterStore {
             func sector(_ inbound: Bool) -> RosterActivity {
                 RosterActivity(id: iso + (inbound ? "-b" : "-a"), code: inbound ? "GJT102" : "GJT101", category: "FLIGHT", title: "Flight",
                     description: "Sample flight", route: inbound ? "PFO-TLV" : "TLV-PFO", station: inbound ? "PFO" : "TLV",
-                    checkInLT: inbound ? "" : "08:30", checkInUTC: inbound ? "" : iso + "T05:30:00Z",
-                    startLT: inbound ? "11:10" : "09:15", startUTC: iso + (inbound ? "T08:10:00Z" : "T06:15:00Z"),
-                    endLT: inbound ? "12:10" : "10:15", endUTC: iso + (inbound ? "T09:10:00Z" : "T07:15:00Z"),
-                    checkOutLT: inbound ? "12:40" : "", checkOutUTC: inbound ? iso + "T09:40:00Z" : "",
-                    hotelName: "", pickup: "07:40", transferNote: "Sample hotel pickup", activityNote: "", dayNote: "",
+                    checkInLT: inbound ? "" : iso + " 11:30", checkInUTC: inbound ? "" : iso + " 08:30",
+                    startLT: iso + (inbound ? " 14:10" : " 12:15"), startUTC: iso + (inbound ? " 11:10" : " 09:15"),
+                    endLT: iso + (inbound ? " 15:10" : " 13:15"), endUTC: iso + (inbound ? " 12:10" : " 10:15"),
+                    checkOutLT: inbound ? iso + " 15:40" : "", checkOutUTC: inbound ? iso + " 12:40" : "",
+                    hotelName: "", pickup: "10:40", transferNote: "Sample hotel pickup", activityNote: "", dayNote: "",
                     aircraftReg: "LY-GYM", aircraftType: "A320", aircraftVersion: "", aircraftPhone: "", crew: members, rawText: "Sample duty")
             }
             return RosterItem(id: iso, index: day, dateISO: iso, dateText: iso, category: category,
-                title: fly ? "Flight duty" : category.capitalized, route: fly ? "TLV-PFO-TLV" : "", timeText: fly ? "08:30–12:40" : "",
+                title: fly ? "Flight duty" : category.capitalized, route: fly ? "TLV-PFO-TLV" : "", timeText: fly ? "11:30–15:40" : "",
                 rawText: "Sample roster", cells: [], activities: fly ? [sector(false), sector(true)] : [], activeHotels: nil)
         }
         let monthKey = String(format: "%04d-%02d", year, month)
