@@ -165,8 +165,8 @@ private struct IceDutyAgenda: View {
                 Text(item.aircraft.first?.aircraftType ?? prettyCategory(item.category))
                     .font(.caption).foregroundStyle(.secondary)
             }
-            if !item.reportLocal.isEmpty {
-                agendaRow(time: item.reportLocal, title: "Report", detail: item.operationalActivities.first?.station ?? "", arrival: "", sector: nil)
+            if let first = item.operationalActivities.first, !first.localCheckInTime.isEmpty {
+                agendaRow(time: first.localCheckInTime, title: "Report", detail: first.station, arrival: "", sector: nil)
             }
             ForEach(item.operationalActivities) { activity in
                 let codes = TodayGlobalAirportIndex.routeCodes(activity.route)
@@ -175,8 +175,8 @@ private struct IceDutyAgenda: View {
                           detail: activity.isFlight ? activity.code : activity.description,
                           arrival: activity.localEndTime, sector: activity.isFlight ? activity : nil)
             }
-            if !item.releaseLocal.isEmpty {
-                agendaRow(time: item.releaseLocal, title: "Release", detail: "Duty complete", arrival: "", sector: nil)
+            if let last = item.operationalActivities.last, !last.localCheckOutTime.isEmpty {
+                agendaRow(time: last.localCheckOutTime, title: "Release", detail: "Duty complete", arrival: "", sector: nil)
             }
             if item.operationalActivities.isEmpty {
                 VStack(alignment: .leading, spacing: 5) {
@@ -211,7 +211,7 @@ private struct IceDutyAgenda: View {
                     }
                 }
                 if !arrival.isEmpty || !detail.isEmpty {
-                    Text([arrival.isEmpty ? "" : "Arrive " + arrival, detail].filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text([arrival.isEmpty ? "" : (sector == nil ? "End " : "Arrive ") + arrival, detail].filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }.padding(13).frame(maxWidth: .infinity, alignment: .leading).midnightCard(radius: 13)
