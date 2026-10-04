@@ -3,6 +3,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../RAIDORoster-Web2IPA" && pwd)"
 CHECKS="$ROOT/build/validation"
 mkdir -p "$CHECKS"
+swiftc -parse-as-library "$ROOT/../tests/AirportClockChecks.swift" -o "$CHECKS/airport-clocks"
+"$CHECKS/airport-clocks" "$ROOT/RAIDORoster/AirportTimeZones.json"
 
 python3 "$ROOT/../tools/check_fleet_refresh_store.py"
 

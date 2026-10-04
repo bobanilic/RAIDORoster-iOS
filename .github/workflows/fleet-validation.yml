@@ -48,16 +48,17 @@ jobs:
         run: bash RAIDORoster-Web2IPA/build-unsigned-ipa.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-2.26.1-fleet-responsiveness-IPA
+          name: RAIDO-2.28.0-Ice-IPA
           path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
           retention-days: 7
           if-no-files-found: error
-      - name: Render reader in iPhone simulator
-        run: python3 tools/preview_announcement_reader.py
-      - name: Upload reader screenshots
+      - name: Render Ice tabs in iPhone simulator
+        run: python3 tools/preview_ice_tabs.py
+      - name: Upload Ice screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-reader-2.26.1-screenshots
-          path: /tmp/raido-reader-*.png
+          name: RAIDO-2.28.0-Ice-screenshots
+          path: /tmp/raido-ice-*.png
           retention-days: 7
           if-no-files-found: error
