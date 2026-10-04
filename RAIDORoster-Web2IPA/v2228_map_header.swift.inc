@@ -52,6 +52,7 @@
                 }.padding(13).midnightCard(radius: 14).padding(.horizontal, 18).padding(.bottom, 14)
             }
         }
+        .contentShape(Rectangle())
         .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { value in
             // Expanded maps retain pan gestures. Collapse from the handle area.
             if !mapExpanded && value.translation.height > 48 && abs(value.translation.width) < 60 {

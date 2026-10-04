@@ -9,6 +9,8 @@ import json
 import plistlib
 import subprocess
 import time
+import shutil
+import zipfile
 
 root = Path(__file__).resolve().parents[1] / 'RAIDORoster-Web2IPA'
 ipa = root / 'RAIDORoster-unsigned.ipa'
@@ -96,7 +98,18 @@ try:
             print('\n'.join(line for line in Path(log.name).read_text().splitlines() if 'error:' in line))
             raise
     product = Path('/tmp/raido-ice-preview/Build/Products/Debug-iphonesimulator/RAIDORoster.app')
-    bundle = plistlib.loads((product / 'Info.plist').read_bytes())['CFBundleIdentifier']
+    plist_path = product / 'Info.plist'
+    info = plistlib.loads(plist_path.read_bytes())
+    # The release packaging script adds these keys after xcodebuild. Mirror the
+    # packaged configuration in the simulator too: CLLocationManager asserts
+    # when background updates are enabled without the location background mode.
+    with zipfile.ZipFile(ipa) as archive:
+        packaged = plistlib.loads(archive.read('Payload/RAIDORoster.app/Info.plist'))
+    for key, value in packaged.items():
+        if key == 'UIBackgroundModes' or (key.startswith('NS') and key.endswith('UsageDescription')):
+            info[key] = value
+    plist_path.write_bytes(plistlib.dumps(info))
+    bundle = info['CFBundleIdentifier']
     devices = json.loads(run(['xcrun', 'simctl', 'list', 'devices', 'available', '-j'], capture_output=True, text=True).stdout)
     choices = [d for group in devices['devices'].values() for d in group if d['name'].startswith('iPhone')]
     device = next((d for d in choices if d['name'] == 'iPhone 16 Pro'), choices[0])
@@ -108,7 +121,9 @@ try:
     for theme in ['light', 'dark']:
         run(['xcrun', 'simctl', 'ui', udid, 'appearance', theme])
         for tab in ['today', 'roster', 'fleet', 'more', 'expanded']:
-            args = ['xcrun', 'simctl', 'launch', udid, bundle, '--tab=' + ('today' if tab == 'expanded' else tab)]
+            print('Rendering', tab, theme, flush=True)
+            args = ['xcrun', 'simctl', 'launch', '--stdout=/tmp/raido-ice-app-stdout.log',
+                    '--stderr=/tmp/raido-ice-app-stderr.log', udid, bundle, '--tab=' + ('today' if tab == 'expanded' else tab)]
             if theme == 'dark': args.append('--dark')
             if tab == 'expanded': args.append('--expanded')
             run(args)
@@ -116,5 +131,9 @@ try:
             run(['xcrun', 'simctl', 'io', udid, 'screenshot', f'/tmp/raido-ice-{tab}-{theme}.png'])
             run(['xcrun', 'simctl', 'terminate', udid, bundle])
 finally:
+    for report in (Path.home() / 'Library/Logs/DiagnosticReports').glob('RAIDORoster*'):
+        if report.is_file(): shutil.copy(report, Path('/tmp') / ('raido-ice-crash-' + report.name))
+    stderr = Path('/tmp/raido-ice-app-stderr.log')
+    if stderr.exists(): print(stderr.read_text(errors='replace')[-6000:])
     content.write_text(original_content); app.write_text(original_app)
     assert hashlib.sha256(ipa.read_bytes()).hexdigest() == before, 'Preview changed the release IPA'
