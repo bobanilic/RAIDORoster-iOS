@@ -5,6 +5,7 @@
             ZStack(alignment: .top) {
                 mapSurface
                     .padding(.top, 96)
+                    .padding(.bottom, 42)
                     .allowsHitTesting(mapExpanded)
                 LinearGradient(colors: [MidnightTheme.background, MidnightTheme.background.opacity(0.9), .clear],
                                startPoint: .top, endPoint: .bottom)

@@ -11,6 +11,9 @@ recenter and map-source controls. The compact map is passive and does not start
 another location session. Pickup appears first, followed by alcohol/rest
 awareness and the duty agenda. Crew is available per sector; role selections,
 documents, notes, transport, announcements and Calendar export remain available.
+Alcohol reminder clocks use the duty origin's time zone, with the roster's
+explicit LT/UTC offset as a fallback, so they agree with pickup/report times
+even when the phone is set to a different zone.
 
 The offline basemap now uses bundled Natural Earth 1:50m land outlines rather
 than rough silhouettes, with the same Ice sea/land colors as the approved

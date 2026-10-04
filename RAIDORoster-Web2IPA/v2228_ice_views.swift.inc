@@ -44,6 +44,19 @@ private enum IceAirportClock {
     static func city(for code: String) -> String {
         records[code]?.first?.nilIfEmpty ?? code
     }
+    static func rosterLocalClock(_ date: Date, item: RosterItem) -> String {
+        guard let first = item.operationalActivities.first else { return "Time unavailable" }
+        let code = TodayGlobalAirportIndex.routeCodes(first.route).first ?? first.station.uppercased()
+        if let zone = zone(for: code) { return crewCompanionClock(date, timeZone: zone) }
+        // Preserve the roster's explicit LT/UTC offset when an airport has no
+        // known time zone. Never silently substitute the phone's current zone.
+        for (localStamp, utcStamp) in [(first.checkInLT, first.checkInUTC), (first.startLT, first.startUTC)] {
+            if let local = parseUTCStamp(localStamp), let utc = parseUTCStamp(utcStamp) {
+                return crewCompanionClock(date.addingTimeInterval(local.timeIntervalSince(utc)), timeZone: TimeZone(secondsFromGMT: 0)!)
+            }
+        }
+        return "Time unavailable"
+    }
 }
 
 private struct IceDestinationClock: View {
@@ -126,8 +139,8 @@ private struct IceReadinessView: View {
                             Image(systemName: "wineglass").font(.system(size: 18))
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("Alcohol precaution").font(.subheadline.weight(.semibold))
-                                Text(active ? "Active · until " + crewCompanionClock(reference, timeZone: .current)
-                                     : "Starts " + crewCompanionClock(cutoff, timeZone: .current))
+                                Text(active ? "Active · until " + IceAirportClock.rosterLocalClock(reference, item: item)
+                                     : "Starts " + IceAirportClock.rosterLocalClock(cutoff, item: item))
                                     .font(.caption)
                             }
                             Spacer(minLength: 0)
