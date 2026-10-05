@@ -55,6 +55,7 @@ extension RosterStore {
 }
 
 struct IcePreviewRoot: View {
+    @Environment(\.raidoTheme) private var raidoVisualTheme
     @StateObject private var store: RosterStore
     @StateObject private var browser: RosterBrowserModel
     @State private var selected: MainTab
@@ -66,6 +67,7 @@ struct IcePreviewRoot: View {
         _selected = State(initialValue: name == "roster" ? .roster : name == "fleet" ? .fleet : name == "more" ? .more : .today)
     }
     var body: some View {
+        let _ = raidoVisualTheme
         TabView(selection: $selected) {
             TodayView(store: store) {}.tabItem { Label("Today", systemImage: "sun.max") }.tag(MainTab.today)
             RosterHomeView(store: store, browser: browser) {}.tabItem { Label("Roster", systemImage: "calendar") }.tag(MainTab.roster)
