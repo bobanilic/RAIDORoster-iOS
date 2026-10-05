@@ -127,6 +127,7 @@ python3 "$ROOT/v2225_global_airport_index.py"
 python3 "$ROOT/v2226_sensor_driver.py"
 python3 "$ROOT/v2227_fleet_responsiveness.py"
 python3 "$ROOT/v2228_ice_redesign.py"
+python3 "$ROOT/v2229_dual_themes.py"
 
 bash "$ROOT/../tools/run_generated_checks.sh"
 

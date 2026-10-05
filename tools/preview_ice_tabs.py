@@ -1,4 +1,4 @@
-"""Render the generated native Ice screens using synthetic roster data only.
+"""Render both native themes using synthetic roster data only.
 
 The simulator host is temporary. The already-packaged release IPA is hashed and
 must remain unchanged. No real roster, credentials or live ADS-B are used.
@@ -72,6 +72,16 @@ struct IcePreviewRoot: View {
             FleetView(store: store, tabActive: false, showsDismissButton: false).tabItem { Label("Fleet", systemImage: "airplane") }.tag(MainTab.fleet)
             IceMoreView(store: store, browser: browser) {}.tabItem { Label("More", systemImage: "ellipsis") }.tag(MainTab.more)
         }.environmentObject(store).tint(MidnightTheme.accent).foregroundStyle(MidnightTheme.ink)
+            .sheet(isPresented: .constant(ProcessInfo.processInfo.arguments.contains("--settings"))) {
+                SettingsView(store: store, browser: browser) {}
+            }
+            .task {
+                if let raw = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--switch-to=") })?.dropFirst(12),
+                   let theme = RaidoTheme(rawValue: String(raw)) {
+                    try? await Task.sleep(for: .seconds(1))
+                    UserDefaults.standard.set(theme.rawValue, forKey: RaidoAppearancePreferences.themeKey)
+                }
+            }
     }
 }
 '''
@@ -87,8 +97,16 @@ try:
     # Display all Fleet definitions immediately, without polling or network data.
     generated = generated.replace('@State private var showOtherFleet = false', '@State private var showOtherFleet = true')
     content.write_text(generated + preview)
-    app.write_text(original_app.replace('ContentView()', 'IcePreviewRoot()').replace('.preferredColorScheme(preferredScheme)',
-        '.preferredColorScheme(ProcessInfo.processInfo.arguments.contains("--dark") ? .dark : .light)'))
+    host = original_app.replace('ContentView()', 'IcePreviewRoot()')
+    host = host.replace('        RaidoAppearancePreferences.migrate(.standard)', '''
+        let args = ProcessInfo.processInfo.arguments
+        let rawTheme = args.first(where: { $0.hasPrefix("--theme=") }).map { String($0.dropFirst(8)) } ?? "ice"
+        let mode = args.first(where: { $0.hasPrefix("--mode=") }).map { String($0.dropFirst(7)) } ?? "system"
+        UserDefaults.standard.set(rawTheme, forKey: RaidoAppearancePreferences.themeKey)
+        UserDefaults.standard.set(mode, forKey: RaidoAppearancePreferences.iceKey)
+        UserDefaults.standard.set(mode, forKey: RaidoAppearancePreferences.getJetKey)
+        RaidoAppearancePreferences.migrate(.standard)''')
+    app.write_text(host)
     with open('/tmp/raido-ice-preview-build.log', 'w') as log:
         try:
             run(['xcodebuild', '-project', str(root / 'RAIDORoster.xcodeproj'), '-scheme', 'RAIDORoster', '-configuration', 'Debug',
@@ -118,18 +136,43 @@ try:
     run(['xcrun', 'simctl', 'bootstatus', udid, '-b'])
     run(['xcrun', 'simctl', 'install', udid, str(product)])
     run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '06:44', '--batteryState', 'charged', '--batteryLevel', '100'])
-    for theme in ['light', 'dark']:
-        run(['xcrun', 'simctl', 'ui', udid, 'appearance', theme])
-        for tab in ['today', 'roster', 'fleet', 'more', 'expanded']:
-            print('Rendering', tab, theme, flush=True)
-            args = ['xcrun', 'simctl', 'launch', '--stdout=/tmp/raido-ice-app-stdout.log',
-                    '--stderr=/tmp/raido-ice-app-stderr.log', udid, bundle, '--tab=' + ('today' if tab == 'expanded' else tab)]
-            if theme == 'dark': args.append('--dark')
-            if tab == 'expanded': args.append('--expanded')
-            run(args)
-            time.sleep(3)
-            run(['xcrun', 'simctl', 'io', udid, 'screenshot', f'/tmp/raido-ice-{tab}-{theme}.png'])
-            run(['xcrun', 'simctl', 'terminate', udid, bundle])
+    for palette in ['ice', 'getJet']:
+        for mode in ['light', 'dark', 'system']:
+            for system_mode in (['light', 'dark'] if mode == 'system' else [mode]):
+                run(['xcrun', 'simctl', 'ui', udid, 'appearance', system_mode])
+                for tab in (['today'] if mode == 'system' else ['today', 'roster', 'fleet', 'more', 'expanded', 'settings']):
+                    print('Rendering', palette, mode, system_mode, tab, flush=True)
+                    args = ['xcrun', 'simctl', 'launch', '--stdout=/tmp/raido-ice-app-stdout.log',
+                            '--stderr=/tmp/raido-ice-app-stderr.log', udid, bundle,
+                            '--theme=' + palette, '--mode=' + mode,
+                            '--tab=' + ('today' if tab == 'expanded' else 'more' if tab == 'settings' else tab)]
+                    if tab == 'expanded': args.append('--expanded')
+                    if tab == 'settings': args.append('--settings')
+                    run(args)
+                    time.sleep(3)
+                    run(['xcrun', 'simctl', 'io', udid, 'screenshot', f'/tmp/raido-theme-{palette}-{tab}-{mode}-{system_mode}.png'])
+                    run(['xcrun', 'simctl', 'terminate', udid, bundle])
+    # Change theme inside the same running view hierarchy, exercising palette
+    # invalidation and UIKit chrome refresh rather than only cold starts.
+    for target in ['getJet', 'ice']:
+        origin = 'ice' if target == 'getJet' else 'getJet'
+        print('Rendering live theme switch', origin, target, flush=True)
+        args = ['xcrun', 'simctl', 'launch', '--stdout=/tmp/raido-ice-app-stdout.log',
+                '--stderr=/tmp/raido-ice-app-stderr.log', udid, bundle,
+                '--theme=' + origin, '--mode=light', '--tab=today', '--switch-to=' + target]
+        run(args)
+        time.sleep(4)
+        run(['xcrun', 'simctl', 'io', udid, 'screenshot', f'/tmp/raido-theme-switch-{target}.png'])
+        run(['xcrun', 'simctl', 'terminate', udid, bundle])
+    with zipfile.ZipFile(ipa) as archive:
+        report = {
+            'version': '2.29.0', 'ipaBytes': ipa.stat().st_size,
+            'unpackedBytes': sum(x.file_size for x in archive.infolist()),
+            'executableBytes': archive.getinfo('Payload/RAIDORoster.app/RAIDORoster').file_size,
+            'entries': len(archive.infolist()), 'sha256': before,
+        }
+    Path('/tmp/raido-theme-size.json').write_text(json.dumps(report, indent=2) + '\n')
+    print('Release size:', json.dumps(report), flush=True)
 finally:
     for report in (Path.home() / 'Library/Logs/DiagnosticReports').glob('RAIDORoster*'):
         if report.is_file(): shutil.copy(report, Path('/tmp') / ('raido-ice-crash-' + report.name))
