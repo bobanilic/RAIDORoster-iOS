@@ -126,7 +126,7 @@ def observe_theme(text):
         rest = part[body.end():]
         if 'func body(' in body.group():
             rest = re.sub(r'^(\s*)content\b', r'\1return content', rest, count=1)
-        part = part[:body.end()] + '\n        let _ = raidoVisualTheme' + rest
+        part = part[:body.end()] + '\n        let _ = raidoVisualTheme\n' + rest
         part = '\n    @Environment(\\.raidoTheme) private var raidoVisualTheme' + part
         text = text[:match.end()] + part + text[end:]
     return text
