@@ -32,9 +32,19 @@ s = s[:a] + '''func announcementAirline(registration: String) -> AnnouncementAir
 }''' + s[b:]
 
 status = '''    // V2.29.1 flight context and GPS status
+    private func refreshLocationServicesAvailability() {
+        servicesCheckGeneration += 1
+        let generation = servicesCheckGeneration
+        Task { @MainActor [weak self] in
+            let enabled = await Task.detached(priority: .utility) { CLLocationManager.locationServicesEnabled() }.value
+            guard let self, self.servicesCheckGeneration == generation else { return }
+            self.servicesAvailable = enabled
+        }
+    }
+
     func mapStatus(now: Date = Date()) -> FlightTrackingStatus {
         let permission: FlightTrackingStatus.Permission
-        switch manager.authorizationStatus {
+        switch authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse: permission = .allowed
         case .notDetermined: permission = .pending
         default: permission = .blocked
@@ -42,13 +52,20 @@ status = '''    // V2.29.1 flight context and GPS status
         let opens = automaticDepartureAt?.addingTimeInterval(-autoLead)
         return FlightTrackingStatus.resolve(
             tracking: isTracking, automatic: automaticMonitoring, completed: companionPhase == .complete,
-            servicesEnabled: CLLocationManager.locationServicesEnabled(), permission: permission,
+            servicesEnabled: servicesAvailable, permission: permission,
             source: fusedLocation == nil ? nil : positionSourceText, estimated: positionIsEstimated,
             acquisitionAge: acquisitionStartedAt.map { max(0, now.timeIntervalSince($0)) },
             windowOpen: insideAutoWindow(now), upcomingStart: opens.flatMap { now < $0 ? clockText($0) : nil })
     }
 
 '''
+s = once(s, '    @Published private(set) var authorizationStatus: CLAuthorizationStatus = .notDetermined',
+    '    @Published private(set) var authorizationStatus: CLAuthorizationStatus = .notDetermined\n'
+    '    @Published private var servicesAvailable = true\n    private var servicesCheckGeneration = 0')
+s = once(s, '        authorizationStatus = manager.authorizationStatus\n        restoreSession(now: Date())',
+    '        authorizationStatus = manager.authorizationStatus\n        refreshLocationServicesAvailability()\n        restoreSession(now: Date())')
+s = once(s, '    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {\n',
+    '    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {\n        refreshLocationServicesAvailability()\n')
 s = once(s, '    private var companionPowerModeText: String {', status + '    private var companionPowerModeText: String {')
 s = once(s, '''                    HStack(spacing: 6) {
                         Image(systemName: gps.fusedLocation == nil ? "location.slash" : "location")

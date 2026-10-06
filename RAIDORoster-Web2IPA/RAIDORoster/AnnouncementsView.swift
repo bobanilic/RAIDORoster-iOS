@@ -117,7 +117,11 @@ struct AnnouncementsView: View {
                 ForEach(AnnouncementLanguage.allCases) { Text($0.label).tag($0.rawValue) }
             }
         } footer: {
-            Text(aircraft == .unspecified
+            Text(airline == .unspecified
+                 ? "Choose the operating airline to open its announcement book."
+                 : airline == .airhub
+                 ? "Airhub · \(aircraft.label) · Book not installed"
+                 : aircraft == .unspecified
                  ? "Choose an aircraft to see its safety demonstration and emergency briefings."
                  : "\(airline.label) · \(aircraft.label) · Available offline")
         }
