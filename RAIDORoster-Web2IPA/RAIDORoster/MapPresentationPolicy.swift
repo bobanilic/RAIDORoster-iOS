@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 struct OfflinePlaceLabel: Codable {
     enum Kind: String, Codable { case water, country, capital, city, landmark }
