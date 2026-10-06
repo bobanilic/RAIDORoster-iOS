@@ -6,6 +6,7 @@ on:
       - 'tests/**'
       - 'tools/preview_announcement_reader.py'
       - 'tools/preview_ice_tabs.py'
+      - 'tools/check_announcement_selection.py'
       - 'tools/run_generated_checks.sh'
       - '.github/workflows/fleet-validation.yml'
   workflow_dispatch:
@@ -50,7 +51,7 @@ jobs:
         run: bash RAIDORoster-Web2IPA/build-unsigned-ipa.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-2.29.0-dual-themes-IPA
+          name: RAIDO-2.29.1-flight-context-IPA
           path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
           retention-days: 7
           if-no-files-found: error
@@ -60,7 +61,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-2.29.0-theme-screenshots
+          name: RAIDO-2.29.1-theme-screenshots
           path: |
             /tmp/raido-ice-*.png
             /tmp/raido-ice-app-*.log

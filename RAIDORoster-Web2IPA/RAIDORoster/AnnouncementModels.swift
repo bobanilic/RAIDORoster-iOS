@@ -31,6 +31,23 @@ enum AnnouncementAirline: String, CaseIterable, Identifiable {
         case .airhub: return "Airhub"
         }
     }
+
+    // Use the aircraft operator, never the marketed flight number or a national
+    // registration prefix. RAIDO supplies both LYTEN and LY-TEN forms.
+    static func fromRoster(registration: String, operators: [String: String]) -> Self {
+        func normalized(_ value: String) -> String {
+            value.uppercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber) }
+        }
+        let key = normalized(registration)
+        guard !key.isEmpty, let code = operators.first(where: { normalized($0.key) == key })?.value else {
+            return .unspecified
+        }
+        switch code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() {
+        case "GETJET": return .getjet
+        case "AIRHUB": return .airhub
+        default: return .unspecified
+        }
+    }
 }
 
 enum AnnouncementLanguage: String, CaseIterable, Identifiable {

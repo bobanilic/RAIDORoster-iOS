@@ -128,6 +128,7 @@ python3 "$ROOT/v2226_sensor_driver.py"
 python3 "$ROOT/v2227_fleet_responsiveness.py"
 python3 "$ROOT/v2228_ice_redesign.py"
 python3 "$ROOT/v2229_dual_themes.py"
+python3 "$ROOT/v2229b_flight_context_fix.py"
 
 bash "$ROOT/../tools/run_generated_checks.sh"
 

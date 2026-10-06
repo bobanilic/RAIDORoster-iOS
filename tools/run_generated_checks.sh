@@ -10,6 +10,9 @@ swiftc -parse-as-library "$ROOT/../tests/AirportClockChecks.swift" -o "$CHECKS/a
 "$CHECKS/airport-clocks" "$ROOT/RAIDORoster/AirportTimeZones.json"
 
 python3 "$ROOT/../tools/check_fleet_refresh_store.py"
+python3 "$ROOT/../tools/check_announcement_selection.py"
+swiftc "$ROOT/RAIDORoster/FlightTrackingStatus.swift" "$ROOT/../tests/FlightTrackingStatusChecks.swift" -o "$CHECKS/gps-status"
+"$CHECKS/gps-status"
 
 # The patch chain changes these models. Check the exact generated sources too.
 run_check() {

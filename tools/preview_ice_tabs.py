@@ -18,7 +18,9 @@ assert ipa.exists(), 'Package the release IPA before rendering'
 before = hashlib.sha256(ipa.read_bytes()).hexdigest()
 content = root / 'RAIDORoster/ContentView.swift'
 app = root / 'RAIDORoster/RAIDORosterApp.swift'
+announcement_view = root / 'RAIDORoster/AnnouncementsView.swift'
 original_content, original_app = content.read_text(), app.read_text()
+original_announcements = announcement_view.read_text()
 preview = r'''
 extension RosterStore {
     fileprivate func installIceFixture() {
@@ -41,7 +43,7 @@ extension RosterStore {
                     endLT: iso + (inbound ? " 15:10" : " 13:15"), endUTC: iso + (inbound ? " 12:10" : " 10:15"),
                     checkOutLT: inbound ? iso + " 15:40" : "", checkOutUTC: inbound ? iso + " 12:40" : "",
                     hotelName: "", pickup: "10:40", transferNote: "Sample hotel pickup", activityNote: "", dayNote: "",
-                    aircraftReg: "LY-GYM", aircraftType: "A320", aircraftVersion: "", aircraftPhone: "", crew: members, rawText: "Sample duty")
+                    aircraftReg: ProcessInfo.processInfo.arguments.contains("--airhub") ? "9HGTS" : "LYTEN", aircraftType: "A320", aircraftVersion: "", aircraftPhone: "", crew: members, rawText: "Sample duty")
             }
             return RosterItem(id: iso, index: day, dateISO: iso, dateText: iso, category: category,
                 title: fly ? "Flight duty" : category.capitalized, route: fly ? "TLV-PFO-TLV" : "", timeText: fly ? "11:30–15:40" : "",
@@ -74,8 +76,10 @@ struct IcePreviewRoot: View {
             FleetView(store: store, tabActive: false, showsDismissButton: false).tabItem { Label("Fleet", systemImage: "airplane") }.tag(MainTab.fleet)
             IceMoreView(store: store, browser: browser) {}.tabItem { Label("More", systemImage: "ellipsis") }.tag(MainTab.more)
         }.environmentObject(store).tint(MidnightTheme.accent).foregroundStyle(MidnightTheme.ink)
-            .sheet(isPresented: .constant(ProcessInfo.processInfo.arguments.contains("--settings"))) {
-                SettingsView(store: store, browser: browser) {}
+            .sheet(isPresented: .constant(ProcessInfo.processInfo.arguments.contains("--settings") || ProcessInfo.processInfo.arguments.contains("--announcements"))) {
+                if ProcessInfo.processInfo.arguments.contains("--announcements") {
+                    AnnouncementsView(item: store.todayPrimaryItem)
+                } else { SettingsView(store: store, browser: browser) {} }
             }
             .task {
                 if let raw = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--switch-to=") })?.dropFirst(12),
@@ -92,6 +96,20 @@ def run(args, **kwargs):
     return subprocess.run(args, check=True, **kwargs)
 
 try:
+    # Exercise the same selectSector action used by the actual Flight picker.
+    # Multi-sector duties still require an explicit selection in the release.
+    announcements = original_announcements.replace('                initialized = true', '''                initialized = true
+                if ProcessInfo.processInfo.arguments.contains("--announcements"), let sector = sectors.first {
+                    selectSector(sector.id)
+                    let expected: AnnouncementAirline = ProcessInfo.processInfo.arguments.contains("--airhub") ? .airhub : .getjet
+                    precondition(airline == expected, "Flight selection did not select its operator")
+                    precondition(aircraft == .a320, "Flight selection lost the aircraft type")
+                    precondition(expected == .airhub || !available.isEmpty, "Selected GetJet flight has no offline announcements")
+                    print("Verified selected announcement flight: \\(sector.code), \\(sector.aircraftReg), \\(airline.label)")
+                    return
+                }''')
+    assert announcements != original_announcements
+    announcement_view.write_text(announcements)
     generated = original_content.replace('@State private var mapExpanded = false',
         '@State private var mapExpanded = ProcessInfo.processInfo.arguments.contains("--expanded")')
     # Force the local basemap in the disposable preview, independent of network.
@@ -142,7 +160,7 @@ try:
         for mode in ['light', 'dark', 'system']:
             for system_mode in (['light', 'dark'] if mode == 'system' else [mode]):
                 run(['xcrun', 'simctl', 'ui', udid, 'appearance', system_mode])
-                for tab in (['today'] if mode == 'system' else ['today', 'roster', 'fleet', 'more', 'expanded', 'settings']):
+                for tab in (['today'] if mode == 'system' else ['today', 'roster', 'fleet', 'more', 'expanded', 'settings', 'announcements', 'announcements-airhub']):
                     print('Rendering', palette, mode, system_mode, tab, flush=True)
                     args = ['xcrun', 'simctl', 'launch', '--stdout=/tmp/raido-ice-app-stdout.log',
                             '--stderr=/tmp/raido-ice-app-stderr.log', udid, bundle,
@@ -150,6 +168,8 @@ try:
                             '--tab=' + ('today' if tab == 'expanded' else 'more' if tab == 'settings' else tab)]
                     if tab == 'expanded': args.append('--expanded')
                     if tab == 'settings': args.append('--settings')
+                    if tab.startswith('announcements'): args.append('--announcements')
+                    if tab == 'announcements-airhub': args.append('--airhub')
                     run(args)
                     time.sleep(3)
                     run(['xcrun', 'simctl', 'io', udid, 'screenshot', f'/tmp/raido-theme-{palette}-{tab}-{mode}-{system_mode}.png'])
@@ -168,7 +188,7 @@ try:
         run(['xcrun', 'simctl', 'terminate', udid, bundle])
     with zipfile.ZipFile(ipa) as archive:
         report = {
-            'version': '2.29.0', 'ipaBytes': ipa.stat().st_size,
+            'version': packaged['CFBundleShortVersionString'], 'ipaBytes': ipa.stat().st_size,
             'unpackedBytes': sum(x.file_size for x in archive.infolist()),
             'executableBytes': archive.getinfo('Payload/RAIDORoster.app/RAIDORoster').file_size,
             'entries': len(archive.infolist()), 'sha256': before,
@@ -181,4 +201,5 @@ finally:
     stderr = Path('/tmp/raido-ice-app-stderr.log')
     if stderr.exists(): print(stderr.read_text(errors='replace')[-6000:])
     content.write_text(original_content); app.write_text(original_app)
+    announcement_view.write_text(original_announcements)
     assert hashlib.sha256(ipa.read_bytes()).hexdigest() == before, 'Preview changed the release IPA'
