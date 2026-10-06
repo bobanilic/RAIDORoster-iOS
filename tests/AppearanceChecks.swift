@@ -36,6 +36,20 @@ struct AppearanceChecks {
         }
         expect(RaidoAppearancePreferences.selectedTheme("invalid") == .ice, "Invalid theme falls back safely")
         expect(RaidoAppearancePreferences.appearance(theme: "getJet", ice: "dark", getJet: "invalid") == .system, "Invalid mode follows System")
+        func luminance(_ hex: UInt32) -> Double {
+            func channel(_ shift: UInt32) -> Double {
+                let value = Double((hex >> shift) & 255) / 255
+                return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+            }
+            return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+        }
+        for theme in RaidoTheme.allCases {
+            for dark in [false, true] {
+                let foreground = luminance(RaidoActionPalette.ink)
+                let fill = luminance(RaidoActionPalette.fill(theme: theme, dark: dark))
+                expect((max(foreground, fill) + 0.05) / (min(foreground, fill) + 0.05) >= 4.5, "Readable filled actions in every theme and mode")
+            }
+        }
         print("Passed \(checks) appearance migration and selection checks")
     }
 }

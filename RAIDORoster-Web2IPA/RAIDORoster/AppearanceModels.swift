@@ -32,3 +32,14 @@ enum RaidoAppearancePreferences {
         RaidoAppearance(rawValue: selectedTheme(theme) == .ice ? ice : getJet) ?? .system
     }
 }
+
+// Filled actions need a separate colour from the lighter accent used for links.
+enum RaidoActionPalette {
+    static func fill(theme: RaidoTheme, dark: Bool) -> UInt32 {
+        switch theme {
+        case .ice: return dark ? 0x265F7A : 0x1F607F
+        case .getJet: return dark ? 0x365B4F : 0x00656A
+        }
+    }
+    static let ink: UInt32 = 0xFFFFFF
+}

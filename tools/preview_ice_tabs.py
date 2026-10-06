@@ -11,6 +11,7 @@ import subprocess
 import time
 import shutil
 import zipfile
+from install_preview_ui_checks import install as install_ui_checks
 
 root = Path(__file__).resolve().parents[1] / 'RAIDORoster-Web2IPA'
 ipa = root / 'RAIDORoster-unsigned.ipa'
@@ -21,6 +22,9 @@ app = root / 'RAIDORoster/RAIDORosterApp.swift'
 announcement_view = root / 'RAIDORoster/AnnouncementsView.swift'
 original_content, original_app = content.read_text(), app.read_text()
 original_announcements = announcement_view.read_text()
+project = root / 'RAIDORoster.xcodeproj'
+original_project = (project / 'project.pbxproj').read_bytes()
+test_scheme = None
 preview = r'''
 extension RosterStore {
     fileprivate func installIceFixture() {
@@ -76,9 +80,11 @@ struct IcePreviewRoot: View {
             FleetView(store: store, tabActive: false, showsDismissButton: false).tabItem { Label("Fleet", systemImage: "airplane") }.tag(MainTab.fleet)
             IceMoreView(store: store, browser: browser) {}.tabItem { Label("More", systemImage: "ellipsis") }.tag(MainTab.more)
         }.environmentObject(store).tint(MidnightTheme.accent).foregroundStyle(MidnightTheme.ink)
-            .sheet(isPresented: .constant(ProcessInfo.processInfo.arguments.contains("--settings") || ProcessInfo.processInfo.arguments.contains("--announcements"))) {
+            .sheet(isPresented: .constant(ProcessInfo.processInfo.arguments.contains("--settings") || ProcessInfo.processInfo.arguments.contains("--announcements") || ProcessInfo.processInfo.arguments.contains("--crew-control"))) {
                 if ProcessInfo.processInfo.arguments.contains("--announcements") {
                     AnnouncementsView(item: store.todayPrimaryItem)
+                } else if ProcessInfo.processInfo.arguments.contains("--crew-control") {
+                    CrewControlSheet(item: store.todayPrimaryItem)
                 } else { SettingsView(store: store, browser: browser) {} }
             }
             .task {
@@ -127,11 +133,14 @@ try:
         UserDefaults.standard.set(mode, forKey: RaidoAppearancePreferences.getJetKey)
         RaidoAppearancePreferences.migrate(.standard)''')
     app.write_text(host)
+    with zipfile.ZipFile(ipa) as archive:
+        packaged = plistlib.loads(archive.read('Payload/RAIDORoster.app/Info.plist'))
+    test_scheme = install_ui_checks(project, packaged)
     with open('/tmp/raido-ice-preview-build.log', 'w') as log:
         try:
-            run(['xcodebuild', '-project', str(root / 'RAIDORoster.xcodeproj'), '-scheme', 'RAIDORoster', '-configuration', 'Debug',
+            run(['xcodebuild', '-project', str(root / 'RAIDORoster.xcodeproj'), '-scheme', 'RAIDOMapChecks', '-configuration', 'Debug',
                  '-sdk', 'iphonesimulator', '-destination', 'generic/platform=iOS Simulator', '-derivedDataPath', '/tmp/raido-ice-preview',
-                 'CODE_SIGNING_ALLOWED=NO', 'build'], stdout=log, stderr=subprocess.STDOUT)
+                 'CODE_SIGNING_ALLOWED=NO', 'build-for-testing'], stdout=log, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError:
             print('\n'.join(line for line in Path(log.name).read_text().splitlines() if 'error:' in line))
             raise
@@ -160,7 +169,7 @@ try:
         for mode in ['light', 'dark', 'system']:
             for system_mode in (['light', 'dark'] if mode == 'system' else [mode]):
                 run(['xcrun', 'simctl', 'ui', udid, 'appearance', system_mode])
-                for tab in (['today'] if mode == 'system' else ['today', 'roster', 'fleet', 'more', 'expanded', 'settings', 'announcements', 'announcements-airhub']):
+                for tab in (['today'] if mode == 'system' else ['today', 'roster', 'fleet', 'more', 'expanded', 'settings', 'announcements', 'announcements-airhub', 'crew-control']):
                     print('Rendering', palette, mode, system_mode, tab, flush=True)
                     args = ['xcrun', 'simctl', 'launch', '--stdout=/tmp/raido-ice-app-stdout.log',
                             '--stderr=/tmp/raido-ice-app-stderr.log', udid, bundle,
@@ -170,6 +179,7 @@ try:
                     if tab == 'settings': args.append('--settings')
                     if tab.startswith('announcements'): args.append('--announcements')
                     if tab == 'announcements-airhub': args.append('--airhub')
+                    if tab == 'crew-control': args.append('--crew-control')
                     run(args)
                     time.sleep(3)
                     run(['xcrun', 'simctl', 'io', udid, 'screenshot', f'/tmp/raido-theme-{palette}-{tab}-{mode}-{system_mode}.png'])
@@ -186,6 +196,15 @@ try:
         time.sleep(4)
         run(['xcrun', 'simctl', 'io', udid, 'screenshot', f'/tmp/raido-theme-switch-{target}.png'])
         run(['xcrun', 'simctl', 'terminate', udid, bundle])
+    with open('/tmp/raido-map-ui-tests.log', 'w') as log:
+        try:
+            run(['xcodebuild', '-project', str(project), '-scheme', 'RAIDOMapChecks', '-configuration', 'Debug',
+                 '-destination', 'platform=iOS Simulator,id=' + udid, '-derivedDataPath', '/tmp/raido-ice-preview',
+                 '-parallel-testing-enabled', 'NO', 'CODE_SIGNING_ALLOWED=NO', 'test-without-building'], stdout=log, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError:
+            print(Path(log.name).read_text()[-12000:])
+            raise
+    print('Passed native swipe, handle-collapse and tap UI tests in both themes', flush=True)
     with zipfile.ZipFile(ipa) as archive:
         report = {
             'version': packaged['CFBundleShortVersionString'], 'ipaBytes': ipa.stat().st_size,
@@ -202,4 +221,6 @@ finally:
     if stderr.exists(): print(stderr.read_text(errors='replace')[-6000:])
     content.write_text(original_content); app.write_text(original_app)
     announcement_view.write_text(original_announcements)
+    (project / 'project.pbxproj').write_bytes(original_project)
+    if test_scheme is not None: test_scheme.unlink(missing_ok=True)
     assert hashlib.sha256(ipa.read_bytes()).hexdigest() == before, 'Preview changed the release IPA'

@@ -13,6 +13,8 @@ python3 "$ROOT/../tools/check_fleet_refresh_store.py"
 python3 "$ROOT/../tools/check_announcement_selection.py"
 swiftc "$ROOT/RAIDORoster/FlightTrackingStatus.swift" "$ROOT/../tests/FlightTrackingStatusChecks.swift" -o "$CHECKS/gps-status"
 "$CHECKS/gps-status"
+swiftc "$ROOT/RAIDORoster/MapPresentationPolicy.swift" "$ROOT/../tests/MapPresentationChecks.swift" -o "$CHECKS/map-presentation"
+"$CHECKS/map-presentation" "$ROOT/RAIDORoster/OfflinePlaceLabels.json"
 
 # The patch chain changes these models. Check the exact generated sources too.
 run_check() {
