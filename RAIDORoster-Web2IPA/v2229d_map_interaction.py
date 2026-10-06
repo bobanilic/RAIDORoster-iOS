@@ -24,7 +24,33 @@ header = once(header, '                    TimelineView(.periodic(from: .now, by
     '                    if gps.isTracking {\n                    TimelineView(.periodic(from: .now, by: 5)) { context in')
 header = once(header, '                            .accessibilityHint(status.detail)\n                    }',
     '                            .accessibilityHint(status.detail)\n                            .accessibilityIdentifier("today-map-tracking-status")\n                    }\n                    }')
+header = once(header, '.highPriorityGesture(mapExpansionDrag(onHandle: false), including: mapExpanded ? .none : .all)',
+    '''.overlay {
+                    if !mapExpanded {
+                        MapDisclosureGestureSurface(expanded: mapExpanded, onHandle: false, onToggle: toggleMap)
+                    }
+                }''')
+header = once(header, '''            Button { toggleMap() } label: {
+                VStack(spacing: 5) {
+                    Capsule().fill(MidnightTheme.accent.opacity(0.45)).frame(width: 30, height: 3)
+                    Text(mapExpanded ? "Tap or swipe up to collapse" : "Tap or pull down for map").font(.caption2).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity, minHeight: 44)
+            }.buttonStyle(.plain)
+                .highPriorityGesture(mapExpansionDrag(onHandle: true))
+                .accessibilityIdentifier("today-map-handle")
+                .accessibilityLabel(mapExpanded ? "Collapse flight map" : "Expand flight map")
+                .accessibilityValue(mapExpanded ? "Expanded" : "Collapsed")''',
+    '''            VStack(spacing: 5) {
+                Capsule().fill(MidnightTheme.accent.opacity(0.45)).frame(width: 30, height: 3)
+                Text(mapExpanded ? "Tap or swipe up to collapse" : "Tap or pull down for map").font(.caption2).foregroundStyle(.secondary).accessibilityHidden(true)
+            }.frame(maxWidth: .infinity, minHeight: 44)
+                .overlay {
+                    MapDisclosureGestureSurface(expanded: mapExpanded, onHandle: true, onToggle: toggleMap)
+                }''')
 s = s[:a] + header + s[b:]
+a = s.index('    private func mapExpansionDrag(onHandle: Bool)')
+b = s.index('    private func toggleMap()', a)
+s = s[:a] + s[b:]
 
 a = s.index('    private var mapSurface: some View {')
 b = s.index('                if !iceHeader {', a)

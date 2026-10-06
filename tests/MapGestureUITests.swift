@@ -13,9 +13,11 @@ import XCTest
             XCTAssertFalse(app.otherElements["today-map-tracking-status"].exists, "Idle preflight banner must be hidden")
             let surface = app.otherElements["today-map-surface"].firstMatch
             XCTAssertTrue(surface.exists)
+            let surfaceY = surface.frame.minY
             surface.swipeDown(velocity: .slow)
             XCTAssertTrue(NSPredicate(format: "value == %@", "Expanded").evaluate(with: handle) ||
                 XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Expanded"), object: handle)], timeout: 5) == .completed)
+            XCTAssertEqual(surface.frame.minY, surfaceY, accuracy: 2, "Pull-down must expand without moving the page")
             handle.swipeUp(velocity: .slow)
             XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Collapsed"), object: handle)], timeout: 5), .completed)
             handle.tap()
