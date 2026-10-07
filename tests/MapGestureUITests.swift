@@ -27,6 +27,8 @@ import XCTest
             XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Collapsed"), object: handle)], timeout: 5), .completed)
             handle.tap()
             XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Expanded"), object: handle)], timeout: 5), .completed)
+            XCTAssertEqual(app.otherElements["offline-map-interaction"].firstMatch.value as? String,
+                "zoom=1.000;panX=0.0;panY=0.0", "Collapse must reset after the map's final pan sample")
             let map = app.otherElements["offline-map-interaction"].firstMatch
             XCTAssertTrue(map.exists)
             let pageY = handle.frame.minY

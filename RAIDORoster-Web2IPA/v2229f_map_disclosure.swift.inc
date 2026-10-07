@@ -92,7 +92,12 @@ private struct TodayMapDisclosureObserver: UIViewRepresentable {
             let delta = recognizer.translation(in: scroll)
             guard let destination = MapExpansionGesture.destination(expanded: beganExpanded,
                 horizontal: delta.x, vertical: delta.y), destination != parent.expanded else { return }
-            parent.onToggle()
+            // Let the map's simultaneous pan finish before reset-to-overview.
+            // Otherwise its final sample can overwrite the collapse reset.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.parent.expanded != destination else { return }
+                self.parent.onToggle()
+            }
         }
         func gestureRecognizer(_ recognizer: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
