@@ -1,7 +1,7 @@
 import XCTest
 
 @MainActor final class MapGestureUITests: XCTestCase {
-    func testSwipeExpansionAndHandleCollapse() {
+    func testBroadSwipesAndMapPanning() {
         continueAfterFailure = false
         for theme in ["ice", "getJet"] {
             let app = XCUIApplication(bundleIdentifier: "com.bobanilic.raidoroster")
@@ -14,11 +14,16 @@ import XCTest
             let surface = app.otherElements["today-map-surface"].firstMatch
             XCTAssertTrue(surface.exists)
             let surfaceY = surface.frame.minY
-            surface.swipeDown(velocity: .slow)
+            XCTAssertEqual(surface.frame.height, 324, accuracy: 2, "Keep the total compact header footprint")
+            XCTAssertFalse(app.staticTexts["Tap or pull down for map"].exists)
+            let page = app.scrollViews.firstMatch
+            let broadStart = page.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.72))
+            broadStart.press(forDuration: 0.05, thenDragTo: broadStart.withOffset(CGVector(dx: 0, dy: -180)))
             XCTAssertTrue(NSPredicate(format: "value == %@", "Expanded").evaluate(with: handle) ||
                 XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Expanded"), object: handle)], timeout: 5) == .completed)
-            XCTAssertEqual(surface.frame.minY, surfaceY, accuracy: 2, "Pull-down must expand without moving the page")
-            handle.swipeUp(velocity: .slow)
+            XCTAssertEqual(surface.frame.minY, surfaceY, accuracy: 2, "Broad upward swipe must reveal the map at the top")
+            let collapseStart = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.32))
+            collapseStart.press(forDuration: 0.05, thenDragTo: collapseStart.withOffset(CGVector(dx: 0, dy: 180)))
             XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Collapsed"), object: handle)], timeout: 5), .completed)
             handle.tap()
             XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Expanded"), object: handle)], timeout: 5), .completed)
@@ -41,10 +46,9 @@ import XCTest
             handle.tap()
             XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Collapsed"), object: handle)], timeout: 5), .completed)
             let collapsedY = handle.frame.minY
-            let page = app.scrollViews.firstMatch
             let agenda = page.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
-            agenda.press(forDuration: 0.05, thenDragTo: agenda.withOffset(CGVector(dx: 0, dy: -130)))
-            XCTAssertLessThan(handle.frame.minY, collapsedY - 30, "Page scrolling must remain available outside the map")
+            agenda.press(forDuration: 0.05, thenDragTo: agenda.withOffset(CGVector(dx: 0, dy: -90)))
+            XCTAssertLessThan(handle.frame.minY, collapsedY - 20, "Page scrolling must remain available outside the map")
             app.terminate()
         }
     }

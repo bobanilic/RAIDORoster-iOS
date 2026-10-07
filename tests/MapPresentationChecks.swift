@@ -10,12 +10,13 @@ import CoreGraphics
         for name in ["Mediterranean Sea", "Cyprus", "Nicosia", "Greece", "Athens", "Mount Etna", "Mount Vesuvius"] {
             precondition(catalogue.labels.contains { $0.name == name }, "Missing route geography: \(name)")
         }
-        precondition(MapExpansionGesture.destination(expanded: false, horizontal: 0, vertical: 50, onHandle: false) == true)
-        precondition(MapExpansionGesture.destination(expanded: false, horizontal: 0, vertical: 35, onHandle: true) == true)
-        precondition(MapExpansionGesture.destination(expanded: true, horizontal: 0, vertical: -35, onHandle: true) == false)
-        precondition(MapExpansionGesture.destination(expanded: true, horizontal: 0, vertical: -100, onHandle: false) == nil, "Map pans must not collapse")
-        precondition(MapExpansionGesture.destination(expanded: false, horizontal: 80, vertical: 50, onHandle: false) == nil)
-        precondition(MapExpansionGesture.destination(expanded: false, horizontal: 0, vertical: 12, onHandle: true) == nil)
+        precondition(MapExpansionGesture.destination(expanded: false, horizontal: 0, vertical: -180) == true)
+        precondition(MapExpansionGesture.destination(expanded: true, horizontal: 0, vertical: 180) == false)
+        precondition(MapExpansionGesture.destination(expanded: true, horizontal: 0, vertical: -180) == nil)
+        precondition(MapExpansionGesture.destination(expanded: false, horizontal: 0, vertical: 180) == nil)
+        precondition(MapExpansionGesture.destination(expanded: true, horizontal: 0, vertical: 60) == nil, "Short map pans must not collapse")
+        precondition(MapExpansionGesture.destination(expanded: false, horizontal: 180, vertical: -160) == nil)
+        precondition(MapExpansionGesture.destination(expanded: false, horizontal: 0, vertical: -139) == nil)
         func label(_ id: String, _ name: String, _ x: CGFloat, _ y: CGFloat, priority: Int = 1) -> MapLabelLayout.Candidate {
             .init(id: id, name: name, priority: priority, rank: 1, rect: CGRect(x: x, y: y, width: 60, height: 14))
         }

@@ -16,10 +16,10 @@ struct OfflinePlaceCatalogue: Codable {
 }
 
 enum MapExpansionGesture {
-    static func destination(expanded: Bool, horizontal: Double, vertical: Double, onHandle: Bool) -> Bool? {
-        guard abs(vertical) >= 20, abs(vertical) > abs(horizontal) * 1.2 else { return nil }
-        if !expanded, vertical > 0 { return true }
-        if expanded, onHandle, vertical < 0 { return false }
+    static func destination(expanded: Bool, horizontal: Double, vertical: Double) -> Bool? {
+        guard abs(vertical) >= 140, abs(vertical) > abs(horizontal) * 1.4 else { return nil }
+        if !expanded, vertical < 0 { return true }
+        if expanded, vertical > 0 { return false }
         return nil
     }
 }

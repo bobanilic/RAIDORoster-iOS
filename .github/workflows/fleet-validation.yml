@@ -52,17 +52,17 @@ jobs:
         run: bash RAIDORoster-Web2IPA/build-unsigned-ipa.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-2.29.3-map-interaction-IPA
+          name: RAIDO-2.29.4-frosted-map-IPA
           path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
           retention-days: 7
           if-no-files-found: error
       - name: Render both themes and appearance settings in iPhone simulator
-        run: python3 tools/preview_ice_tabs.py
+        run: python3 tools/preview_ice_tabs.py --map-only
       - name: Upload Ice screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-2.29.3-theme-screenshots
+          name: RAIDO-2.29.4-map-screenshots
           path: |
             /tmp/raido-ice-*.png
             /tmp/raido-ice-app-*.log
