@@ -1,6 +1,36 @@
 import XCTest
 
 @MainActor final class MapGestureUITests: XCTestCase {
+    func testPaletteSettingsPersistIndependently() {
+        continueAfterFailure = false
+        let app = XCUIApplication(bundleIdentifier: "com.bobanilic.raidoroster")
+        app.launchArguments = ["--theme=getJet", "--mode=light", "--settings"]
+        app.launch()
+        let link = app.buttons["settings-color-palette"]
+        XCTAssertTrue(link.waitForExistence(timeout: 15))
+        link.tap()
+        let wine = app.buttons["palette-option-burgundyRose"]
+        XCTAssertTrue(wine.waitForExistence(timeout: 5))
+        wine.tap()
+        XCTAssertEqual(wine.value as? String, "Selected")
+        app.navigationBars.buttons["Settings"].tap()
+        XCTAssertTrue(app.staticTexts["Burgundy & Rose"].exists)
+        app.buttons["Ice"].tap()
+        link.tap()
+        let blue = app.buttons["palette-option-iceBlue"]
+        XCTAssertTrue(blue.waitForExistence(timeout: 5))
+        blue.tap()
+        XCTAssertEqual(blue.value as? String, "Selected")
+        app.navigationBars.buttons["Settings"].tap()
+        app.buttons["GetJet"].tap()
+        XCTAssertTrue(app.staticTexts["Burgundy & Rose"].exists, "Switching theme preserves its palette")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(link.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Burgundy & Rose"].exists, "Palette persists after relaunch")
+        app.terminate()
+    }
+
     func testBroadSwipesAndMapPanning() {
         continueAfterFailure = false
         for theme in ["ice", "getJet"] {

@@ -132,6 +132,9 @@ try:
         UserDefaults.standard.set(rawTheme, forKey: RaidoAppearancePreferences.themeKey)
         UserDefaults.standard.set(mode, forKey: RaidoAppearancePreferences.iceKey)
         UserDefaults.standard.set(mode, forKey: RaidoAppearancePreferences.getJetKey)
+        if let chosen = args.first(where: { $0.hasPrefix("--palette=") }).map({ String($0.dropFirst(10)) }) {
+            UserDefaults.standard.set(chosen, forKey: rawTheme == "getJet" ? RaidoAppearancePreferences.getJetPaletteKey : RaidoAppearancePreferences.icePaletteKey)
+        }
         RaidoAppearancePreferences.migrate(.standard)''')
     app.write_text(host)
     with zipfile.ZipFile(ipa) as archive:
@@ -166,25 +169,40 @@ try:
     run(['xcrun', 'simctl', 'bootstatus', udid, '-b'])
     run(['xcrun', 'simctl', 'install', udid, str(product)])
     run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '06:44', '--batteryState', 'charged', '--batteryLevel', '100'])
-    for palette in ['ice', 'getJet']:
-        for mode in ['light', 'dark', 'system']:
-            for system_mode in (['light', 'dark'] if mode == 'system' else [mode]):
-                run(['xcrun', 'simctl', 'ui', udid, 'appearance', system_mode])
-                for tab in (['today'] if mode == 'system' else ['today', 'expanded'] if '--map-only' in sys.argv else ['today', 'roster', 'fleet', 'more', 'expanded', 'settings', 'announcements', 'announcements-airhub', 'crew-control']):
-                    print('Rendering', palette, mode, system_mode, tab, flush=True)
-                    args = ['xcrun', 'simctl', 'launch', '--stdout=/tmp/raido-ice-app-stdout.log',
-                            '--stderr=/tmp/raido-ice-app-stderr.log', udid, bundle,
-                            '--theme=' + palette, '--mode=' + mode,
-                            '--tab=' + ('today' if tab == 'expanded' else 'more' if tab == 'settings' else tab)]
-                    if tab == 'expanded': args.append('--expanded')
-                    if tab == 'settings': args.append('--settings')
-                    if tab.startswith('announcements'): args.append('--announcements')
-                    if tab == 'announcements-airhub': args.append('--airhub')
-                    if tab == 'crew-control': args.append('--crew-control')
-                    run(args)
-                    time.sleep(3)
-                    run(['xcrun', 'simctl', 'io', udid, 'screenshot', f'/tmp/raido-theme-{palette}-{tab}-{mode}-{system_mode}.png'])
-                    run(['xcrun', 'simctl', 'terminate', udid, bundle])
+    combinations = [(theme, palette, mode, tab)
+        for theme in ['ice', 'getJet'] for palette in ['iceBlue', 'forestGreen', 'midnightChampagne', 'burgundyRose', 'espressoBronze']
+        for mode in ['light', 'dark'] for tab in (['roster', 'settings'] if palette == 'forestGreen' else ['roster'])]
+    if '--palette-only' in sys.argv:
+        for theme, palette, mode, tab in combinations:
+            print('Rendering palette', theme, palette, mode, tab, flush=True)
+            run(['xcrun', 'simctl', 'ui', udid, 'appearance', mode])
+            args = ['xcrun', 'simctl', 'launch', '--stdout=/tmp/raido-ice-app-stdout.log',
+                    '--stderr=/tmp/raido-ice-app-stderr.log', udid, bundle,
+                    '--theme=' + theme, '--palette=' + palette, '--mode=' + mode, '--tab=' + ('more' if tab == 'settings' else tab)]
+            if tab == 'settings': args.append('--settings')
+            run(args); time.sleep(2)
+            run(['xcrun', 'simctl', 'io', udid, 'screenshot', f'/tmp/raido-theme-{theme}-{palette}-{tab}-{mode}.png'])
+            run(['xcrun', 'simctl', 'terminate', udid, bundle])
+    else:
+        for palette in ['ice', 'getJet']:
+            for mode in ['light', 'dark', 'system']:
+                for system_mode in (['light', 'dark'] if mode == 'system' else [mode]):
+                    run(['xcrun', 'simctl', 'ui', udid, 'appearance', system_mode])
+                    for tab in (['today'] if mode == 'system' else ['today', 'expanded'] if '--map-only' in sys.argv else ['today', 'roster', 'fleet', 'more', 'expanded', 'settings', 'announcements', 'announcements-airhub', 'crew-control']):
+                        print('Rendering', palette, mode, system_mode, tab, flush=True)
+                        args = ['xcrun', 'simctl', 'launch', '--stdout=/tmp/raido-ice-app-stdout.log',
+                                '--stderr=/tmp/raido-ice-app-stderr.log', udid, bundle,
+                                '--theme=' + palette, '--mode=' + mode,
+                                '--tab=' + ('today' if tab == 'expanded' else 'more' if tab == 'settings' else tab)]
+                        if tab == 'expanded': args.append('--expanded')
+                        if tab == 'settings': args.append('--settings')
+                        if tab.startswith('announcements'): args.append('--announcements')
+                        if tab == 'announcements-airhub': args.append('--airhub')
+                        if tab == 'crew-control': args.append('--crew-control')
+                        run(args)
+                        time.sleep(3)
+                        run(['xcrun', 'simctl', 'io', udid, 'screenshot', f'/tmp/raido-theme-{palette}-{tab}-{mode}-{system_mode}.png'])
+                        run(['xcrun', 'simctl', 'terminate', udid, bundle])
     # Change theme inside the same running view hierarchy, exercising palette
     # invalidation and UIKit chrome refresh rather than only cold starts.
     for target in ['getJet', 'ice']:

@@ -50,6 +50,33 @@ struct AppearanceChecks {
                 expect((max(foreground, fill) + 0.05) / (min(foreground, fill) + 0.05) >= 4.5, "Readable filled actions in every theme and mode")
             }
         }
+        expect(defaults.string(forKey: RaidoAppearancePreferences.icePaletteKey) == "iceBlue", "Existing Ice colours remain default")
+        expect(defaults.string(forKey: RaidoAppearancePreferences.getJetPaletteKey) == "forestGreen", "Existing GetJet colours remain default")
+        defaults.set("espressoBronze", forKey: RaidoAppearancePreferences.icePaletteKey)
+        defaults.set("burgundyRose", forKey: RaidoAppearancePreferences.getJetPaletteKey)
+        RaidoAppearancePreferences.migrate(defaults)
+        expect(defaults.string(forKey: RaidoAppearancePreferences.icePaletteKey) == "espressoBronze", "Migration retains Ice palette")
+        expect(defaults.string(forKey: RaidoAppearancePreferences.getJetPaletteKey) == "burgundyRose", "Migration retains GetJet palette")
+        expect(RaidoAppearancePreferences.selectedPalette(theme: .ice, ice: "invalid", getJet: "burgundyRose") == .iceBlue, "Invalid Ice palette falls back")
+        expect(RaidoAppearancePreferences.selectedPalette(theme: .getJet, ice: "espressoBronze", getJet: "invalid") == .forestGreen, "Invalid GetJet palette falls back")
+        for palette in RaidoPalette.allCases {
+            for theme in RaidoTheme.allCases {
+                let resolved = RaidoAppearancePreferences.selectedPalette(theme: theme,
+                    ice: theme == .ice ? palette.rawValue : "iceBlue",
+                    getJet: theme == .getJet ? palette.rawValue : "forestGreen")
+                expect(resolved == palette, "Independent palette selection in both layouts")
+            }
+            for dark in [false, true] {
+                let c = palette.colors(dark: dark)
+                for (foreground, background) in [(c.ink, c.background), (c.ink, c.surface),
+                    (c.accent, c.background), (c.offInk, c.background),
+                    (c.selectionInk, c.highlight), (c.warningInk, c.warning),
+                    (RaidoActionPalette.ink, c.actionFill)] {
+                    let a = luminance(foreground), b = luminance(background)
+                    expect((max(a, b) + 0.05) / (min(a, b) + 0.05) >= 4.5, "Readable " + palette.title + " colour roles")
+                }
+            }
+        }
         print("Passed \(checks) appearance migration and selection checks")
     }
 }
