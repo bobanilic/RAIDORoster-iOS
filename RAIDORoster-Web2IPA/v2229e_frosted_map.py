@@ -23,6 +23,12 @@ header = s[a:b]
 c = header.index('            if mapExpanded {')
 details = header[c:header.index('\n        }\n        .contentShape(Rectangle())', c)]
 s = s[:a] + (ROOT / 'v2229e_frosted_header.swift.inc').read_text().replace('/* EXPANDED_DETAILS */', details) + '\n\n' + s[b:]
+# The local-only badge belongs to the legacy standalone map. In the full-bleed
+# header it would cover Today and the date; source details stay in map controls.
+s = once(s, '                                Text("LOCAL • NO DATA REQUIRED")',
+    '                                if !iceHeader {\n                                Text("LOCAL • NO DATA REQUIRED")')
+s = once(s, '                                    .background(MidnightTheme.background.opacity(0.88), in: Capsule())\n                                Spacer()',
+    '                                    .background(MidnightTheme.background.opacity(0.88), in: Capsule())\n                                }\n                                Spacer()')
 s = once(s, 'withAnimation(.easeInOut(duration: 0.28)) { mapExpanded.toggle() }',
     '''if mapExpanded { committedPan = .zero; committedZoom = 1; onlineCameraPosition = .automatic }
         withAnimation(.spring(response: 0.38, dampingFraction: 0.9)) { mapExpanded.toggle() }''')

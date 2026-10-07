@@ -2,7 +2,6 @@
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
                 mapSurface
-                    .padding(.top, 96)
                     .allowsHitTesting(mapExpanded)
                 Rectangle().fill(.ultraThinMaterial)
                     .overlay(MidnightTheme.background.opacity(0.15))
