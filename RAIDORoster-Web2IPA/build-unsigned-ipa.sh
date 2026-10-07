@@ -133,6 +133,7 @@ python3 "$ROOT/v2229c_map_polish.py"
 python3 "$ROOT/v2229d_map_interaction.py"
 python3 "$ROOT/v2229e_frosted_map.py"
 python3 "$ROOT/v2229f_blended_map.py"
+python3 "$ROOT/v2229g_map_catalogue.py"
 
 bash "$ROOT/../tools/run_generated_checks.sh"
 

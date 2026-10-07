@@ -52,7 +52,7 @@ jobs:
         run: bash RAIDORoster-Web2IPA/build-unsigned-ipa.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-2.29.5-blended-map-IPA
+          name: RAIDO-2.29.6-map-catalogue-IPA
           path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
           retention-days: 7
           if-no-files-found: error
@@ -62,7 +62,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: RAIDO-2.29.5-map-screenshots
+          name: RAIDO-2.29.6-map-screenshots
           path: |
             /tmp/raido-ice-*.png
             /tmp/raido-ice-app-*.log
