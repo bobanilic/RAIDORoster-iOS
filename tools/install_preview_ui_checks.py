@@ -19,6 +19,8 @@ def install(project_path, packaged_info):
         if key == 'UIBackgroundModes' or (key.startswith('NS') and key.endswith('UsageDescription'))}))
     for config in objects[objects[native]['buildConfigurationList']]['buildConfigurations']:
         objects[config]['buildSettings']['INFOPLIST_FILE'] = str(plist)
+        if objects[config]['name'] == 'Debug':
+            objects[config]['buildSettings']['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = '$(inherited) DEBUG'
     source = Path(__file__).resolve().parents[1] / 'tests/MapGestureUITests.swift'
     ids = {name: f'F2292{index:019d}' for index, name in enumerate(['target', 'source', 'build', 'product', 'sources', 'frameworks', 'resources', 'proxy', 'dependency', 'debug', 'release', 'configs'], 1)}
     objects[ids['source']] = {'isa': 'PBXFileReference', 'lastKnownFileType': 'sourcecode.swift', 'path': str(source), 'sourceTree': '<absolute>'}

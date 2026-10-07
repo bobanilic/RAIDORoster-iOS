@@ -17,13 +17,13 @@ import XCTest
             XCTAssertEqual(surface.frame.height, 324, accuracy: 2, "Keep the total compact header footprint")
             XCTAssertFalse(app.staticTexts["Tap or pull down for map"].exists)
             let page = app.scrollViews.firstMatch
-            let broadStart = page.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.72))
-            broadStart.press(forDuration: 0.05, thenDragTo: broadStart.withOffset(CGVector(dx: 0, dy: -180)))
+            let broadStart = page.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.45))
+            broadStart.press(forDuration: 0.05, thenDragTo: broadStart.withOffset(CGVector(dx: 0, dy: 180)))
             XCTAssertTrue(NSPredicate(format: "value == %@", "Expanded").evaluate(with: handle) ||
                 XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Expanded"), object: handle)], timeout: 5) == .completed)
-            XCTAssertEqual(surface.frame.minY, surfaceY, accuracy: 2, "Broad upward swipe must reveal the map at the top")
-            let collapseStart = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.32))
-            collapseStart.press(forDuration: 0.05, thenDragTo: collapseStart.withOffset(CGVector(dx: 0, dy: 180)))
+            XCTAssertEqual(surface.frame.minY, surfaceY, accuracy: 2, "Downward disclosure must keep the page at the top")
+            let collapseStart = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.72))
+            collapseStart.press(forDuration: 0.05, thenDragTo: collapseStart.withOffset(CGVector(dx: 0, dy: -180)))
             XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Collapsed"), object: handle)], timeout: 5), .completed)
             handle.tap()
             XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Expanded"), object: handle)], timeout: 5), .completed)

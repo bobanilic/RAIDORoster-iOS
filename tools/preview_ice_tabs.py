@@ -166,15 +166,6 @@ try:
     run(['xcrun', 'simctl', 'bootstatus', udid, '-b'])
     run(['xcrun', 'simctl', 'install', udid, str(product)])
     run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '06:44', '--batteryState', 'charged', '--batteryLevel', '100'])
-    with open('/tmp/raido-map-ui-tests.log', 'w') as log:
-        try:
-            run(['xcodebuild', '-project', str(project), '-scheme', 'RAIDOMapChecks', '-configuration', 'Debug',
-                 '-destination', 'platform=iOS Simulator,id=' + udid, '-derivedDataPath', '/tmp/raido-ice-preview',
-                 '-parallel-testing-enabled', 'NO', 'CODE_SIGNING_ALLOWED=NO', 'test-without-building'], stdout=log, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError:
-            print(Path(log.name).read_text()[-12000:])
-            raise
-    print('Passed broad disclosure swipes, independent map pan/pinch and tap tests in both themes', flush=True)
     for palette in ['ice', 'getJet']:
         for mode in ['light', 'dark', 'system']:
             for system_mode in (['light', 'dark'] if mode == 'system' else [mode]):
@@ -206,6 +197,15 @@ try:
         time.sleep(4)
         run(['xcrun', 'simctl', 'io', udid, 'screenshot', f'/tmp/raido-theme-switch-{target}.png'])
         run(['xcrun', 'simctl', 'terminate', udid, bundle])
+    with open('/tmp/raido-map-ui-tests.log', 'w') as log:
+        try:
+            run(['xcodebuild', '-project', str(project), '-scheme', 'RAIDOMapChecks', '-configuration', 'Debug',
+                 '-destination', 'platform=iOS Simulator,id=' + udid, '-derivedDataPath', '/tmp/raido-ice-preview',
+                 '-parallel-testing-enabled', 'NO', 'CODE_SIGNING_ALLOWED=NO', 'test-without-building'], stdout=log, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError:
+            print(Path(log.name).read_text()[-12000:])
+            raise
+    print('Passed broad disclosure swipes, independent map pan/pinch and tap tests in both themes', flush=True)
     with zipfile.ZipFile(ipa) as archive:
         report = {
             'version': packaged['CFBundleShortVersionString'], 'ipaBytes': ipa.stat().st_size,
