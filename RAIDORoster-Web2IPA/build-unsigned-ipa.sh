@@ -135,6 +135,7 @@ python3 "$ROOT/v2229e_frosted_map.py"
 python3 "$ROOT/v2229f_blended_map.py"
 python3 "$ROOT/v2229g_map_catalogue.py"
 python3 "$ROOT/v2229h_color_palettes.py"
+python3 "$ROOT/v2229i_roster_timing.py"
 
 bash "$ROOT/../tools/run_generated_checks.sh"
 

@@ -11,6 +11,7 @@ swiftc -parse-as-library "$ROOT/../tests/AirportClockChecks.swift" -o "$CHECKS/a
 
 python3 "$ROOT/../tools/check_fleet_refresh_store.py"
 python3 "$ROOT/../tools/check_announcement_selection.py"
+python3 "$ROOT/../tools/check_roster_timing.py"
 swiftc "$ROOT/RAIDORoster/FlightTrackingStatus.swift" "$ROOT/../tests/FlightTrackingStatusChecks.swift" -o "$CHECKS/gps-status"
 "$CHECKS/gps-status"
 swiftc "$ROOT/RAIDORoster/MapPresentationPolicy.swift" "$ROOT/../tests/MapPresentationChecks.swift" -o "$CHECKS/map-presentation"
