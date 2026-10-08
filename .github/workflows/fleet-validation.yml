@@ -15,8 +15,11 @@ permissions:
   contents: read
 jobs:
   validate:
-    runs-on: macos-15
+    # Avoid the macOS ARM pool when hosted capacity is exhausted.
+    runs-on: macos-15-intel
     timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
       - name: Check timestamped sensor evidence and arrival gates
