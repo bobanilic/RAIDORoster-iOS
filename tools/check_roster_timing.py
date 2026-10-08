@@ -101,7 +101,7 @@ HELPERS
         expect(RosterItem(activityList: [hotel, flight]).preDutyPickupUTCDate == tonight.preDutyPickupUTCDate, "Hotel does not become report boundary")
         expect(RosterItem(activityList: []).preDutyPickupUTCDate == nil, "No invented pickup")
         let base = parseUTCStamp("2026-10-08 16:02")!
-        for seconds in [0.0, 1, 35, 59, 24 * 3600 + 35] {
+        for seconds in [0, 1, 35, 59, 24 * 3600 + 35] as [TimeInterval] {
             let now = base.addingTimeInterval(seconds)
             let dates = Array(EveryMinuteTimelineSchedule().entries(from: now, mode: .normal).prefix(2))
             let minute = Calendar(identifier: .gregorian).dateInterval(of: .minute, for: now)!.start
