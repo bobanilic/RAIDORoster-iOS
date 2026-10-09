@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = '3.1.1';
+  const VERSION = '3.2.0';
   if (window !== window.top) return;
   const SCHEMA_VERSION = 1;
   if (window.RAIDOPlus?.version === VERSION) {
@@ -681,7 +681,7 @@
     const monthDates = new Set(b.days.filter(d => !monthPrefix || d.dateISO.startsWith(monthPrefix)).map(d => d.dateISO));
     const monthDays = monthDates.size;
     const operational = b.activities.filter(a => ['FLIGHT','POSITIONING','RESERVE','STANDBY','OFF','DND','TRAINING'].includes(a.category)).length;
-    const ok = sparse ? !!b.month && b.days.length >= 1 && b.activities.length >= 1
+    const ok = sparse ? !!b.month && monthDays >= 1 && b.activities.length >= 1
       : b.days.length >= 5 && b.activities.length >= 5 && operational >= 3;
     const expected = b.month ? new Date(b.month.year, b.month.month, 0).getDate() : 0;
     const coverage = expected ? Math.round((monthDays / expected) * 100) : 0;
@@ -858,6 +858,113 @@
       monthlyBLH: monthlyBLH(root), validation: v, rows: b.days};
   }
 
+  // History operates the real, rendered portal when its HTML response is only
+  // a JavaScript shell. Never manufacture form fields or an undocumented API.
+  const historyMonths = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  function optionYear(option) {
+    const label = String(option.textContent || '').trim();
+    const value = String(option.value || '').trim();
+    return /^20\d{2}$/.test(label) ? Number(label) : /^20\d{2}$/.test(value) ? Number(value) : null;
+  }
+  function monthOption(option) {
+    const label = String(option.textContent || '').trim().toLowerCase();
+    const named = historyMonths.findIndex(m => label === m || label === m.slice(0,3));
+    if (named >= 0) return named + 1;
+    const value = String(option.value || '').trim();
+    return /^(?:[1-9]|0[1-9]|1[0-2])$/.test(value) ? Number(value) : null;
+  }
+  function historyDiscover(root = document, sourceURL = location.href) {
+    const keys = new Set();
+    for (const select of root.querySelectorAll('select')) {
+      const options = Array.from(select.options), years = options.map(optionYear).filter(Boolean);
+      if (/year/i.test(select.id + ' ' + select.name) || (years.length && years.length === options.filter(o => o.value).length)) {
+        for (const year of years) for (let m=1;m<=12;m++) keys.add(`${year}-${pad2(m)}`);
+      }
+    }
+    for (const link of root.querySelectorAll('a[href]')) {
+      try {
+        const base = new URL(sourceURL,location.href), url = new URL(link.getAttribute('href'), base);
+        if (url.origin !== base.origin || url.pathname.toLowerCase() !== base.pathname.toLowerCase()) continue;
+        const params = Object.fromEntries(Array.from(url.searchParams).map(([k,v]) => [k.toLowerCase(),v]));
+        if (/^20\d{2}$/.test(params.year || '') && /^(?:[1-9]|0[1-9]|1[0-2])$/.test(params.month || '')) keys.add(`${params.year}-${pad2(Number(params.month))}`);
+      } catch (_) {}
+    }
+    // Following an offered Previous button discovers history incrementally,
+    // including months older than the initial window. Disabled controls end it.
+    const month = pageMonth(root);
+    if (month) for (const el of root.querySelectorAll('button,a,input[type="button"],input[type="submit"]')) {
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true' || el.hidden) continue;
+      const text = String(el.getAttribute('aria-label') || el.getAttribute('title') || el.value || el.textContent || '').trim().toLowerCase();
+      if (/^(previous(?: month)?|prev(?: month)?|‹|«|←)$/.test(text)) {
+        const prior = month.year*12+month.month-2, year = Math.floor(prior/12);
+        if (year >= 2000) keys.add(`${year}-${pad2(prior%12+1)}`);
+      }
+    }
+    return Array.from(keys);
+  }
+  function historyInspect(expectedMonth) {
+    if (document.querySelector('input[type="password"]')) return {kind:'auth'};
+    if (document.readyState === 'loading' || document.querySelector('[aria-busy="true"]') || window.__RAIDOHistoryNetwork?.pending > 0) return {kind:'loading'};
+    const b = build(), v = validation(b, true);
+    if (!v.month) return {kind:'format'};
+    if (expectedMonth && v.month !== expectedMonth) return {kind:'mismatch',month:v.month};
+    if (!v.isValid) {
+      // A blank page is not proof of an empty month. Only explicit portal UI
+      // plus an identified month can establish this state.
+      const empty = Array.from(document.querySelectorAll('.empty-state,.no-data,[data-roster-empty]'))
+        .some(el => /no (?:activities|duties|roster entries|roster data)(?:\s|[.!]|$)/i.test(readableText(el)));
+      return {kind:empty ? 'empty' : 'format',month:v.month};
+    }
+    return {kind:'ready',month:v.month,offered:historyDiscover(),payload:{schemaVersion:SCHEMA_VERSION,sourceURL:location.href,
+      pageTitle:document.title || 'RAIDO',monthlyBLH:monthlyBLH(),validation:v,rows:b.days}};
+  }
+  function historyNavigate(target) {
+    if (!/^20\d{2}-(?:0[1-9]|1[0-2])$/.test(target)) return {kind:'invalid'};
+    const current = pageMonth();
+    if (!current) return {kind:'format'};
+    const [year,month] = target.split('-').map(Number);
+    const currentKey = `${current.year}-${pad2(current.month)}`;
+    if (currentKey === target) return {kind:'unchanged',month:target};
+    for (const link of document.querySelectorAll('a[href]')) {
+      try {
+        const url = new URL(link.getAttribute('href'),location.href);
+        const params = Object.fromEntries(Array.from(url.searchParams).map(([k,v]) => [k.toLowerCase(),v]));
+        if (url.origin === location.origin && url.pathname.toLowerCase() === location.pathname.toLowerCase() && Number(params.year) === year && Number(params.month) === month) {
+          link.click(); return {kind:'started',month:target,mode:'link'};
+        }
+      } catch (_) {}
+    }
+    const selects = Array.from(document.querySelectorAll('select')).filter(s => !s.disabled);
+    if (current.year !== year) {
+      const select = selects.find(s => /year/i.test(s.id+' '+s.name) || Array.from(s.options).filter(o => optionYear(o)).length >= 2);
+      const option = select && Array.from(select.options).find(o => optionYear(o) === year && !o.disabled);
+      if (option && select.value !== option.value) {
+        select.value = option.value; select.dispatchEvent(new Event('change',{bubbles:true}));
+        return {kind:'started',month:`${year}-${pad2(current.month)}`,mode:'year'};
+      }
+    }
+    if (current.year === year && current.month !== month) {
+      const select = selects.find(s => /month/i.test(s.id+' '+s.name) && !/year/i.test(s.id+' '+s.name));
+      const option = select && Array.from(select.options).find(o => monthOption(o) === month && !o.disabled);
+      if (option && select.value !== option.value) {
+        select.value = option.value; select.dispatchEvent(new Event('change',{bubbles:true}));
+        return {kind:'started',month:target,mode:'month'};
+      }
+    }
+    const delta = (year*12+month)-(current.year*12+current.month), direction = delta < 0 ? 'previous' : 'next';
+    const controls = Array.from(document.querySelectorAll('button.switch-month-button,button,a,input[type="button"],input[type="submit"]'));
+    const control = controls.find(el => {
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true' || el.hidden) return false;
+      const text = String(el.getAttribute('aria-label') || el.getAttribute('title') || el.value || el.textContent || '').trim().toLowerCase();
+      const named = direction === 'previous' ? /^(previous(?: month)?|prev(?: month)?|‹|«|←)$/ : /^(next(?: month)?|›|»|→)$/;
+      return named.test(text);
+    });
+    if (!control) return {kind:'controls-unavailable',month:currentKey};
+    const next = current.year*12+current.month-1+(delta < 0 ? -1 : 1);
+    control.click();
+    return {kind:'started',month:`${Math.floor(next/12)}-${pad2(next%12+1)}`,mode:direction};
+  }
+
   function schedule() {
     clearTimeout(timer);
     timer = setTimeout(extractNow, 650);
@@ -876,6 +983,7 @@
     version: VERSION,
     extractNow,
     extractHTML,
+    history: {discover:historyDiscover,discoverHTML:(html,url) => historyDiscover(new DOMParser().parseFromString(html,'text/html'),url),inspect:historyInspect,navigate:historyNavigate},
     diagnostics
   };
 
