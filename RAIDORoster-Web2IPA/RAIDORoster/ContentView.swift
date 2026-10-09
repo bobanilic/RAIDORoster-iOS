@@ -7607,8 +7607,9 @@ private final class FleetAircraftPhotoStore: ObservableObject {
 
         self.imageURL = imageURL
         photographer = first["photographer"] as? String
-        if let link = first["link"] as? String {
-            sourceURL = URL(string: link)
+        if let link = first["link"] as? String, let url = URL(string: link),
+           url.scheme == "https", ["planespotters.net", "www.planespotters.net"].contains(url.host ?? "") {
+            sourceURL = url
         }
     }
 }
@@ -7676,14 +7677,24 @@ private struct FleetAircraftDetailView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.white.opacity(0.85))
                             if let photographer = photo.photographer {
-                                Text("© \(photographer) • Planespotters.net")
-                                    .font(.caption2)
-                                    .foregroundStyle(.white.opacity(0.72))
+                                Group {
+                                    if let source = photo.sourceURL {
+                                        Link("© \(photographer) • Planespotters.net", destination: source)
+                                    } else {
+                                        Text("© \(photographer) • Planespotters.net")
+                                    }
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.85))
                             }
                         }
                         .padding(16)
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .onTapGesture {
+                        if let source = photo.sourceURL { UIApplication.shared.open(source) }
+                    }
+                    .accessibilityLabel("Aircraft photograph. Open original photo on Planespotters.")
 
                     if isAssigned {
                         Label("Assigned to your current / next rostered duty", systemImage: "person.crop.circle.badge.checkmark")
