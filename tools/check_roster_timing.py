@@ -27,7 +27,7 @@ properties = '\n'.join(block(anchor) for anchor in [
 helpers = '\n'.join(block(anchor) for anchor in [
     'private func pickupUTCDate(for activity: RosterActivity)',
     'private func parseNominalLocalStamp(_ value: String)',
-    'private func parseUTCStamp(_ value: String)',
+    'func parseUTCStamp(_ value: String)',
     'private func activitySortKey(_ activity: RosterActivity)',
 ])
 for start, end in [('IceDestinationClock', 'IcePickupCard'), ('IcePickupCard', 'IceReadinessView')]:

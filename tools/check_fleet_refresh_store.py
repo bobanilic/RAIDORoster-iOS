@@ -7,7 +7,7 @@ root = Path(__file__).resolve().parents[1]
 content = (root / 'RAIDORoster-Web2IPA/RAIDORoster/ContentView.swift').read_text()
 start = content.index('private struct FleetAircraftDefinition:')
 end = content.index('\nprivate enum FleetFilter:', start)
-extension = content[content.index('private extension String {'):].split('\n}', 1)[0] + '\n}'
+extension = content[content.index('extension String {'):].split('\n}', 1)[0] + '\n}'
 with tempfile.TemporaryDirectory(prefix='fleet-store-') as directory:
     fixture = Path(directory) / 'FleetStoreChecks.swift'
     fixture.write_text('import Foundation\nimport Combine\nimport CoreLocation\n' + content[start:end] + '\n' + extension + '\n' +
