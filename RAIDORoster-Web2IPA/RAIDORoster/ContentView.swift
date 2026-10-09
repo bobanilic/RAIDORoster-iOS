@@ -980,7 +980,6 @@ struct ContentView: View {
             PortalView(model: appState.browser, store: appState.rosterStore) { showPortal = false; selectedTab = .roster }
         }
         .onAppear { TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
-            FlightCompanionV3ShadowEngine.shared.startShadowObservation()
         }
         .onChange(of: appState.rosterStore.snapshot) { _, _ in
             TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
@@ -1743,6 +1742,7 @@ struct CrewReadinessCard: View {
     @Environment(\.raidoTheme) private var raidoVisualTheme
     let item: RosterItem
     @ObservedObject var store: RosterStore
+    @AppStorage(FlightPowerPolicy.preferenceKey) private var flightBatterySaving = true
     @AppStorage("RAIDORoster.RestAwarenessHours") private var restAwarenessHours = 10
 
     var body: some View {
@@ -2162,7 +2162,7 @@ private struct TodayOnlineRouteMap: View {
 }
 
 @MainActor
-private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, @preconcurrency CLLocationManagerDelegate {
     static let shared = TodayLiveFlightLocationManager()
     @Published private(set) var location: CLLocation?
     @Published private(set) var trail: [CLLocationCoordinate2D] = []
@@ -2192,6 +2192,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     private var networkTrackDegrees: Double?
     private var networkObservationAt: Date?
     private var hybridTask: Task<Void, Never>?
+    private var networkRequestTask: Task<(Data, URLResponse), Error>?
     private var lastFusedTrailAt: Date?
     private enum CompanionPhase: String, Codable { case parked, armed, groundCandidate, taxiOut, takeoffRoll, airborne, descent, taxiIn, complete }
     private var companionPhase: CompanionPhase = .parked
@@ -2215,6 +2216,21 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     private var scheduledArrivalAt: Date?
     private var activeRouteText = ""
     private var landedUsingSensors = false
+    private var landedUsingEstimate = false
+    @Published private(set) var isImprovingAccuracy = false
+    @Published private(set) var standardGPSActive = false
+    private var accuracyTask: Task<Void, Never>?
+    private var lifecycleObservers: [NSObjectProtocol] = []
+    private var isForeground = UIApplication.shared.applicationState == .active
+    private var savingBattery: Bool {
+        UserDefaults.standard.object(forKey: FlightPowerPolicy.preferenceKey) as? Bool ?? true
+    }
+    private var powerResources: FlightPowerPolicy.Resources {
+        FlightPowerPolicy.resolve(active: isTracking, phase: companionPhase.rawValue, saving: savingBattery,
+            foreground: isForeground, accuracyFix: isImprovingAccuracy, estimatedArrival: landedUsingEstimate)
+    }
+    var isEstimatingWithGPSOff: Bool { isTracking && powerResources.estimated && !isImprovingAccuracy }
+
     private let autoLead: TimeInterval = 30 * 60
     private let autoGrace: TimeInterval = 4 * 60 * 60
     private let airportGateRadius: CLLocationDistance = 6_000
@@ -2246,12 +2262,12 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     override init() {
         super.init()
         manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-        manager.distanceFilter = kCLDistanceFilterNone
+        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        manager.distanceFilter = 50
         manager.activityType = .airborne
         manager.pausesLocationUpdatesAutomatically = true
-        manager.allowsBackgroundLocationUpdates = true
-        manager.showsBackgroundLocationIndicator = true
+        manager.allowsBackgroundLocationUpdates = false
+        manager.showsBackgroundLocationIndicator = false
         authorizationStatus = manager.authorizationStatus
         refreshLocationServicesAvailability()
         restoreSession(now: Date())
@@ -2265,6 +2281,11 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
                 self.migrateLegacyTrails()
             }
         }
+        for (name, foreground) in [(UIApplication.didBecomeActiveNotification, true), (UIApplication.didEnterBackgroundNotification, false)] {
+            lifecycleObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.applicationActiveChanged(foreground) }
+            })
+        }
         Task { @MainActor [weak self] in self?.resumeRestoredSession(now: Date()) }
     }
 
@@ -2273,7 +2294,8 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     }
 
     var displaySpeed: CLLocationSpeed? {
-        if let location, location.speed >= 0 { return location.speed }
+        if isEstimatingWithGPSOff, let value = fusedLocation, value.speed >= 0 { return value.speed }
+        if let location = usableGNSSLocation, location.speed >= 0 { return location.speed }
         if let retainedSpeed, let retainedSpeedAt,
            Date().timeIntervalSince(retainedSpeedAt) <= retainedNavigationLifetime {
             return retainedSpeed
@@ -2282,7 +2304,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     }
 
     var displayCourse: CLLocationDirection? {
-        if let location, location.course >= 0 { return location.course }
+        if let location = usableGNSSLocation, location.course >= 0 { return location.course }
         if let retainedCourse, let retainedCourseAt,
            Date().timeIntervalSince(retainedCourseAt) <= retainedNavigationLifetime {
             return retainedCourse
@@ -2412,6 +2434,8 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
 
     private func restartHybridTask() {
         hybridTask?.cancel()
+        hybridTask = nil
+        guard powerResources.timer else { return }
         hybridTask = Task { [weak self] in
             guard let self else { return }
             var secondsSincePoll = 10_000
@@ -2425,7 +2449,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
                 case .descent: pollEvery = 6
                 case .complete: pollEvery = 60
                 }
-                if secondsSincePoll >= pollEvery, let registration = self.trackedRegistration {
+                if self.powerResources.network, secondsSincePoll >= pollEvery, let registration = self.trackedRegistration {
                     await self.fetchNetworkAircraft(registration: registration)
                     secondsSincePoll = 0
                 }
@@ -2444,7 +2468,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
             "https://api.adsb.one/v2/reg/\(encoded)"
         ]
         for raw in urls {
-            guard !Task.isCancelled, let url = URL(string: raw) else { return }
+            guard !Task.isCancelled, powerResources.network, let url = URL(string: raw) else { return }
             if await acceptNetworkAircraft(url: url) { return }
         }
     }
@@ -2455,8 +2479,13 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("RAIDORoster/2.23", forHTTPHeaderField: "User-Agent")
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse,
+            let requestTask = Task { try await URLSession.shared.data(for: request) }
+            networkRequestTask = requestTask
+            defer { networkRequestTask = nil }
+            let (data, response) = try await withTaskCancellationHandler {
+                try await requestTask.value
+            } onCancel: { requestTask.cancel() }
+            guard powerResources.network, !Task.isCancelled, let http = response as? HTTPURLResponse,
                   (200..<300).contains(http.statusCode),
                   let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let aircraft = (root["ac"] as? [[String: Any]])?.first,
@@ -2525,6 +2554,10 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     private func refreshFusedPosition() {
         let now = Date()
         maintainSession(now: now)
+        if isEstimatingWithGPSOff, let estimate = estimatedRouteLocation(now: now) {
+            publishFused(estimate, source: "Estimated · battery saving", estimated: true, now: now)
+            return
+        }
         if let gnss = usableGNSSLocation {
             publishFused(gnss, source: sourceLabel(for: gnss), estimated: false, now: now)
             return
@@ -2615,7 +2648,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     }
 
     private func estimatedRouteLocation(now: Date) -> CLLocation? {
-        if landedUsingSensors, landedAt != nil, companionPhase == .taxiIn || companionPhase == .complete,
+        if landedUsingSensors || landedUsingEstimate, landedAt != nil, companionPhase == .taxiIn || companionPhase == .complete,
            let destination = routeCoordinates.last {
             return CLLocation(coordinate: destination, altitude: 0, horizontalAccuracy: 3_000,
                               verticalAccuracy: -1, course: -1, speed: 0, timestamp: now)
@@ -2641,6 +2674,92 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         case .descent: manager.desiredAccuracy = kCLLocationAccuracyBest; manager.distanceFilter = 30
         }
         manager.pausesLocationUpdatesAutomatically = companionPhase == .complete
+        let resources = powerResources
+        if !resources.network { networkRequestTask?.cancel() }
+        if !resources.location {
+            manager.stopUpdatingLocation()
+            manager.allowsBackgroundLocationUpdates = false
+            manager.showsBackgroundLocationIndicator = false
+            standardGPSActive = false
+        } else {
+            manager.allowsBackgroundLocationUpdates = resources.backgroundLocation
+            manager.showsBackgroundLocationIndicator = resources.backgroundLocation
+        }
+        if resources.motion { startMotionObservation() } else { stopMotionObservation() }
+        if resources.estimated || companionPhase == .complete { stopWakeMonitoring() }
+        if resources.estimated && !isForeground { hybridTask?.cancel(); hybridTask = nil }
+    }
+
+    private func startMotionObservation() {
+        guard powerResources.motion else { return }
+        FlightCompanionV3Observer.shared.startObservation(sessionKey: sensorSessionKey)
+        FlightCompanionV3ShadowEngine.shared.startShadowObservation()
+    }
+
+    private func stopMotionObservation() {
+        FlightCompanionV3Observer.shared.stopObservation()
+        FlightCompanionV3ShadowEngine.shared.stopShadowObservation()
+    }
+
+    private func beginLocationUpdates() {
+        guard powerResources.location else { return }
+        manager.allowsBackgroundLocationUpdates = powerResources.backgroundLocation
+        manager.showsBackgroundLocationIndicator = powerResources.backgroundLocation
+        manager.startUpdatingLocation()
+        standardGPSActive = true
+    }
+
+    private func stopWakeMonitoring() {
+        manager.stopMonitoringSignificantLocationChanges()
+        if let id = automaticRegionID {
+            for region in manager.monitoredRegions where region.identifier == id { manager.stopMonitoring(for: region) }
+        }
+    }
+
+    func setBatterySaving(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: FlightPowerPolicy.preferenceKey)
+        finishAccuracyFix()
+        if isTracking { beginLocationUpdates(); restartHybridTask() }
+        startMotionObservation()
+        refreshFusedPosition()
+    }
+
+    func requestAccuracyFix() {
+        guard isTracking, powerResources.estimated, isForeground else { return }
+        switch manager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways: break
+        default: errorText = "Allow location in iPhone Settings to improve accuracy"; return
+        }
+        errorText = nil
+        accuracyTask?.cancel()
+        isImprovingAccuracy = true
+        manager.desiredAccuracy = kCLLocationAccuracyBest
+        manager.distanceFilter = kCLDistanceFilterNone
+        beginLocationUpdates()
+        accuracyTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(nanoseconds: UInt64(FlightPowerPolicy.accuracyFixSeconds * 1_000_000_000)) }
+            catch { return }
+            self?.finishAccuracyFix()
+            self?.refreshFusedPosition()
+        }
+    }
+
+    func finishAccuracyFix() {
+        accuracyTask?.cancel(); accuracyTask = nil
+        isImprovingAccuracy = false
+        applyPowerProfile()
+    }
+
+    private func applicationActiveChanged(_ active: Bool) {
+        isForeground = active
+        if !active {
+            if isImprovingAccuracy { finishAccuracyFix() }
+            if powerResources.estimated { hybridTask?.cancel(); hybridTask = nil }
+            persistSession(now: Date(), force: true)
+        } else if isTracking {
+            refreshFusedPosition()
+            if isTracking { restartHybridTask() }
+        }
     }
 
     private func updateDurations(_ now: Date) {
@@ -2761,7 +2880,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
 
         if automaticKey != key {
             persistFusedTrail(now: now, force: true)
-            FlightCompanionV3Observer.shared.stopObservation()
+            stopMotionObservation()
             if isTracking {
                 manager.stopUpdatingLocation()
                 isTracking = false
@@ -2790,7 +2909,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
             automaticDepartureAt = selected.start
             scheduledArrivalAt = selected.end
             activeRouteText = selected.activity.route
-            landedUsingSensors = false
+            landedUsingSensors = false; landedUsingEstimate = false
             location = nil; trail = []
             networkObservationAt = nil; networkLatitude = nil; networkLongitude = nil
             automaticOrigin = origin.coordinate
@@ -2811,7 +2930,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
 
         automaticMonitoring = true
         requestAutomaticAuthorization()
-        manager.startMonitoringSignificantLocationChanges()
+        if !powerResources.estimated, companionPhase != .complete { manager.startMonitoringSignificantLocationChanges() }
         if let id = automaticRegionID,
            let region = manager.monitoredRegions.first(where: { $0.identifier == id }) {
             manager.requestState(for: region)
@@ -2870,9 +2989,9 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         companionPhase = .armed
         flightPhaseText = "At departure airport · armed"
         applyPowerProfile()
-        manager.startUpdatingLocation()
+        beginLocationUpdates()
         restartHybridTask()
-        FlightCompanionV3Observer.shared.startObservation(sessionKey: sensorSessionKey)
+        startMotionObservation()
         persistSession(now: now, force: true)
     }
 
@@ -2888,6 +3007,13 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     }
 
     func mapStatus(now: Date = Date()) -> FlightTrackingStatus {
+        if landedUsingEstimate, companionPhase == .complete {
+            return .init(title: "Session complete · estimated arrival", detail: "The arrival and session end were estimated. No touchdown measurement was recorded.", symbol: "checkmark.circle")
+        }
+        if isTracking, powerResources.estimated {
+            return .init(title: isImprovingAccuracy ? "Improving GPS accuracy · up to 45s" : "Estimated · battery saving",
+                detail: "Route progress and arrival are estimates. GPS, motion and live requests stay off except for a requested foreground GPS fix.", symbol: "location.circle")
+        }
         let permission: FlightTrackingStatus.Permission
         switch authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse: permission = .allowed
@@ -2905,6 +3031,8 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
 
     private var companionPowerModeText: String {
         if !isTracking { return automaticMonitoring ? "low-power armed" : "idle" }
+        if isImprovingAccuracy { return "foreground accuracy fix · max 45s" }
+        if powerResources.estimated { return "estimated · GPS/motion/network off" }
         switch companionPhase {
         case .parked, .armed: return "armed low-power"
         case .groundCandidate: return "ground verification"
@@ -2936,6 +3064,8 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         return [
             "version=2.26.0-sensor-driver",
             "pausesUpdates=\(manager.pausesLocationUpdatesAutomatically)",
+            "backgroundGPS=\(manager.allowsBackgroundLocationUpdates)",
+            "batterySaving=\(savingBattery)",
             "scheduledDepartureUTC=\(departure)",
             "originAirport=\(origin)",
             "automaticMonitoring=\(automaticMonitoring)",
@@ -2950,8 +3080,8 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
             "fusedAgeSeconds=\(fusedAge)",
             "trailPoints=\(fusedTrail.count)",
             "powerMode=\(companionPowerModeText)",
-            "standardGPS=\(isTracking)",
-            "adsbPollIntervalSeconds=\(adsbPollSeconds)",
+            "standardGPS=\(standardGPSActive)",
+            "adsbPollIntervalSeconds=\(powerResources.network ? adsbPollSeconds : 0)",
             "desiredAccuracy=\(Int(manager.desiredAccuracy.rounded()))",
             "distanceFilter=\(Int(manager.distanceFilter.rounded()))"
         ].joined(separator: "\n")
@@ -3050,13 +3180,13 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     }
 
     func start() {
-        FlightCompanionV3Observer.shared.stopObservation()
+        stopMotionObservation()
         resumeAfterRestore = false
         automaticMonitoring = false
-        landedUsingSensors = false
+        landedUsingSensors = false; landedUsingEstimate = false
         guard CLLocationManager.locationServicesEnabled() else {
+            stop()
             errorText = "Location Services are off"
-            isTracking = false
             return
         }
 
@@ -3088,20 +3218,20 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
         case .authorizedWhenInUse, .authorizedAlways:
-            manager.startUpdatingLocation()
-            FlightCompanionV3Observer.shared.startObservation(sessionKey: sensorSessionKey)
+            beginLocationUpdates()
+            startMotionObservation()
         case .denied, .restricted:
+            stop()
             errorText = "Location permission required"
-            isTracking = false
         @unknown default:
+            stop()
             errorText = "Location unavailable"
-            isTracking = false
         }
     }
 
     // MARK: V2.26 sensor driver and recoverable session
     var sensorPhase: FlightSensorPolicy.Phase {
-        guard isTracking else { return .inactive }
+        guard isTracking, powerResources.motion else { return .inactive }
         switch companionPhase {
         case .parked, .armed, .groundCandidate, .taxiOut, .takeoffRoll: return .preflight
         case .airborne, .descent: return .airborne
@@ -3112,6 +3242,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     private var sensorSessionKey: String { automaticKey ?? trailPersistenceKey ?? "manual" }
 
     func stopForBackgroundIfIdle() {
+        applicationActiveChanged(false)
         persistSession(now: Date(), force: true)
         if companionPhase == .complete { stop(); return }
         if automaticMonitoring, isTracking { return }
@@ -3169,7 +3300,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         landedAt = touchdown; landingTimeText = clockText(touchdown)
         companionPhase = .taxiIn; flightPhaseText = "Landed · taxi in · sensors"
         landedUsingSensors = true; stationarySince = nil
-        FlightCompanionV3Observer.shared.stopObservation()
+        stopMotionObservation()
         applyPowerProfile()
         persistSession(now: now, force: true)
         refreshFusedPosition()
@@ -3192,6 +3323,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         let takeoff: Date?
         let landing: Date?
         let sensorLanding: Bool
+        let estimatedLanding: Bool?
         let progress: Double
         let progressAt: Date?
         let savedAt: Date
@@ -3214,7 +3346,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
             origin: automaticOrigin.map { .init(latitude: $0.latitude, longitude: $0.longitude) },
             route: routeCoordinates.map { .init(latitude: $0.latitude, longitude: $0.longitude) },
             trailKey: trailPersistenceKey, taxiOut: taxiOutStartedAt, takeoff: airborneAt,
-            landing: landedAt, sensorLanding: landedUsingSensors, progress: lastMeasuredProgress,
+            landing: landedAt, sensorLanding: landedUsingSensors, estimatedLanding: landedUsingEstimate, progress: lastMeasuredProgress,
             progressAt: lastMeasuredProgressAt, savedAt: now)
         do {
             let file: ProtectedJSONFile<PersistedSession> = try DeviceCacheStorage.file("session.json")
@@ -3256,9 +3388,9 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         trackedRegistration = state.registration; trailPersistenceKey = state.trailKey
         activeRouteText = state.routeText
         companionPhase = state.phase; taxiOutStartedAt = state.taxiOut
-        airborneAt = state.takeoff; landedAt = state.landing; landedUsingSensors = state.sensorLanding
+        airborneAt = state.takeoff; landedAt = state.landing; landedUsingSensors = state.sensorLanding; landedUsingEstimate = state.estimatedLanding ?? false
         lastMeasuredProgress = state.progress; lastMeasuredProgressAt = state.progressAt
-        takeoffTimeText = state.takeoff.map(clockText); landingTimeText = state.landing.map(clockText)
+        takeoffTimeText = state.takeoff.map(clockText); landingTimeText = landedUsingEstimate ? nil : state.landing.map(clockText)
         flightPhaseText = "Restored session · \(state.phase.rawValue)"
         loadPersistedTrail()
         resumeAfterRestore = true
@@ -3270,12 +3402,23 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
               (manager.authorizationStatus == .authorizedWhenInUse && UIApplication.shared.applicationState == .active) else { return }
         resumeAfterRestore = false
         acquisitionStartedAt = now; isTracking = true
-        applyPowerProfile(); manager.startUpdatingLocation(); restartHybridTask()
-        if sensorPhase != .inactive { FlightCompanionV3Observer.shared.startObservation(sessionKey: sensorSessionKey) }
+        applyPowerProfile(); beginLocationUpdates(); restartHybridTask()
+        startMotionObservation()
     }
 
     private func maintainSession(now: Date) {
-        if landedUsingSensors, companionPhase == .taxiIn, let landing = landedAt,
+        if isTracking, powerResources.estimated, !isImprovingAccuracy, landedAt == nil, let takeoff = airborneAt,
+           FlightPowerPolicy.canEstimateArrival(takeoff: takeoff, progress: sensorProgress(now: now), now: now) {
+            let anchorDate = lastMeasuredProgressAt ?? takeoff
+            let anchor = lastMeasuredProgressAt == nil ? 0 : lastMeasuredProgress
+            let modeledArrival = routeDistance.map { anchorDate.addingTimeInterval(max(0, 1 - anchor) * $0 / modelCruiseSpeed(total: $0)) }
+            landedAt = modeledArrival ?? now; landedUsingEstimate = true
+            companionPhase = .taxiIn; flightPhaseText = "Arrival · estimated"
+            // Sensors are off; do not fabricate an actual touchdown time.
+            landingTimeText = nil
+            applyPowerProfile()
+        }
+        if landedUsingSensors || landedUsingEstimate, companionPhase == .taxiIn, let landing = landedAt,
            now.timeIntervalSince(landing) >= 25 * 60 {
             companionPhase = .complete; flightPhaseText = "Session complete · estimated"
             applyPowerProfile()
@@ -3306,10 +3449,16 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     }
 
     func stop() {
+        accuracyTask?.cancel(); accuracyTask = nil; isImprovingAccuracy = false
         resumeAfterRestore = false
-        FlightCompanionV3Observer.shared.stopObservation()
+        stopMotionObservation()
         persistFusedTrail(now: Date(), force: true)
         manager.stopUpdatingLocation()
+        manager.allowsBackgroundLocationUpdates = false
+        manager.showsBackgroundLocationIndicator = false
+        standardGPSActive = false
+        stopWakeMonitoring()
+        networkRequestTask?.cancel(); networkRequestTask = nil
         hybridTask?.cancel()
         hybridTask = nil
         isTracking = false
@@ -3319,9 +3468,9 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         refreshLocationServicesAvailability()
-        if automaticMonitoring {
+        if automaticMonitoring, !powerResources.estimated, companionPhase != .complete {
             requestAutomaticAuthorization()
-            manager.startMonitoringSignificantLocationChanges()
+            if !powerResources.estimated, companionPhase != .complete { manager.startMonitoringSignificantLocationChanges() }
             if let id = automaticRegionID, let region = manager.monitoredRegions.first(where: { $0.identifier == id }) {
                 manager.requestState(for: region)
             }
@@ -3334,8 +3483,8 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
             errorText = nil
-            manager.startUpdatingLocation()
-            FlightCompanionV3Observer.shared.startObservation(sessionKey: sensorSessionKey)
+            beginLocationUpdates()
+            startMotionObservation()
         case .denied, .restricted:
             stop()
             errorText = "Location permission required"
@@ -3345,9 +3494,8 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         case .notDetermined:
             break
         @unknown default:
+            stop()
             errorText = "Location unavailable"
-            isTracking = false
-            acquisitionStartedAt = nil
         }
     }
 
@@ -3393,6 +3541,10 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         refreshFusedPosition()
         gpsQualityText = qualityText(for: candidate)
         errorText = nil
+        if isImprovingAccuracy, candidate.horizontalAccuracy <= 250,
+           (0...20).contains(Date().timeIntervalSince(candidate.timestamp)) {
+            finishAccuracyFix()
+        }
 
         if candidate.speed >= 0 {
             retainedSpeed = candidate.speed
@@ -3775,6 +3927,7 @@ struct TodayRouteMapCard: View {
 
     private var gpsQuality: (label: String, color: Color) {
         guard gps.isTracking else { return ("GPS Off", .secondary) }
+        if gps.isEstimatingWithGPSOff { return ("Estimated · GPS off", .secondary) }
         guard let location = gps.location else { return ("Acquiring GPS", .orange) }
 
         let age = abs(location.timestamp.timeIntervalSinceNow)
@@ -3787,7 +3940,7 @@ struct TodayRouteMapCard: View {
     }
 
     private var altitudeText: String {
-        guard let location = gps.location,
+        guard (gps.fixAge ?? .infinity) <= 20, let location = gps.location,
               location.verticalAccuracy >= 0 else { return "— ft" }
         let feet = Int((location.altitude * 3.28084).rounded())
         return "\(feet.formatted()) ft"
@@ -3813,7 +3966,7 @@ struct TodayRouteMapCard: View {
     }
 
     private var courseText: String {
-        guard let location = gps.location,
+        guard (gps.fixAge ?? .infinity) <= 20, let location = gps.location,
               location.course >= 0,
               location.courseAccuracy >= 0,
               location.speed > 2 else { return "—°" }
@@ -3916,7 +4069,7 @@ struct TodayRouteMapCard: View {
                     Circle()
                         .fill(gps.isTracking ? gpsQuality.color : Color.secondary)
                         .frame(width: 6, height: 6)
-                    Text(gps.isTracking ? "LIVE GPS" : "ROUTE OVERVIEW")
+                    Text(gps.isEstimatingWithGPSOff ? "ESTIMATED" : gps.isTracking ? "LIVE GPS" : "ROUTE OVERVIEW")
                         .font(.caption2.bold())
                         .foregroundStyle(gps.isTracking ? gpsQuality.color : Color.secondary)
                 }
@@ -4023,6 +4176,11 @@ struct TodayRouteMapCard: View {
 
                             Spacer(minLength: 6)
 
+                            if gps.isEstimatingWithGPSOff {
+                                Button("Improve accuracy") { gps.requestAccuracyFix() }.font(.caption.bold())
+                            } else if gps.isImprovingAccuracy {
+                                Button("Cancel fix") { gps.finishAccuracyFix() }.font(.caption.bold())
+                            }
                             Button("Stop") {
                                 gps.stop()
                             }
@@ -4295,6 +4453,8 @@ struct TodayRouteMapCard: View {
                         Button("Offline local map") { todayMapSource = "offline" }
                         Toggle("Geographic labels", isOn: $showsPlaceLabels)
                         Button("Recenter map") { onlineCameraPosition = .automatic; committedZoom = 1; committedPan = .zero }
+                        if gps.isEstimatingWithGPSOff { Button("Improve accuracy · up to 45s") { gps.requestAccuracyFix() } }
+                        if gps.isImprovingAccuracy { Button("Cancel accuracy fix") { gps.finishAccuracyFix() } }
                         if gps.isTracking { Button("Stop tracking", role: .destructive) { gps.stop() } }
                         else { Button("Start Live GPS") { gps.start() } }
                     } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
@@ -7780,6 +7940,13 @@ struct SettingsView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }.listRowBackground(MidnightTheme.surface)
 
+                Section("Flight Companion") {
+                    Toggle("Save battery during flight", isOn: $flightBatterySaving)
+                        .onChange(of: flightBatterySaving) { _, enabled in TodayLiveFlightLocationManager.shared.setBatterySaving(enabled) }
+                    Text("After takeoff is detected, use route estimates with GPS, motion and live requests off. The map catches up after screen lock. Expand it to request a GPS fix for up to 45 seconds. Arrival is estimated while this mode is on.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }.listRowBackground(MidnightTheme.surface)
+
                 Section("Earnings") {
                     NavigationLink {
                         EarningsPayProfileView(earnings: EarningsStore.shared,
@@ -8994,14 +9161,14 @@ private final class FlightCompanionV3ShadowEngine: ObservableObject {
 
         if CMAltimeter.isRelativeAltitudeAvailable() {
             altimeter.startRelativeAltitudeUpdates(to: .main) { [weak self] data, _ in
-                guard let self, let data else { return }
+                guard let self, self.started, let data else { return }
                 self.consumeAltitude(data.relativeAltitude.doubleValue, at: Date())
             }
         }
 
         if CMMotionActivityManager.isActivityAvailable() {
             activityManager.startActivityUpdates(to: .main) { [weak self] activity in
-                guard let self, let activity else { return }
+                guard let self, self.started, let activity else { return }
                 let value: String
                 if activity.automotive { value = "automotive" }
                 else if activity.walking { value = "walking" }
@@ -9016,6 +9183,16 @@ private final class FlightCompanionV3ShadowEngine: ObservableObject {
                 self.evaluate(now: Date())
             }
         }
+    }
+
+    func stopShadowObservation() {
+        guard started else { return }
+        altimeter.stopRelativeAltitudeUpdates()
+        activityManager.stopActivityUpdates()
+        started = false
+        altitudeSamples.removeAll()
+        candidateSince = nil
+        climbRateFtMin = 0
     }
 
     func recordGNSS(_ location: CLLocation) {
