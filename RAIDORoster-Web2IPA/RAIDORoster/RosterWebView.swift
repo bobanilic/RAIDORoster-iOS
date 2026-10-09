@@ -13,6 +13,12 @@ final class RosterBrowserModel: ObservableObject {
     @Published var loadError: String?
     @Published var diagnosticStatus: String?
     @Published var monthNavigationStatus: String?
+    @Published private(set) var offlineMonthStatus: String?
+    private lazy var offlineCache: RosterOfflineCache = {
+        let cache = RosterOfflineCache(store: store)
+        cache.statusChanged = { [weak self] in self?.offlineMonthStatus = $0 }
+        return cache
+    }()
 
     fileprivate var webView: WKWebView?
     fileprivate let store: RosterStore
@@ -34,6 +40,28 @@ final class RosterBrowserModel: ObservableObject {
     func reload() {
         loadError = nil
         webView?.reload()
+    }
+
+    func resumeOfflineMonths() {
+        offlineCache.resume()
+        let source = store.rosterSourceURL ?? (RosterMonthCachePolicy.isRosterURL(preferredStartURL) ? preferredStartURL : nil)
+        if let source { offlineCache.start(source: source) }
+    }
+
+    func pauseOfflineMonths() { offlineCache.pause() }
+
+    fileprivate func rosterPageLoaded(_ url: URL) {
+        store.rememberRosterSourceURL(url)
+        offlineCache.start(source: url, force: true)
+    }
+
+    func cacheRosterMonth(_ month: String) {
+        guard RosterMonthCachePolicy.index(month) != nil else { return }
+        let source = store.rosterSourceURL ?? (RosterMonthCachePolicy.isRosterURL(preferredStartURL) ? preferredStartURL : nil)
+        guard let source else {
+            offlineMonthStatus = "Sign in to Live RAIDO once to save your roster months."; return
+        }
+        offlineCache.start(source: source, requestedMonth: month)
     }
 
     func goBack() {
@@ -396,6 +424,9 @@ struct RosterWebView: UIViewRepresentable {
 
                 RosterWebView.requestExtraction(in: webView)
                 model.refreshRosterCalendarFeed()
+                if let url = webView.url, RosterMonthCachePolicy.isRosterURL(url) {
+                    model.rosterPageLoaded(url)
+                }
             }
         }
 

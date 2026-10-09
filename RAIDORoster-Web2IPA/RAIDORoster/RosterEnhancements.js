@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = '3.0.0';
+  const VERSION = '3.1.1';
   if (window !== window.top) return;
   const SCHEMA_VERSION = 1;
   if (window.RAIDOPlus?.version === VERSION) {
@@ -30,8 +30,22 @@
     return (h >>> 0).toString(36);
   }
 
-  function monthlyBLH() {
-    const text = compact(document.body?.innerText || '').slice(0, 120000);
+  // Detached HTML has no layout: textContent joins neighbouring blocks/cells.
+  // Preserve those boundaries without inserting spaces inside inline text.
+  function readableText(node, detached = false) {
+    if (!node) return '';
+    if (!detached && node.innerText) return node.innerText;
+    const copy = node.cloneNode(true);
+    copy.querySelectorAll('script,style,noscript,template').forEach(el => el.remove());
+    copy.querySelectorAll('br,p,div,h1,h2,h3,h4,h5,h6,table,thead,tbody,tfoot,tr,td,th,li,ul,ol,section,article,header,footer,nav,dl,dt,dd').forEach(el => {
+      el.before(node.ownerDocument.createTextNode(' '));
+      el.after(node.ownerDocument.createTextNode(' '));
+    });
+    return copy.textContent || '';
+  }
+
+  function monthlyBLH(root = document) {
+    const text = compact(readableText(root.body, root !== document)).slice(0, 120000);
     // N-OC renders the monthly summary as "BLH 70:48".
     const match = text.match(/\bBLH\s+(\d{1,3}:\d{2})\b/i);
     if (!match) return '';
@@ -42,8 +56,8 @@
     return `${hours}:${String(minutes).padStart(2, '0')}`;
   }
 
-  function pageMonth() {
-    const text = upper(document.body?.innerText || '').slice(0, 120000);
+  function pageMonth(root = document) {
+    const text = upper(readableText(root.body, root !== document)).slice(0, 120000);
     const m = text.match(/\b(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+(20\d{2})\b/);
     if (!m) return null;
     const month = MONTH_NAMES.indexOf(m[1]) + 1;
@@ -93,8 +107,8 @@
     return meta?.utcTime ? `${meta.utcDateISO} ${meta.utcTime}` : '';
   }
 
-  function activityTables() {
-    return Array.from(document.querySelectorAll('table.activity-table'));
+  function activityTables(root = document) {
+    return Array.from(root.querySelectorAll('table.activity-table'));
   }
 
   function markerMatches(text) {
@@ -385,14 +399,15 @@
       .reduce((n, v) => n + (v ? String(v).length : 0), 0) + a.crew.length * 50;
   }
 
-  function extractActivities() {
+  function extractActivities(root = document) {
     const bySignature = new Map();
 
-    activityTables().forEach((table, sourceIndex) => {
-      const representations = Array.from(new Set([
-        compact(table.innerText || ''),
-        compact(table.textContent || '')
-      ].filter(Boolean)));
+    activityTables(root).forEach((table, sourceIndex) => {
+      const representations = root !== document ? [compact(readableText(table, true))]
+        : Array.from(new Set([
+          compact(table.innerText || ''),
+          compact(table.textContent || '')
+        ].filter(Boolean)));
 
       representations.forEach((text, representationIndex) => {
         splitLogicalActivities(text).forEach((logical, logicalIndex) => {
@@ -653,20 +668,21 @@
     return rows.sort((a, b) => a.dateISO.localeCompare(b.dateISO) || a.index - b.index);
   }
 
-  function build() {
-    const month = pageMonth();
-    const tables = activityTables();
-    const activities = extractActivities();
+  function build(root = document) {
+    const month = pageMonth(root);
+    const tables = activityTables(root);
+    const activities = extractActivities(root);
     const days = groupDays(activities);
     return { month, tables, activities, days };
   }
 
-  function validation(b) {
+  function validation(b, sparse = false) {
     const monthPrefix = b.month ? `${b.month.year}-${pad2(b.month.month)}` : '';
     const monthDates = new Set(b.days.filter(d => !monthPrefix || d.dateISO.startsWith(monthPrefix)).map(d => d.dateISO));
     const monthDays = monthDates.size;
     const operational = b.activities.filter(a => ['FLIGHT','POSITIONING','RESERVE','STANDBY','OFF','DND','TRAINING'].includes(a.category)).length;
-    const ok = b.days.length >= 5 && b.activities.length >= 5 && operational >= 3;
+    const ok = sparse ? !!b.month && b.days.length >= 1 && b.activities.length >= 1
+      : b.days.length >= 5 && b.activities.length >= 5 && operational >= 3;
     const expected = b.month ? new Date(b.month.year, b.month.month, 0).getDate() : 0;
     const coverage = expected ? Math.round((monthDays / expected) * 100) : 0;
 
@@ -829,6 +845,19 @@
     } catch (_) { reportFormatFailure(); }
   }
 
+  // Parse a fetched month without navigating the live portal or executing the
+  // fetched page's scripts. Use the same extractor and native validation as live.
+  function extractHTML(html, sourceURL, expectedMonth) {
+    const url = new URL(sourceURL, location.href);
+    if (url.origin !== location.origin || !/\/HumanResourceRoster\.aspx$/i.test(url.pathname)) throw new Error('Invalid roster URL');
+    if (typeof html !== 'string' || html.length > 4 * 1024 * 1024) throw new Error('Roster page too large');
+    const root = new DOMParser().parseFromString(html, 'text/html');
+    const b = build(root), v = validation(b, true);
+    if (!v.isValid || v.month !== expectedMonth) throw new Error('Requested month unavailable');
+    return {schemaVersion: SCHEMA_VERSION, sourceURL: url.href, pageTitle: root.title || 'RAIDO',
+      monthlyBLH: monthlyBLH(root), validation: v, rows: b.days};
+  }
+
   function schedule() {
     clearTimeout(timer);
     timer = setTimeout(extractNow, 650);
@@ -846,6 +875,7 @@
   window.RAIDOPlus = {
     version: VERSION,
     extractNow,
+    extractHTML,
     diagnostics
   };
 

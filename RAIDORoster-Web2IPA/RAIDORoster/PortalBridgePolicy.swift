@@ -73,13 +73,13 @@ enum PortalBridgePolicy {
             for member in crew { try strings(member, limits: ["role": 40, "code": 40, "name": 500, "country": 100, "phone": 120]) }
         }
     }
-    static func snapshot(_ body: Any) throws -> [String: Any] {
+    static func snapshot(_ body: Any, allowSparse: Bool = false) throws -> [String: Any] {
         let payload = try envelope(body)
         guard let source = payload["sourceURL"] as? String, let url = URL(string: source), isPortal(url),
               url.path.lowercased().hasSuffix("/humanresourceroster.aspx") else { throw Rejection.origin }
         if payload["error"] != nil { throw Rejection.format }
         try strings(payload, limits: ["pageTitle": 1_000, "monthlyBLH": 20])
-        guard let rows = payload["rows"] as? [[String: Any]], (5...400).contains(rows.count),
+        guard let rows = payload["rows"] as? [[String: Any]], ((allowSparse ? 1 : 5)...400).contains(rows.count),
               let validation = payload["validation"] as? [String: Any],
               let month = validation["month"] as? String,
               month.range(of: #"^20\d{2}-(?:0[1-9]|1[0-2])$"#, options: .regularExpression) != nil,

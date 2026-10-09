@@ -90,6 +90,48 @@ final class RosterBridgeTests: XCTestCase {
         let body = try await extract("changed-layout", path: "HumanResourceRoster.aspx")
         XCTAssertEqual(body["error"] as? String, "portal-format-changed")
     }
+    func testFetchedMonthUsesSameExtractorWithoutChangingLivePage() async throws {
+        let ready = expectation(description: "Live fixture ready")
+        try loadFixture("roster", path: "HumanResourceRoster.aspx", expectation: ready)
+        defer {
+            webView?.configuration.userContentController.removeAllScriptMessageHandlers()
+            webView = nil; recorder = nil; fixtureWindow?.isHidden = true; fixtureWindow = nil
+        }
+        await fulfillment(of: [ready], timeout: 60)
+        let view = try XCTUnwrap(webView)
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "roster", withExtension: "html"))
+        let original = try String(contentsOf: fixture, encoding: .utf8)
+        // Adjacent blocks have no whitespace; detached textContent used to join
+        // the year to BLH and reject valid archived months. Split table cells too.
+        for (name, token, key) in [("September", "SEP26", "2026-09"),
+                                   ("July", "JUL26", "2026-07"),
+                                   ("June", "JUN26", "2026-06")] {
+            let html = original.replacingOccurrences(of: "October", with: name)
+                .replacingOccurrences(of: "OCT26", with: token)
+                .replacingOccurrences(of: " Start ", with: "</td><td>Start ")
+                + "<script>window.fetchedScriptExecuted=true;</script>"
+            let value = try await view.callAsyncJavaScript("return window.RAIDOPlus.extractHTML(html, url, month)",
+                arguments: ["html": html, "url": "https://gjt.noc.vmc.navblue.cloud/RaidoMobile/HumanResourceRoster.aspx", "month": key],
+                in: nil, contentWorld: .page)
+            let checked = try PortalBridgePolicy.snapshot(try XCTUnwrap(value as? [String: Any]))
+            XCTAssertEqual((checked["validation"] as? [String: Any])?["month"] as? String, key)
+            XCTAssertEqual(checked["monthlyBLH"] as? String, "40:00")
+            let rows = try XCTUnwrap(checked["rows"] as? [[String: Any]])
+            XCTAssertEqual(rows.count, 5)
+            XCTAssertEqual(rows.first?["dateISO"] as? String, "\(key)-08")
+            let activity = try XCTUnwrap((rows.first?["activities"] as? [[String: Any]])?.first)
+            XCTAssertEqual(activity["route"] as? String, "TLV → HER")
+            XCTAssertEqual(activity["startUTC"] as? String, "\(key)-08 06:50")
+        }
+        let live = try await view.callAsyncJavaScript("return {month:document.querySelector('h1').textContent, executed:!!window.fetchedScriptExecuted}", arguments: [:], in: nil, contentWorld: .page) as? [String: Any]
+        XCTAssertEqual(live?["month"] as? String, "October 2026")
+        XCTAssertEqual(live?["executed"] as? Bool, false)
+        do {
+            _ = try await view.callAsyncJavaScript("return window.RAIDOPlus.extractHTML(html, url, month)",
+                arguments: ["html": original, "url": "https://gjt.noc.vmc.navblue.cloud/RaidoMobile/HumanResourceRoster.aspx", "month": "2026-08"], in: nil, contentWorld: .page)
+            XCTFail("A different returned month must be rejected")
+        } catch { /* expected: requested month was not returned */ }
+    }
     func testLoginPageDoesNotReportParserFailure() async throws {
         let expectation = expectation(description: "No roster error on login")
         expectation.isInverted = true
@@ -102,7 +144,7 @@ final class RosterBridgeTests: XCTestCase {
     private func extract(_ name: String, path: String) async throws -> [String: Any] {
         let expectation = expectation(description: "Script bridge payload")
         try loadFixture(name, path: path, expectation: expectation)
-        await fulfillment(of: [expectation], timeout: 30)
+        await fulfillment(of: [expectation], timeout: 60)
         let body = try XCTUnwrap(recorder?.body)
         webView?.configuration.userContentController.removeAllScriptMessageHandlers()
         webView = nil; recorder = nil
@@ -119,6 +161,7 @@ final class RosterBridgeTests: XCTestCase {
         controller.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         let config = WKWebViewConfiguration(); config.userContentController = controller
         webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: config)
+        webView?.navigationDelegate = recorder
         // Keep WebKit in a visible host so CI does not throttle its extraction timer.
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         let host = UIViewController(); window.rootViewController = host
@@ -128,10 +171,14 @@ final class RosterBridgeTests: XCTestCase {
     }
 }
 
-@MainActor private final class Recorder: NSObject, WKScriptMessageHandler {
+@MainActor private final class Recorder: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     let expectation: XCTestExpectation
     var body: [String: Any]?
     init(expectation: XCTestExpectation) { self.expectation = expectation }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        // Trigger after document-end injection; do not depend on the startup timer.
+        webView.evaluateJavaScript("window.RAIDOPlus?.extractNow()", completionHandler: nil)
+    }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard body == nil else { return }
         body = message.body as? [String: Any]
