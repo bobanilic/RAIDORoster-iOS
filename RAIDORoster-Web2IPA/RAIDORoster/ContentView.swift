@@ -7,6 +7,7 @@ import Network
 import UIKit
 import EventKit
 import UserNotifications
+import os
 
 struct CrewMember: Codable, Equatable, Identifiable {
     let role: String
@@ -941,6 +942,14 @@ final class RosterStore: ObservableObject {
     @Published private(set) var monthSnapshots: [String: RosterSnapshot] = [:]
     @Published var selectedRosterMonthKey: String?
     @Published var changeNotice: String?
+    @Published private(set) var portalFormatWarning: String?
+
+    private func reportPortalFormatFailure(_ error: Error) {
+        portalFormatWarning = hasCache
+            ? "Portal format changed · your saved roster is retained. Open Live RAIDO to retry."
+            : "Portal format changed. Open Live RAIDO to retry."
+        Logger(subsystem: "com.bobanilic.raidoroster", category: "Roster").error("Roster payload rejected: \(String(describing: error), privacy: .public)")
+    }
     @Published private(set) var changedDates: Set<String> = []
     @Published private(set) var latestChanges: [RosterDayChange] = []
     @Published var calendarSyncStatus: String?
@@ -949,6 +958,8 @@ final class RosterStore: ObservableObject {
     private let calendar = Calendar.current
     private let automaticCalendarExporter = CalendarExporter()
     private let automaticReminderScheduler = DutyReminderScheduler()
+    private let storageFolderOverride: URL?
+    private let automaticSideEffects: Bool
     private let isoDay: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
@@ -958,10 +969,12 @@ final class RosterStore: ObservableObject {
         return formatter
     }()
 
-    init() {
+    init(storageFolderURL: URL? = nil, automaticSideEffects: Bool = true) {
+        storageFolderOverride = storageFolderURL
+        self.automaticSideEffects = automaticSideEffects
         load()
         loadChangeState()
-        try? FileManager.default.removeItem(at: storageFolderURL.appendingPathComponent("crew-history.json"))
+        try? FileManager.default.removeItem(at: self.storageFolderURL.appendingPathComponent("crew-history.json"))
         // V2.11.3 retires historical crew counting and removes any previously
         // generated archive from this device.
     }
@@ -1261,8 +1274,11 @@ final class RosterStore: ObservableObject {
     }
 
     func ingest(messageBody: Any) {
-        guard let payload = messageBody as? [String: Any],
-              let rawRows = payload["rows"] as? [[String: Any]],
+        let checked: [String: Any]
+        do { checked = try PortalBridgePolicy.snapshot(messageBody) }
+        catch { reportPortalFormatFailure(error); return }
+        let payload = checked
+        guard let rawRows = payload["rows"] as? [[String: Any]],
               let validationPayload = payload["validation"] as? [String: Any] else { return }
 
         let validation = RosterValidation(
@@ -1328,10 +1344,11 @@ final class RosterStore: ObservableObject {
                 let changed = changes.count
                 changeNotice = "Roster changed • \(changed) day\(changed == 1 ? "" : "s")"
                 saveChangeState()
-                notifyRosterChanges(changes)
+                if automaticSideEffects { notifyRosterChanges(changes) }
             }
         }
 
+        portalFormatWarning = nil
         snapshot = newSnapshot
         save(newSnapshot)
         let archiveKey = monthKey(for: newSnapshot)
@@ -1340,6 +1357,7 @@ final class RosterStore: ObservableObject {
         selectedRosterMonthKey = archiveKey
         saveMonthSnapshots()
 
+        guard automaticSideEffects else { return }
         let autoCalendar = UserDefaults.standard.object(forKey: "RAIDORoster.AutoCalendarSync") as? Bool ?? true
         if autoCalendar {
             automaticCalendarExporter.syncMonthIfAuthorized(parsed, month: validation.month) { [weak self] status in
@@ -1355,8 +1373,14 @@ final class RosterStore: ObservableObject {
     }
 
     func ingestCalendarFeed(messageBody: Any) {
-        guard let payload = messageBody as? [String: Any],
-              let rawEvents = payload["events"] as? [[String: Any]],
+        let checked: [String: Any]
+        do { checked = try PortalBridgePolicy.calendarFeed(messageBody) }
+        catch {
+            Logger(subsystem: "com.bobanilic.raidoroster", category: "Roster").error("Calendar payload rejected: \(String(describing: error), privacy: .public)")
+            return
+        }
+        let payload = checked
+        guard let rawEvents = payload["events"] as? [[String: Any]],
               !rawEvents.isEmpty else { return }
 
         let currentMonth = currentRosterMonthKey()
@@ -1772,6 +1796,10 @@ final class RosterStore: ObservableObject {
 
     private var storageFolderURL: URL {
         let fm = FileManager.default
+        if let folder = storageFolderOverride {
+            try? fm.createDirectory(at: folder, withIntermediateDirectories: true)
+            return folder
+        }
         let base = (try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true))
             ?? fm.urls(for: .documentDirectory, in: .userDomainMask).first!
         let folder = base.appendingPathComponent("RAIDORoster", isDirectory: true)
@@ -2066,6 +2094,12 @@ struct RosterHomeView: View {
                     .pickerStyle(.segmented)
                     .accessibilityLabel("Roster view")
 
+                    if let warning = store.portalFormatWarning {
+                        Label(warning, systemImage: "exclamationmark.icloud")
+                            .font(.caption).foregroundStyle(MidnightTheme.warningInk)
+                            .padding(12).midnightCard(radius: 12)
+                            .accessibilityIdentifier("portal-format-warning")
+                    }
                     if let notice = store.changeNotice {
                         HStack(spacing: 8) {
                             Circle()
@@ -10331,6 +10365,12 @@ struct TodayView: View {
                             .padding(.horizontal, 18).padding(.top, 10).padding(.bottom, 22)
                     }
                     VStack(alignment: .leading, spacing: 12) {
+                        if let warning = store.portalFormatWarning {
+                            Label(warning, systemImage: "exclamationmark.icloud")
+                                .font(.caption).foregroundStyle(MidnightTheme.warningInk)
+                                .padding(12).midnightCard(radius: 12)
+                                .accessibilityIdentifier("portal-format-warning")
+                        }
                         if store.isCacheValidated, let item = store.todayPrimaryItem {
                             IcePickupCard(item: item)
                             IceReadinessView(item: item, store: store)

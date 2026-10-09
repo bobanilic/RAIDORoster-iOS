@@ -11,6 +11,9 @@ case "${1:-all}" in
     bash RAIDORoster-Web2IPA/build-unsigned-ipa.sh
     python3 tools/verify_raido_artifacts.py
     ;;
+  native-tests)
+    python3 tools/run_native_tests.py
+    ;;
   preview)
     python3 tools/preview_ice_tabs.py --palette-only
     # Stop simulator services before runner orphan-process cleanup.
@@ -20,5 +23,5 @@ case "${1:-all}" in
     bash "$0" checks
     bash "$0" build
     ;;
-  *) echo "Usage: $0 [checks|build|preview|all]" >&2; exit 2 ;;
+  *) echo "Usage: $0 [checks|build|native-tests|preview|all]" >&2; exit 2 ;;
 esac

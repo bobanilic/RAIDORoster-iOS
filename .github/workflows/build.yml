@@ -61,3 +61,24 @@ jobs:
             /tmp/raido-theme-size.json
           if-no-files-found: warn
           retention-days: 7
+  native-tests:
+    runs-on: macos-15-intel
+    timeout-minutes: 25
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test roster ingestion and the actual web extractor
+        run: bash tools/ci.sh native-tests
+      - name: Shut down simulator before runner cleanup
+        if: always()
+        run: xcrun simctl shutdown all || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RAIDO-native-tests
+          path: |
+            RAIDORoster-Web2IPA/build/NativeTests.xcresult
+            /tmp/raido-native-tests.log
+          if-no-files-found: warn
+          retention-days: 7

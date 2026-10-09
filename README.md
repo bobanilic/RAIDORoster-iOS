@@ -36,3 +36,5 @@ Live RAIDO loads the crew portal through your authenticated WebKit session. Airc
 The offline map and bundled announcements require no map-tile service. Offline aircraft positions are estimates when measured signals are unavailable; a saved route alone is not a measured position. Automatic tracking requires its existing arming and evidence gates. Real-flight sensor thresholds still require device evidence.
 
 See `docs/` for feature notes and [the source migration record](docs/source-build.md). Older version-specific notes describe historical implementations; the current build entry point is `tools/ci.sh`.
+
+Native XCTest coverage for roster ingestion, bridge validation and the actual web extractor can be run from the shared `RAIDORosterTests` scheme in Xcode, or with `bash tools/ci.sh native-tests` on macOS. Portal fixtures contain synthetic duties only.
