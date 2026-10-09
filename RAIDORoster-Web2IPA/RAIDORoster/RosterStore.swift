@@ -399,7 +399,7 @@ final class RosterStore: ObservableObject {
               parsed.count == validation.datedRows,
               parsed.allSatisfy({ $0.dateISO != nil }) else { return false }
 
-        let old = snapshot
+        let old = archiveOnly ? monthSnapshots[validation.month] : snapshot
         let newSnapshot = RosterSnapshot(
             capturedAt: Date(),
             sourceURL: payload["sourceURL"] as? String ?? "",
@@ -409,18 +409,8 @@ final class RosterStore: ObservableObject {
             monthlyBLH: (payload["monthlyBLH"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         )
 
-        if archiveOnly {
-            monthSnapshots[validation.month] = newSnapshot
-            // Importing history never changes the visible month or change-review state.
-            if snapshot == nil || validation.month == currentRosterMonthKey() {
-                snapshot = newSnapshot
-                save(newSnapshot)
-            }
-            saveMonthSnapshots()
-            return true
-        }
-
-        if let old,
+        if (!archiveOnly || validation.month == currentRosterMonthKey()),
+           let old,
            old.validation?.month == validation.month,
            normalized(old.items) != normalized(parsed) {
             let changes = buildDayChanges(old: old.items, new: parsed)
@@ -432,6 +422,17 @@ final class RosterStore: ObservableObject {
                 saveChangeState()
                 if automaticSideEffects { notifyRosterChanges(changes) }
             }
+        }
+
+        if archiveOnly {
+            monthSnapshots[validation.month] = newSnapshot
+            // Keep the visible month selected; current-month changes are reviewed above.
+            if snapshot == nil || validation.month == currentRosterMonthKey() {
+                snapshot = newSnapshot
+                save(newSnapshot)
+            }
+            saveMonthSnapshots()
+            return true
         }
 
         portalFormatWarning = nil

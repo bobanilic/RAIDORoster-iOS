@@ -50,6 +50,11 @@ final class RosterBrowserModel: ObservableObject {
 
     func pauseOfflineMonths() { offlineCache.pause() }
 
+    fileprivate func rosterPageLoaded(_ url: URL) {
+        store.rememberRosterSourceURL(url)
+        offlineCache.start(source: url, force: true)
+    }
+
     func cacheRosterMonth(_ month: String) {
         guard RosterMonthCachePolicy.index(month) != nil else { return }
         let source = store.rosterSourceURL ?? (RosterMonthCachePolicy.isRosterURL(preferredStartURL) ? preferredStartURL : nil)
@@ -420,8 +425,7 @@ struct RosterWebView: UIViewRepresentable {
                 RosterWebView.requestExtraction(in: webView)
                 model.refreshRosterCalendarFeed()
                 if let url = webView.url, RosterMonthCachePolicy.isRosterURL(url) {
-                    model.store.rememberRosterSourceURL(url)
-                    model.offlineCache.start(source: url, force: true)
+                    model.rosterPageLoaded(url)
                 }
             }
         }

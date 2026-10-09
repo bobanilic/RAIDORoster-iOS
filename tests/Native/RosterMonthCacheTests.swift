@@ -40,6 +40,33 @@ final class RosterMonthCacheTests: XCTestCase {
         XCTAssertEqual(loaded.rosterViewSnapshot?.monthlyBLH, "15:15")
         XCTAssertEqual(loaded.monthSnapshots["2026-10"]?.items.count, 5)
     }
+    func testCurrentMonthArchiveRefreshReportsChangesWithoutMovingSelection() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM"
+        let current = formatter.string(from: Date())
+        let history = RosterMonthCachePolicy.key(try XCTUnwrap(RosterMonthCachePolicy.index(current)) - 1)
+        let store = RosterStore(storageFolderURL: folder, automaticSideEffects: false)
+        XCTAssertTrue(store.ingest(messageBody: payload(current)))
+        // Live history can be the latest snapshot when the current archive refresh arrives.
+        XCTAssertTrue(store.ingest(messageBody: payload(history)))
+        var changed = payload(current)
+        var rows = try XCTUnwrap(changed["rows"] as? [[String: Any]])
+        rows[0]["category"] = "STANDBY"; rows[0]["title"] = "Standby"
+        rows[0]["rawText"] = "Sanitized standby duty"
+        changed["rows"] = rows
+        XCTAssertTrue(store.ingest(messageBody: changed, archiveOnly: true, expectedMonth: current))
+        XCTAssertEqual(store.selectedRosterMonthKey, history)
+        XCTAssertEqual(store.snapshot?.validation?.month, current)
+        XCTAssertTrue(store.changedDates.contains("\(current)-01"))
+        XCTAssertFalse(store.latestChanges.isEmpty)
+        let loaded = RosterStore(storageFolderURL: folder, automaticSideEffects: false)
+        XCTAssertTrue(loaded.changedDates.contains("\(current)-01"))
+    }
     func testSparseArchiveAndInvalidUpdatePreserveGoodCache() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: folder) }

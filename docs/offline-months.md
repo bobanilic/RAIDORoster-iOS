@@ -13,8 +13,8 @@ the returned month's header must match the requested month before import.
 
 Month/year controls and roster links supply available month candidates. If
 those controls are absent, the preceding 12 months, current month and next two
-months are attempted. At most 120 candidates are handled per batch, nearest
-the current month first. Older months are also fetched on demand from the
+months are attempted. At most 120 candidates are handled per batch, with current/past months
+prioritized before future months. Older months are also fetched on demand from the
 native calendar while online. A successfully saved month remains usable after
 relaunch without selecting it in Live RAIDO. Data never downloaded, or no
 longer offered by the server, cannot be reconstructed while offline.
@@ -26,7 +26,8 @@ unpublished months have a six-hour retry delay, and current/future snapshots
 are refreshed after six hours. Clearing the cache invalidates pending imports.
 The remembered roster URL is stored in a protected, backup-excluded file.
 
-Imports preserve the selected native month and roster change-review state.
+Imports preserve the selected native month. Historical imports leave the
+change-review state untouched; current-month refreshes still report changed duties.
 Partial published months with fewer than five dated rows are accepted only on
 this explicitly requested archive path; empty or wrong-month pages are refused.
 Live extraction keeps its existing minimum coverage requirement.
