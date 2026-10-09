@@ -42,6 +42,8 @@ A22920000000000000000002 /* OfflinePlaceLabels.json in Resources */ = {isa = PBX
 		A30300000000000000000002 = {isa = PBXBuildFile; fileRef = B30300000000000000000002; };
 		A30400000000000000000001 = {isa = PBXBuildFile; fileRef = B30400000000000000000001; };
 		A30400000000000000000002 = {isa = PBXBuildFile; fileRef = B30400000000000000000002; };
+		A30500000000000000000001 = {isa = PBXBuildFile; fileRef = B30500000000000000000001; };
+		A30500000000000000000002 = {isa = PBXBuildFile; fileRef = B30500000000000000000002; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -85,6 +87,8 @@ B22920000000000000000002 /* OfflinePlaceLabels.json */ = {isa = PBXFileReference
 		B30300000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../tests/Native/FlightPowerTests.swift; sourceTree = SOURCE_ROOT; };
 		B30400000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AircraftHTTPClient.swift; sourceTree = "<group>"; };
 		B30400000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../tests/Native/AircraftHTTPTests.swift; sourceTree = SOURCE_ROOT; };
+		B30500000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightRequestSlot.swift; sourceTree = "<group>"; };
+		B30500000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../tests/Native/FlightRequestSlotTests.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -114,6 +118,7 @@ B22920000000000000000002 /* OfflinePlaceLabels.json */ = {isa = PBXFileReference
 				B30200000000000000000001 /* RosterStore.swift */,
 				B30300000000000000000001 /* FlightPowerPolicy.swift */,
 				B30400000000000000000001 /* AircraftHTTPClient.swift */,
+				B30500000000000000000001 /* FlightRequestSlot.swift */,
 B22920000000000000000002 /* OfflinePlaceLabels.json */,
 B22920000000000000000001 /* MapPresentationPolicy.swift */,
 				B22910000000000000000001 /* FlightTrackingStatus.swift */,
@@ -146,7 +151,7 @@ B22920000000000000000001 /* MapPresentationPolicy.swift */,
 			name = Products;
 			sourceTree = "<group>";
 		};
-		D30000000000000000000001 /* Native tests */ = {isa = PBXGroup; name = "Native tests"; sourceTree = "<group>"; children = (B30400000000000000000002, B30300000000000000000002, B30100000000000000000002, B30000000000000000000002, B30000000000000000000003, B30000000000000000000004, B30000000000000000000005); };
+		D30000000000000000000001 /* Native tests */ = {isa = PBXGroup; name = "Native tests"; sourceTree = "<group>"; children = (B30500000000000000000002, B30400000000000000000002, B30300000000000000000002, B30100000000000000000002, B30000000000000000000002, B30000000000000000000003, B30000000000000000000004, B30000000000000000000005); };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -202,8 +207,8 @@ B22920000000000000000001 /* MapPresentationPolicy.swift */,
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		C00000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A30400000000000000000001 /* AircraftHTTPClient.swift in Sources */, A30300000000000000000001 /* FlightPowerPolicy.swift in Sources */, A30200000000000000000001 /* RosterStore.swift in Sources */, A30100000000000000000001 /* ProtectedJSONFile.swift in Sources */, A30000000000000000000001 /* PortalBridgePolicy.swift in Sources */, A00000000000000000000001 /* RAIDORosterApp.swift in Sources */, A00000000000000000000002 /* ContentView.swift in Sources */, A22920000000000000000001 /* MapPresentationPolicy.swift in Sources */, A22910000000000000000001 /* FlightTrackingStatus.swift in Sources */, A22900000000000000000001 /* AppearanceModels.swift in Sources */, A22700000000000000000001 /* FleetRefreshPolicy.swift in Sources */, A22600000000000000000001 /* FlightSensorPolicy.swift in Sources */, A222000000000000000001 /* PayProfileModels.swift in Sources */, A22100000000000000000003 /* CrewDocumentsView.swift in Sources */, A22100000000000000000002 /* CrewDocumentServices.swift in Sources */, A22100000000000000000001 /* CrewDocumentVault.swift in Sources */, A22000000000000000000002 /* EarningsView.swift in Sources */, A22000000000000000000001 /* EarningsModels.swift in Sources */, A19900000000000000000002 /* AnnouncementsView.swift in Sources */, A19900000000000000000001 /* AnnouncementModels.swift in Sources */, A19800000000000000000001 /* FleetTrackingPolicy.swift in Sources */, A00000000000000000000003 /* RosterWebView.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
-		C30000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A30400000000000000000002, A30300000000000000000002, A30100000000000000000002, A30000000000000000000002); runOnlyForDeploymentPostprocessing = 0; };
+		C00000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A30500000000000000000001 /* FlightRequestSlot.swift in Sources */, A30400000000000000000001 /* AircraftHTTPClient.swift in Sources */, A30300000000000000000001 /* FlightPowerPolicy.swift in Sources */, A30200000000000000000001 /* RosterStore.swift in Sources */, A30100000000000000000001 /* ProtectedJSONFile.swift in Sources */, A30000000000000000000001 /* PortalBridgePolicy.swift in Sources */, A00000000000000000000001 /* RAIDORosterApp.swift in Sources */, A00000000000000000000002 /* ContentView.swift in Sources */, A22920000000000000000001 /* MapPresentationPolicy.swift in Sources */, A22910000000000000000001 /* FlightTrackingStatus.swift in Sources */, A22900000000000000000001 /* AppearanceModels.swift in Sources */, A22700000000000000000001 /* FleetRefreshPolicy.swift in Sources */, A22600000000000000000001 /* FlightSensorPolicy.swift in Sources */, A222000000000000000001 /* PayProfileModels.swift in Sources */, A22100000000000000000003 /* CrewDocumentsView.swift in Sources */, A22100000000000000000002 /* CrewDocumentServices.swift in Sources */, A22100000000000000000001 /* CrewDocumentVault.swift in Sources */, A22000000000000000000002 /* EarningsView.swift in Sources */, A22000000000000000000001 /* EarningsModels.swift in Sources */, A19900000000000000000002 /* AnnouncementsView.swift in Sources */, A19900000000000000000001 /* AnnouncementModels.swift in Sources */, A19800000000000000000001 /* FleetTrackingPolicy.swift in Sources */, A00000000000000000000003 /* RosterWebView.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		C30000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A30500000000000000000002, A30400000000000000000002, A30300000000000000000002, A30100000000000000000002, A30000000000000000000002); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */

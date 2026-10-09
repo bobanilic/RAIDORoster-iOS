@@ -2191,7 +2191,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     private var networkTrackDegrees: Double?
     private var networkObservationAt: Date?
     private var hybridTask: Task<Void, Never>?
-    private var networkRequestTask: Task<AircraftHTTPClient.Response, Error>?
+    private var networkRequestSlot = FlightRequestSlot<AircraftHTTPClient.Response>()
     private var lastFusedTrailAt: Date?
     private enum CompanionPhase: String, Codable { case parked, armed, groundCandidate, taxiOut, takeoffRoll, airborne, descent, taxiIn, complete }
     private var companionPhase: CompanionPhase = .parked
@@ -2479,8 +2479,8 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         request.setValue("RAIDORoster/2.23", forHTTPHeaderField: "User-Agent")
         do {
             let requestTask = Task { try await AircraftHTTPClient.shared.data(for: request) }
-            networkRequestTask = requestTask
-            defer { networkRequestTask = nil }
+            let ticket = networkRequestSlot.replace(with: requestTask)
+            defer { networkRequestSlot.finish(ticket) }
             let receipt = try await withTaskCancellationHandler {
                 try await requestTask.value
             } onCancel: { requestTask.cancel() }
@@ -2675,7 +2675,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         }
         manager.pausesLocationUpdatesAutomatically = companionPhase == .complete
         let resources = powerResources
-        if !resources.network { networkRequestTask?.cancel() }
+        if !resources.network { networkRequestSlot.cancel() }
         if !resources.location {
             manager.stopUpdatingLocation()
             manager.allowsBackgroundLocationUpdates = false
@@ -3458,7 +3458,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         manager.showsBackgroundLocationIndicator = false
         standardGPSActive = false
         stopWakeMonitoring()
-        networkRequestTask?.cancel(); networkRequestTask = nil
+        networkRequestSlot.cancel()
         hybridTask?.cancel()
         hybridTask = nil
         isTracking = false
