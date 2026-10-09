@@ -6,6 +6,7 @@ import WebKit
 final class RosterBridgeTests: XCTestCase {
     private var recorder: Recorder?
     private var webView: WKWebView?
+    private var fixtureWindow: UIWindow?
 
     func payload() -> [String: Any] {
         ["schemaVersion": 1, "sourceURL": "https://gjt.noc.vmc.navblue.cloud/RaidoMobile/Dialogues/HumanResources/HumanResourceRoster.aspx",
@@ -96,14 +97,16 @@ final class RosterBridgeTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 2)
         webView?.configuration.userContentController.removeAllScriptMessageHandlers()
         webView = nil; recorder = nil
+        fixtureWindow?.isHidden = true; fixtureWindow = nil
     }
     private func extract(_ name: String, path: String) async throws -> [String: Any] {
         let expectation = expectation(description: "Script bridge payload")
         try loadFixture(name, path: path, expectation: expectation)
-        await fulfillment(of: [expectation], timeout: 10)
+        await fulfillment(of: [expectation], timeout: 30)
         let body = try XCTUnwrap(recorder?.body)
         webView?.configuration.userContentController.removeAllScriptMessageHandlers()
         webView = nil; recorder = nil
+        fixtureWindow?.isHidden = true; fixtureWindow = nil
         return body
     }
     private func loadFixture(_ name: String, path: String, expectation: XCTestExpectation) throws {
@@ -116,6 +119,11 @@ final class RosterBridgeTests: XCTestCase {
         controller.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         let config = WKWebViewConfiguration(); config.userContentController = controller
         webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: config)
+        // Keep WebKit in a visible host so CI does not throttle its extraction timer.
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let host = UIViewController(); window.rootViewController = host
+        host.view.addSubview(webView!); window.isHidden = false
+        fixtureWindow = window
         webView?.loadHTMLString(html, baseURL: URL(string: "https://gjt.noc.vmc.navblue.cloud/RaidoMobile/\(path)"))
     }
 }

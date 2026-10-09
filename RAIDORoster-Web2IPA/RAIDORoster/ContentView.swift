@@ -8445,7 +8445,7 @@ func parseUTCStamp(_ value: String) -> Date? {
     return formatter.date(from: value)
 }
 
-private func durationText(_ interval: TimeInterval) -> String {
+func durationText(_ interval: TimeInterval) -> String {
     let minutes = max(0, Int(interval / 60))
     let hours = minutes / 60
     let mins = minutes % 60
