@@ -51,7 +51,7 @@ final class ProtectedStorageTests: XCTestCase {
         XCTAssertNil(defaults.object(forKey: "legacy"))
     }
     func testCorruptedAndFutureSchemasArePreserved() throws {
-        for raw in ["broken JSON", "{\"schemaVersion\":99,\"payload\":{}}"] {
+        for raw in ["broken JSON", "{\"schemaVersion\":99,\"payload\":{}}", "{\"schemaVersion\":1,\"payload\":\"broken\"}"] {
             let data = Data(raw.utf8)
             try data.write(to: file.url)
             XCTAssertThrowsError(try file.load())
