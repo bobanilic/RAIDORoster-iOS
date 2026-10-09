@@ -20,6 +20,16 @@ struct ProtectedJSONFile<Value: Codable> {
             let existing = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
             if let object = existing as? [String: Any], let schema = object["schemaVersion"] {
                 guard schema as? Int == 1 else { throw Failure.unsupportedSchema }
+                let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+                _ = try decoder.decode(Envelope.self, from: Data(contentsOf: url))
+            } else {
+                let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+                let bytes = try Data(contentsOf: url)
+                do { _ = try decoder.decode(Value.self, from: bytes) }
+                catch {
+                    decoder.dateDecodingStrategy = .deferredToDate
+                    _ = try decoder.decode(Value.self, from: bytes)
+                }
             }
         }
         let folder = url.deletingLastPathComponent()
