@@ -22,11 +22,12 @@ The IPA is unsigned. Sign it with your chosen sideloading setup before installin
 
 ## Architecture
 
-- `ContentView.swift`: roster models/store, navigation, native roster/Today views, Fleet and Flight Companion integration. It is being split incrementally.
+- `ContentView.swift`: roster models, navigation, native roster/Today views, Fleet and Flight Companion integration. It is being split incrementally.
 - `RosterWebView.swift` and `RosterEnhancements.js`: authenticated portal, extraction and calendar-feed bridge.
 - Separate policy/model files: flight sensor evidence, Fleet fusion/refresh, map presentation, appearance, announcements, earnings and Pay Profiles.
 - `CrewDocumentVault.swift` and related services/views: encrypted document storage and access.
-- `tests/`: executable Swift checks, Python regressions and simulator UI checks. `tools/check_*.py` compile and exercise actual app logic, rather than only searching source text.
+- `AircraftHTTPClient.swift`: shared provider pacing, cooldowns and timestamp-preserving response caching.
+- `tests/`: native XCTest, executable Swift checks, Python regressions and simulator UI checks. `tools/check_*.py` checks include compiled integration programs that exercise app logic; native XCTest adds per-test results.
 - `tests/fixtures/legacy-earnings.json`: the frozen 64-scenario pre-Pay-Profile reference. `source-2298-manifest.json` records the source-capture provenance.
 
 ## What leaves the device

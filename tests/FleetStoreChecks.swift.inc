@@ -56,7 +56,7 @@ private final class FleetStubProtocol: URLProtocol {
         config.protocolClasses = [FleetStubProtocol.self]
         let session = URLSession(configuration: config)
         defer { session.invalidateAndCancel() }
-        let live = FleetLiveStore(session: session)
+        let live = FleetLiveStore(session: session, httpClient: AircraftHTTPClient(spacing: 0, cacheEnabled: false))
         let definitions = Array(FleetAircraftDefinition.all.prefix(8))
         await live.refresh(definitions: definitions)
         precondition(live.snapshots.count == definitions.count && !live.isRefreshing)
