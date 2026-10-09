@@ -22,6 +22,14 @@ struct ProviderBackoff: Sendable {
 /// Cached responses keep their original receipt time; cached data never becomes a fresh fix.
 actor AircraftHTTPClient {
     static let shared = AircraftHTTPClient()
+    private static let networkSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 6
+        config.timeoutIntervalForResource = 10
+        config.waitsForConnectivity = false
+        config.httpMaximumConnectionsPerHost = 4
+        return URLSession(configuration: config)
+    }()
     struct Response: Sendable {
         let data: Data
         let http: HTTPURLResponse
@@ -32,19 +40,19 @@ actor AircraftHTTPClient {
     private var backoffs: [String: ProviderBackoff] = [:]
     private var nextStart: [String: Date] = [:]
     private var cache: [String: Entry] = [:]
-    private let testSpacing: TimeInterval?
+    private let spacingOverride: TimeInterval?
     private let cacheEnabled: Bool
     private static let logger = Logger(subsystem: "com.bobanilic.raidoroster", category: "AircraftNetwork")
-    init(spacing: TimeInterval? = nil, cacheEnabled: Bool = true) { testSpacing = spacing; self.cacheEnabled = cacheEnabled }
+    init(spacing: TimeInterval? = nil, cacheEnabled: Bool = true) { spacingOverride = spacing; self.cacheEnabled = cacheEnabled }
 
     private func interval(host: String) throws -> TimeInterval {
         switch host {
-        case "opendata.adsb.fi", "api.adsb.one": return testSpacing ?? 1.05
-        case "api.adsb.lol", "api.planespotters.net": return testSpacing ?? 0.3
+        case "opendata.adsb.fi", "api.adsb.one": return spacingOverride ?? 1.05
+        case "api.adsb.lol", "api.planespotters.net": return spacingOverride ?? 0.3
         default: throw Failure.unsupportedHost
         }
     }
-    func data(for request: URLRequest, session: URLSession = .shared,
+    func data(for request: URLRequest, session: URLSession? = nil,
               cacheSeconds: TimeInterval = 10) async throws -> Response {
         guard let url = request.url, url.scheme == "https", let host = url.host else { throw Failure.unsupportedHost }
         let spacing = try interval(host: host)
@@ -65,7 +73,7 @@ actor AircraftHTTPClient {
             break
         }
         do {
-            let (bytes, response) = try await session.data(for: request)
+            let (bytes, response) = try await (session ?? Self.networkSession).data(for: request)
             try Task.checkCancellation()
             guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
             let now = Date()

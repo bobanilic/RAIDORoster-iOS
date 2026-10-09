@@ -2,7 +2,8 @@
 
 AircraftHTTPClient is shared by Fleet, Flight Companion and photo metadata.
 It spaces request starts per host, honours Retry-After, and stops contacting a
-failing provider during exponential cooldowns with bounded jitter. Cancellation
+failing provider during exponential cooldowns with bounded jitter. The default
+ephemeral session has a 10-second resource timeout. Cancellation
 is cooperative during pacing and URLSession requests. A late parallel success
 cannot clear a newer rate-limit cooldown.
 

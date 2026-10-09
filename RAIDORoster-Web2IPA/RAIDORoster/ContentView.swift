@@ -8089,6 +8089,14 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }.listRowBackground(MidnightTheme.surface)
 
+                Section("Aircraft data sources") {
+                    Link("ADSB.lol", destination: URL(string: "https://www.adsb.lol/")!)
+                    Link("adsb.fi", destination: URL(string: "https://adsb.fi/")!)
+                    Link("adsb.one", destination: URL(string: "https://www.adsb.one/")!)
+                    Link("Aircraft photographs · Planespotters.net", destination: URL(string: "https://www.planespotters.net/")!)
+                    Link("ADSB.lol data licence · ODbL", destination: URL(string: "https://opendatacommons.org/licenses/odbl/1-0/")!)
+                }.listRowBackground(MidnightTheme.surface)
+
                 Section("Diagnostics") {
                     DisclosureGroup("Flight Companion state") {
                         Text(TodayLiveFlightLocationManager.shared.companionStateText())
