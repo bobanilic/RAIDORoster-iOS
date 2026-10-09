@@ -91,7 +91,39 @@ struct CrewAnnouncement: Codable, Identifiable {
 
     func readingSegments(language: AnnouncementLanguage, aircraft: AnnouncementAircraft) -> [AnnouncementSegment] {
         guard applies(to: aircraft), hasLanguage(language) else { return [] }
-        return segments.filter { $0.applies(language: language, aircraft: aircraft) }
+        let filtered = segments.filter { $0.applies(language: language, aircraft: aircraft) }
+        var output: [AnnouncementSegment] = []
+
+        func endsSentence(_ text: String) -> Bool {
+            let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let last = value.last else { return true }
+            return ".?!:;”'».".contains(last)
+        }
+
+        for segment in filtered {
+            let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let isAlternative = text.hasPrefix("//")
+            if segment.kind == "text", !isAlternative,
+               let previous = output.last,
+               previous.kind == "text",
+               !previous.text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("//"),
+               previous.language == segment.language,
+               previous.aircraft == segment.aircraft,
+               !endsSentence(previous.text) {
+                let mergedPages = Array(Set(previous.pdfPages + segment.pdfPages)).sorted()
+                output[output.count - 1] = AnnouncementSegment(
+                    id: previous.id + "+" + segment.id,
+                    language: previous.language,
+                    kind: previous.kind,
+                    aircraft: previous.aircraft,
+                    text: previous.text.trimmingCharacters(in: .whitespacesAndNewlines) + " " + text,
+                    pdfPages: mergedPages
+                )
+            } else {
+                output.append(segment)
+            }
+        }
+        return output
     }
 
     func favoriteKey(airline: AnnouncementAirline, aircraft: AnnouncementAircraft) -> String {

@@ -8,6 +8,8 @@ import UserNotifications
 import AVFoundation
 
 struct CrewDocumentsView: View {
+    @Environment(\.raidoPalette) private var raidoColorPalette
+    @Environment(\.raidoTheme) private var raidoVisualTheme
     @ObservedObject private var store = CrewDocumentStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var category: CrewDocumentCategory?
@@ -34,6 +36,10 @@ struct CrewDocumentsView: View {
         }
     }
     var body: some View {
+        let _ = raidoColorPalette
+
+        let _ = raidoVisualTheme
+
         NavigationStack {
             Group {
                 if store.unlocked { documentList }
@@ -126,7 +132,7 @@ struct CrewDocumentsView: View {
             Text("Passports, visas, certificates, medical records and vaccinations, available offline.")
                 .foregroundStyle(.secondary).multilineTextAlignment(.center)
             Button("Unlock Documents") { Task { await store.unlock() } }
-                .buttonStyle(.borderedProminent).disabled(store.busy)
+                .raidoPrimaryAction().disabled(store.busy)
             Text("Protected by Face ID, Touch ID or your device passcode.")
                 .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             Text("Saved only on this device. Keep your originals: deleting the app or removing the device passcode can make these copies unavailable.")
@@ -187,8 +193,14 @@ struct CrewDocumentsView: View {
 }
 
 private struct CrewDocumentExpiry: View {
+    @Environment(\.raidoPalette) private var raidoColorPalette
+    @Environment(\.raidoTheme) private var raidoVisualTheme
     let day: String
     var body: some View {
+        let _ = raidoColorPalette
+
+        let _ = raidoVisualTheme
+
         let remaining = CrewDocumentDates.daysRemaining(day)
         Text(remaining.map { $0 < 0 ? "Expired · " + day : $0 == 0 ? "Expires today" : "Expiry / renewal · " + day } ?? day)
             .font(.caption).foregroundStyle((remaining ?? 999) <= 30 ? Color.orange : Color.secondary)
@@ -196,12 +208,18 @@ private struct CrewDocumentExpiry: View {
 }
 
 private struct CrewDocumentDetail: View {
+    @Environment(\.raidoPalette) private var raidoColorPalette
+    @Environment(\.raidoTheme) private var raidoVisualTheme
     let documentID: UUID
     @ObservedObject private var store = CrewDocumentStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var editing = false
     private var document: CrewDocument? { store.documents.first { $0.id == documentID } }
     var body: some View {
+        let _ = raidoColorPalette
+
+        let _ = raidoVisualTheme
+
         NavigationStack {
             Group {
                 if store.unlocked, let data = store.preview { CrewDocumentPDF(data: data) }
@@ -236,6 +254,8 @@ private struct CrewDocumentDetail: View {
 }
 
 private struct CrewDocumentEditor: View {
+    @Environment(\.raidoPalette) private var raidoColorPalette
+    @Environment(\.raidoTheme) private var raidoVisualTheme
     @State var document: CrewDocument
     @ObservedObject private var store = CrewDocumentStore.shared
     @Environment(\.dismiss) private var dismiss
@@ -246,6 +266,10 @@ private struct CrewDocumentEditor: View {
     @State private var initialized = false
     @State private var notice: String?
     var body: some View {
+        let _ = raidoColorPalette
+
+        let _ = raidoVisualTheme
+
         NavigationStack {
             Form {
                 Section {

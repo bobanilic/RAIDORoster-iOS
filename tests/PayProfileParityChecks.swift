@@ -1,7 +1,7 @@
 import Foundation
 
-// Compiled twice: immediately before Pay Profile is patched in, then against
-// the generated application with PAY_PROFILE. Never uses real roster data.
+// Compare the current default Pay Profile against the frozen pre-profile
+// engine output in fixtures/legacy-earnings.json. Never uses real roster data.
 @main
 struct PayProfileParityChecks {
     static func main() throws {

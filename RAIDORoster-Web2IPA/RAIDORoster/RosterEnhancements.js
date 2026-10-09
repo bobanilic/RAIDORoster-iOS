@@ -2,7 +2,6 @@
   const VERSION = '2.4.0';
   if (window.RAIDOPlus?.version === VERSION) {
     window.RAIDOPlus.extractNow();
-    window.RAIDOPlus.goToday();
     return;
   }
 
@@ -26,6 +25,18 @@
       h = Math.imul(h, 16777619);
     }
     return (h >>> 0).toString(36);
+  }
+
+  function monthlyBLH() {
+    const text = compact(document.body?.innerText || '').slice(0, 120000);
+    // N-OC renders the monthly summary as "BLH 70:48".
+    const match = text.match(/\bBLH\s+(\d{1,3}:\d{2})\b/i);
+    if (!match) return '';
+    const parts = match[1].split(':');
+    const hours = Number(parts[0]);
+    const minutes = Number(parts[1]);
+    if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 300 || minutes < 0 || minutes > 59) return '';
+    return `${hours}:${String(minutes).padStart(2, '0')}`;
   }
 
   function pageMonth() {
@@ -185,6 +196,26 @@
     return compact(value).toLowerCase().replace(/(^|[\s'’-])([a-zà-öø-ÿ])/g, (_, a, b) => a + b.toUpperCase());
   }
 
+
+  const PHONE_COUNTRIES = [
+    ['971','AE'], ['420','CZ'], ['421','SK'], ['351','PT'], ['352','LU'], ['353','IE'],
+    ['354','IS'], ['355','AL'], ['356','MT'], ['357','CY'], ['358','FI'], ['359','BG'],
+    ['370','LT'], ['371','LV'], ['372','EE'], ['373','MD'], ['374','AM'], ['375','BY'],
+    ['376','AD'], ['377','MC'], ['378','SM'], ['380','UA'], ['381','RS'], ['382','ME'],
+    ['383','XK'], ['385','HR'], ['386','SI'], ['387','BA'], ['389','MK'], ['995','GE'],
+    ['994','AZ'], ['972','IL'], ['996','KG'], ['998','UZ'], ['30','GR'], ['31','NL'],
+    ['32','BE'], ['33','FR'], ['34','ES'], ['36','HU'], ['39','IT'], ['40','RO'],
+    ['41','CH'], ['43','AT'], ['44','GB'], ['45','DK'], ['46','SE'], ['47','NO'],
+    ['48','PL'], ['49','DE'], ['90','TR']
+  ];
+
+  function phoneCountry(value) {
+    const digits = String(value || '').replace(/\D/g, '');
+    if (!digits) return '';
+    const hit = PHONE_COUNTRIES.find(([prefix]) => digits.startsWith(prefix));
+    return hit?.[1] || '';
+  }
+
   function crewMembers(segment) {
     const block = labelledText(segment, 'Crew On Board', ['Transfer Note', 'A/C Phone', 'Activity Note', 'Day Note']);
     if (!block) return [];
@@ -196,6 +227,7 @@
     }
     return matches.map((item, i) => {
       let chunk = block.slice(item.end, matches[i + 1]?.index ?? block.length);
+      const phone = chunk.match(/\+\d[\d\s().-]{7,}\d/)?.[0] || '';
       chunk = chunk
         .replace(/\s+[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}.*$/i, '')
         .replace(/\s+\+?\d[\d\s().-]{7,}\d.*$/i, '')
@@ -204,7 +236,13 @@
       const name = parts.length >= 2
         ? `${titleCaseName(parts.slice(1).join(' '))} ${titleCaseName(parts[0])}`.trim()
         : titleCaseName(chunk);
-      return { role: item.role, code: item.code, name };
+      return {
+        role: item.role,
+        code: item.code,
+        name,
+        country: phoneCountry(phone),
+        phone: compact(phone)
+      };
     }).filter(c => c.name);
   }
 
@@ -262,7 +300,7 @@
     const activityNote = labelledText(segment, 'Activity Note', NOTE_STOPS);
     const dayNote = labelledText(segment, 'Day Note', NOTE_STOPS);
     const transferNote = labelledText(segment, 'Transfer Note', NOTE_STOPS);
-    const pickup = pickupFrom(transferNote);
+    const pickup = pickupFrom(transferNote) || pickupFrom(activityNote) || pickupFrom(dayNote);
     const aircraft = aircraftDetails(segment);
     const crew = crewMembers(segment);
     const hotel = cat === 'HOTEL' ? hotelName(segment) : '';
@@ -348,14 +386,25 @@
     const bySignature = new Map();
 
     activityTables().forEach((table, sourceIndex) => {
-      const text = compact(table.innerText || table.textContent);
-      splitLogicalActivities(text).forEach((logical, logicalIndex) => {
-        const activity = parseLogicalActivity(logical.code, logical.segment, sourceIndex, logicalIndex);
-        if (!activity) return;
-        const existing = bySignature.get(activity.sig);
-        if (!existing || richness(activity) > richness(existing)) {
-          bySignature.set(activity.sig, activity);
-        }
+      const representations = Array.from(new Set([
+        compact(table.innerText || ''),
+        compact(table.textContent || '')
+      ].filter(Boolean)));
+
+      representations.forEach((text, representationIndex) => {
+        splitLogicalActivities(text).forEach((logical, logicalIndex) => {
+          const activity = parseLogicalActivity(
+            logical.code,
+            logical.segment,
+            sourceIndex,
+            logicalIndex + (representationIndex * 1000)
+          );
+          if (!activity) return;
+          const existing = bySignature.get(activity.sig);
+          if (!existing || richness(activity) > richness(existing)) {
+            bySignature.set(activity.sig, activity);
+          }
+        });
       });
     });
 
@@ -436,48 +485,169 @@
     };
   }
 
-  function groupDays(activities) {
-    const map = new Map();
-    for (const a of activities) {
-      if (!map.has(a.dateISO)) map.set(a.dateISO, []);
-      map.get(a.dateISO).push(a);
+  function activityEpoch(meta) {
+    if (!meta) return NaN;
+    const iso = meta.utcTime && meta.utcDateISO
+      ? `${meta.utcDateISO}T${meta.utcTime}:00Z`
+      : `${meta.dateISO}T${meta.localTime}:00Z`;
+    const value = Date.parse(iso);
+    return Number.isFinite(value) ? value : NaN;
+  }
+
+  function activityStartEpoch(a) {
+    return activityEpoch(a.checkIn) || activityEpoch(a.start) || NaN;
+  }
+
+  function activityEndEpoch(a) {
+    return activityEpoch(a.checkOut) || activityEpoch(a.end) || activityStartEpoch(a);
+  }
+
+  function isDutyCore(a) {
+    return ['FLIGHT', 'POSITIONING', 'TRAINING', 'RESERVE', 'STANDBY'].includes(a.category);
+  }
+
+  function dutyGapStartsNew(previous, current, groupStart, groupEnd) {
+    const prevEnd = activityEndEpoch(previous);
+    const currentStart = activityStartEpoch(current);
+    const currentCI = activityEpoch(current.checkIn);
+    const previousCO = activityEpoch(previous.checkOut);
+
+    // Explicit release followed by a later explicit check-in is authoritative.
+    if (Number.isFinite(previousCO) && Number.isFinite(currentCI) && currentCI > previousCO + 30 * 60 * 1000) {
+      return true;
     }
 
-    return Array.from(map.entries()).map(([dateISO, items], dayIndex) => {
-      items.sort((a, b) => a.start.localTime.localeCompare(b.start.localTime));
-      const primary = [...items].sort((a, b) => priority(b.category) - priority(a.category))[0];
-      const meaningful = items.filter(i => !isAuxiliary(i.category));
-      const displayItems = meaningful.length ? meaningful : items;
-      const names = Array.from(new Set(displayItems.map(i => i.title).filter(Boolean)));
+    // If RAIDO repeats duty CI/CO only on the first/last logical activity,
+    // a large real gap between core activities still marks a new duty.
+    if (Number.isFinite(prevEnd) && Number.isFinite(currentStart) && currentStart - prevEnd >= 4 * 60 * 60 * 1000) {
+      return true;
+    }
 
-      const first = displayItems[0] || items[0];
-      const last = displayItems[displayItems.length - 1] || items[items.length - 1];
-      const ci = displayItems.map(i => i.checkIn?.localTime).find(Boolean) || '';
-      const span = first?.start?.localTime
-        ? `${first.start.localTime}${last?.end?.localTime ? `–${last.end.localTime}` : ''}`
-        : '';
+    // A new explicit CI many hours after this group's CI is also a new duty,
+    // even if a non-flight administrative activity has a broad time span.
+    if (Number.isFinite(currentCI) && Number.isFinite(groupStart) && currentCI - groupStart >= 4 * 60 * 60 * 1000) {
+      if (!Number.isFinite(groupEnd) || currentCI > groupEnd + 30 * 60 * 1000) return true;
+    }
 
-      const activeHotels = activities.filter(a =>
-        a.category === 'HOTEL' &&
-        a.start?.dateISO <= dateISO &&
-        (a.end?.dateISO || a.start.dateISO) >= dateISO
-      );
+    return false;
+  }
 
-      return {
-        id: `d-${dateISO}`,
-        index: dayIndex,
-        dateISO,
-        dateText: first.dateText,
-        category: primary.category,
-        title: names.slice(0, 5).join(' + ') || primary.title,
-        route: combineRoute(displayItems),
-        timeText: `${ci ? `CI ${ci}  •  ` : ''}${span}`,
-        rawText: items.map(i => i.rawText).join('\n'),
-        cells: items.flatMap((i, n) => [`ACTIVITY ${n + 1}: ${i.title}`, ...i.cells]),
-        activities: items.map(publicActivity),
-        activeHotels: activeHotels.map(publicActivity)
-      };
-    }).sort((a, b) => a.dateISO.localeCompare(b.dateISO));
+  function dutyGroupsForDate(items) {
+    const sorted = [...items].sort((a, b) => {
+      const aa = activityStartEpoch(a);
+      const bb = activityStartEpoch(b);
+      if (Number.isFinite(aa) && Number.isFinite(bb) && aa !== bb) return aa - bb;
+      return a.start.localTime.localeCompare(b.start.localTime) || a.sourceIndex - b.sourceIndex;
+    });
+
+    const core = sorted.filter(isDutyCore);
+    const passive = sorted.filter(a => !isDutyCore(a) && !isAuxiliary(a.category));
+
+    // OFF/REST/etc. dates naturally remain one day record.
+    if (!core.length) return [sorted];
+
+    const groups = [];
+    let current = [];
+    let groupStart = NaN;
+    let groupEnd = NaN;
+
+    for (const a of core) {
+      if (current.length && dutyGapStartsNew(current[current.length - 1], a, groupStart, groupEnd)) {
+        groups.push(current);
+        current = [];
+        groupStart = NaN;
+        groupEnd = NaN;
+      }
+      current.push(a);
+      const s = activityStartEpoch(a);
+      const e = activityEndEpoch(a);
+      if (Number.isFinite(s)) groupStart = Number.isFinite(groupStart) ? Math.min(groupStart, s) : s;
+      if (Number.isFinite(e)) groupEnd = Number.isFinite(groupEnd) ? Math.max(groupEnd, e) : e;
+    }
+    if (current.length) groups.push(current);
+
+    // Administrative entries such as delayed reporting are attached to the
+    // nearest duty envelope, but never allowed to bridge two flight duties.
+    for (const a of passive) {
+      const t = activityStartEpoch(a);
+      let bestIndex = 0;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      groups.forEach((g, index) => {
+        const starts = g.map(activityStartEpoch).filter(Number.isFinite);
+        const ends = g.map(activityEndEpoch).filter(Number.isFinite);
+        const lo = starts.length ? Math.min(...starts) : NaN;
+        const hi = ends.length ? Math.max(...ends) : lo;
+        let distance = 0;
+        if (Number.isFinite(t) && Number.isFinite(lo)) {
+          if (t < lo) distance = lo - t;
+          else if (Number.isFinite(hi) && t > hi) distance = t - hi;
+        }
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestIndex = index;
+        }
+      });
+      groups[bestIndex].push(a);
+    }
+
+    return groups.map(g => g.sort((a, b) => {
+      const aa = activityStartEpoch(a);
+      const bb = activityStartEpoch(b);
+      if (Number.isFinite(aa) && Number.isFinite(bb) && aa !== bb) return aa - bb;
+      return a.start.localTime.localeCompare(b.start.localTime);
+    }));
+  }
+
+  function groupDays(activities) {
+    const byDate = new Map();
+    for (const a of activities) {
+      if (!byDate.has(a.dateISO)) byDate.set(a.dateISO, []);
+      byDate.get(a.dateISO).push(a);
+    }
+
+    const rows = [];
+    let rowIndex = 0;
+
+    for (const [dateISO, dayItems] of Array.from(byDate.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+      const groups = dutyGroupsForDate(dayItems);
+
+      groups.forEach((items, dutyIndex) => {
+        const primary = [...items].sort((a, b) => priority(b.category) - priority(a.category))[0];
+        const meaningful = items.filter(i => !isAuxiliary(i.category));
+        const displayItems = meaningful.length ? meaningful : items;
+        const names = Array.from(new Set(displayItems.map(i => i.title).filter(Boolean)));
+
+        const first = displayItems[0] || items[0];
+        const last = displayItems[displayItems.length - 1] || items[items.length - 1];
+        const ci = displayItems.map(i => i.checkIn?.localTime).find(Boolean) || '';
+        const span = first?.start?.localTime
+          ? `${first.start.localTime}${last?.end?.localTime ? `–${last.end.localTime}` : ''}`
+          : '';
+
+        const activeHotels = activities.filter(a =>
+          a.category === 'HOTEL' &&
+          a.start?.dateISO <= dateISO &&
+          (a.end?.dateISO || a.start.dateISO) >= dateISO
+        );
+
+        rows.push({
+          id: `d-${dateISO}-${dutyIndex + 1}`,
+          index: rowIndex++,
+          dateISO,
+          dateText: first.dateText,
+          category: primary.category,
+          title: names.slice(0, 5).join(' + ') || primary.title,
+          route: combineRoute(displayItems),
+          timeText: `${ci ? `CI ${ci}  •  ` : ''}${span}`,
+          rawText: items.map(i => i.rawText).join('\n'),
+          cells: items.flatMap((i, n) => [`ACTIVITY ${n + 1}: ${i.title}`, ...i.cells]),
+          activities: items.map(publicActivity),
+          activeHotels: activeHotels.map(publicActivity)
+        });
+      });
+    }
+
+    return rows.sort((a, b) => a.dateISO.localeCompare(b.dateISO) || a.index - b.index);
   }
 
   function build() {
@@ -490,7 +660,8 @@
 
   function validation(b) {
     const monthPrefix = b.month ? `${b.month.year}-${pad2(b.month.month)}` : '';
-    const monthDays = monthPrefix ? b.days.filter(d => d.dateISO.startsWith(monthPrefix)).length : b.days.length;
+    const monthDates = new Set(b.days.filter(d => !monthPrefix || d.dateISO.startsWith(monthPrefix)).map(d => d.dateISO));
+    const monthDays = monthDates.size;
     const operational = b.activities.filter(a => ['FLIGHT','POSITIONING','RESERVE','STANDBY','OFF','DND','TRAINING'].includes(a.category)).length;
     const ok = b.days.length >= 5 && b.activities.length >= 5 && operational >= 3;
     const expected = b.month ? new Date(b.month.year, b.month.month, 0).getDate() : 0;
@@ -498,7 +669,7 @@
 
     return {
       isValid: ok,
-      parser: 'raido-logical-activity-2.4',
+      parser: 'raido-duty-envelope-2.17.9',
       month: monthPrefix || (b.days[0]?.dateISO.slice(0, 7) || ''),
       datedRows: b.days.length,
       message: ok
@@ -522,47 +693,10 @@
       sourceURL: location.origin + location.pathname,
       pageTitle: document.title || 'RAIDO',
       monthLabel: b.month?.label || '',
+      monthlyBLH: monthlyBLH(),
       validation: v,
       rows: b.days
     });
-  }
-
-  function todayToken() {
-    const n = new Date();
-    return `${pad2(n.getDate())}${MONTHS[n.getMonth()]}${String(n.getFullYear()).slice(-2)}`;
-  }
-
-  function goToday() {
-    try {
-      const token = todayToken();
-      const tables = activityTables();
-      let target = tables.find(t => {
-        const text = upper(t.innerText || t.textContent);
-        return text.includes(`CHECKIN ${token}`) || text.includes(`START ${token}`);
-      });
-
-      if (!target) {
-        const built = build();
-        const now = new Date();
-        const todayISO = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-        const hit = built.activities.find(a => a.dateISO === todayISO);
-        if (hit) target = tables[hit.sourceIndex];
-      }
-
-      if (!target) return false;
-      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      const oldOutline = target.style.outline;
-      const oldOffset = target.style.outlineOffset;
-      target.style.outline = '3px solid #0A84FF';
-      target.style.outlineOffset = '2px';
-      setTimeout(() => {
-        target.style.outline = oldOutline;
-        target.style.outlineOffset = oldOffset;
-      }, 2200);
-      return true;
-    } catch (_) {
-      return false;
-    }
   }
 
   function redact(text) {
@@ -572,6 +706,56 @@
       .replace(/https?:\/\/\S+/gi, '[url]')
       .replace(/(booking ref\.?\s*:?\s*)[A-Z0-9-]+/gi, '$1[redacted]')
       .replace(/(Reservation(?:No| number)?\s*:?\s*)[A-Z0-9-]{5,}/gi, '$1[redacted]');
+  }
+
+
+  function monthNavigationDiagnostics() {
+    const controls = Array.from(document.querySelectorAll('button, a, input, select, [role="button"]'));
+
+    function summary(el) {
+      const tag = upper(el.tagName || '');
+      const text = compact(el.innerText || el.textContent || '');
+      const value = compact(el.value || '');
+      const title = compact(el.getAttribute?.('title') || '');
+      const aria = compact(el.getAttribute?.('aria-label') || '');
+      const id = compact(el.id || '');
+      const name = compact(el.getAttribute?.('name') || '');
+      const cls = compact(typeof el.className === 'string' ? el.className : '');
+      const onclick = compact(el.getAttribute?.('onclick') || '');
+      const options = tag === 'SELECT'
+        ? Array.from(el.options || []).slice(0, 36).map(o => ({ text: compact(o.textContent || ''), value: compact(o.value || ''), selected: !!o.selected }))
+        : [];
+      return {
+        tag,
+        text: redact(text).slice(0, 100),
+        value: redact(value).slice(0, 100),
+        title: redact(title).slice(0, 100),
+        aria: redact(aria).slice(0, 100),
+        id: redact(id).slice(0, 100),
+        name: redact(name).slice(0, 100),
+        className: redact(cls).slice(0, 140),
+        onclick: redact(onclick).slice(0, 180),
+        options
+      };
+    }
+
+    const summaries = controls.map(summary);
+    const monthWords = MONTH_NAMES.join('|');
+    const candidateRE = new RegExp(`(?:PREV|NEXT|BACK|FORWARD|MONTH|${monthWords}|[‹›«»])`, 'i');
+    const candidates = summaries.filter(item => {
+      const haystack = [item.text, item.value, item.title, item.aria, item.id, item.name, item.className, item.onclick].join(' ');
+      return candidateRE.test(haystack) || item.tag === 'SELECT' && item.options.some(o => candidateRE.test(o.text));
+    });
+
+    const fallbackLabels = summaries
+      .filter(item => item.text || item.value || item.title || item.aria || item.onclick)
+      .slice(0, 30);
+
+    return {
+      controlCount: controls.length,
+      candidateControls: candidates.slice(0, 30),
+      fallbackControls: candidates.length ? [] : fallbackLabels
+    };
   }
 
   function diagnostics() {
@@ -588,6 +772,7 @@
         parsedDayCount: b.days.length,
         validation: validation(b),
         todayISO: `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`,
+        monthNavigation: monthNavigationDiagnostics(),
         parsedDays: b.days.slice(0, 40).map(d => ({
           id: d.id,
           dateISO: d.dateISO,
@@ -625,7 +810,6 @@
     try {
       const b = build();
       post(b);
-      goToday();
     } catch (_) {}
   }
 
@@ -642,10 +826,10 @@
     }
   }
 
+
   window.RAIDOPlus = {
     version: VERSION,
     extractNow,
-    goToday,
     diagnostics
   };
 
