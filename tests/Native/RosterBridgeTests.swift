@@ -90,6 +90,35 @@ final class RosterBridgeTests: XCTestCase {
         let body = try await extract("changed-layout", path: "HumanResourceRoster.aspx")
         XCTAssertEqual(body["error"] as? String, "portal-format-changed")
     }
+    func testFetchedMonthUsesSameExtractorWithoutChangingLivePage() async throws {
+        let ready = expectation(description: "Live fixture ready")
+        try loadFixture("roster", path: "HumanResourceRoster.aspx", expectation: ready)
+        defer {
+            webView?.configuration.userContentController.removeAllScriptMessageHandlers()
+            webView = nil; recorder = nil; fixtureWindow?.isHidden = true; fixtureWindow = nil
+        }
+        await fulfillment(of: [ready], timeout: 30)
+        let view = try XCTUnwrap(webView)
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "roster", withExtension: "html"))
+        let html = try String(contentsOf: fixture, encoding: .utf8)
+            .replacingOccurrences(of: "October", with: "September")
+            .replacingOccurrences(of: "OCT26", with: "SEP26")
+            + "<script>window.fetchedScriptExecuted=true;</script>"
+        let value = try await view.callAsyncJavaScript("return window.RAIDOPlus.extractHTML(html, url, month)",
+            arguments: ["html": html, "url": "https://gjt.noc.vmc.navblue.cloud/RaidoMobile/HumanResourceRoster.aspx?year=2026&month=9", "month": "2026-09"],
+            in: nil, contentWorld: .page)
+        let checked = try PortalBridgePolicy.snapshot(try XCTUnwrap(value as? [String: Any]))
+        XCTAssertEqual((checked["validation"] as? [String: Any])?["month"] as? String, "2026-09")
+        XCTAssertEqual(checked["monthlyBLH"] as? String, "40:00")
+        let live = try await view.callAsyncJavaScript("return {month:document.querySelector('h1').textContent, executed:!!window.fetchedScriptExecuted}", arguments: [:], in: nil, contentWorld: .page) as? [String: Any]
+        XCTAssertEqual(live?["month"] as? String, "October 2026")
+        XCTAssertEqual(live?["executed"] as? Bool, false)
+        do {
+            _ = try await view.callAsyncJavaScript("return window.RAIDOPlus.extractHTML(html, url, month)",
+                arguments: ["html": html, "url": "https://gjt.noc.vmc.navblue.cloud/RaidoMobile/HumanResourceRoster.aspx", "month": "2026-08"], in: nil, contentWorld: .page)
+            XCTFail("A different returned month must be rejected")
+        } catch { /* expected: requested month was not returned */ }
+    }
     func testLoginPageDoesNotReportParserFailure() async throws {
         let expectation = expectation(description: "No roster error on login")
         expectation.isInverted = true

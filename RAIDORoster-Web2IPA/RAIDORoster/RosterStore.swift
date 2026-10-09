@@ -11,6 +11,8 @@ final class RosterStore: ObservableObject {
     @Published var selectedRosterMonthKey: String?
     @Published var changeNotice: String?
     @Published private(set) var portalFormatWarning: String?
+    @Published private(set) var rosterSourceURL: URL?
+    private(set) var cacheGeneration = UUID()
 
     private func reportPortalFormatFailure(_ error: Error) {
         portalFormatWarning = hasCache
@@ -42,6 +44,10 @@ final class RosterStore: ObservableObject {
         self.automaticSideEffects = automaticSideEffects
         load()
         loadChangeState()
+        do {
+            if let value = try ProtectedJSONFile<String>(url: rosterSourceCacheURL).load(),
+               let url = URL(string: value), RosterMonthCachePolicy.isRosterURL(url) { rosterSourceURL = url }
+        } catch { DeviceCacheStorage.report("Load roster source", error: error) }
         try? FileManager.default.removeItem(at: self.storageFolderURL.appendingPathComponent("crew-history.json"))
         // V2.11.3 retires historical crew counting and removes any previously
         // generated archive from this device.
@@ -341,13 +347,14 @@ final class RosterStore: ObservableObject {
         return metrics
     }
 
-    func ingest(messageBody: Any) {
+    @discardableResult
+    func ingest(messageBody: Any, archiveOnly: Bool = false, expectedMonth: String? = nil) -> Bool {
         let checked: [String: Any]
-        do { checked = try PortalBridgePolicy.snapshot(messageBody) }
-        catch { reportPortalFormatFailure(error); return }
+        do { checked = try PortalBridgePolicy.snapshot(messageBody, allowSparse: archiveOnly && expectedMonth != nil) }
+        catch { if !archiveOnly { reportPortalFormatFailure(error) }; return false }
         let payload = checked
         guard let rawRows = payload["rows"] as? [[String: Any]],
-              let validationPayload = payload["validation"] as? [String: Any] else { return }
+              let validationPayload = payload["validation"] as? [String: Any] else { return false }
 
         let validation = RosterValidation(
             isValid: validationPayload["isValid"] as? Bool ?? false,
@@ -357,7 +364,7 @@ final class RosterStore: ObservableObject {
             message: validationPayload["message"] as? String ?? "Roster parse incomplete"
         )
 
-        guard validation.isValid else { return }
+        guard validation.isValid, expectedMonth == nil || validation.month == expectedMonth else { return false }
         let parsed: [RosterItem] = rawRows.enumerated().compactMap { offset, row in
             let text = (row["rawText"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty,
@@ -388,9 +395,9 @@ final class RosterStore: ObservableObject {
         }
         .sorted { ($0.dateISO ?? "") < ($1.dateISO ?? "") }
 
-        guard parsed.count >= 5,
+        guard parsed.count >= (archiveOnly && expectedMonth != nil ? 1 : 5),
               parsed.count == validation.datedRows,
-              parsed.allSatisfy({ $0.dateISO != nil }) else { return }
+              parsed.allSatisfy({ $0.dateISO != nil }) else { return false }
 
         let old = snapshot
         let newSnapshot = RosterSnapshot(
@@ -401,6 +408,17 @@ final class RosterStore: ObservableObject {
             validation: validation,
             monthlyBLH: (payload["monthlyBLH"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         )
+
+        if archiveOnly {
+            monthSnapshots[validation.month] = newSnapshot
+            // Importing history never changes the visible month or change-review state.
+            if snapshot == nil || validation.month == currentRosterMonthKey() {
+                snapshot = newSnapshot
+                save(newSnapshot)
+            }
+            saveMonthSnapshots()
+            return true
+        }
 
         if let old,
            old.validation?.month == validation.month,
@@ -425,7 +443,7 @@ final class RosterStore: ObservableObject {
         selectedRosterMonthKey = archiveKey
         saveMonthSnapshots()
 
-        guard automaticSideEffects else { return }
+        guard automaticSideEffects else { return true }
         let autoCalendar = UserDefaults.standard.object(forKey: "RAIDORoster.AutoCalendarSync") as? Bool ?? true
         if autoCalendar {
             automaticCalendarExporter.syncMonthIfAuthorized(parsed, month: validation.month) { [weak self] status in
@@ -438,6 +456,14 @@ final class RosterStore: ObservableObject {
         automaticReminderScheduler.syncIfAuthorized(parsed, pickupLead: pickupLead, reportLead: reportLead) { [weak self] status in
             self?.reminderSyncStatus = status
         }
+        return true
+    }
+
+    func rememberRosterSourceURL(_ url: URL) {
+        guard RosterMonthCachePolicy.isRosterURL(url) else { return }
+        rosterSourceURL = url
+        do { try ProtectedJSONFile<String>(url: rosterSourceCacheURL).save(url.absoluteString) }
+        catch { DeviceCacheStorage.report("Save roster source", error: error) }
     }
 
     func ingestCalendarFeed(messageBody: Any) {
@@ -629,6 +655,8 @@ final class RosterStore: ObservableObject {
     }
 
     func clearCache() {
+        cacheGeneration = UUID()
+        rosterSourceURL = nil
         snapshot = nil
         monthSnapshots = [:]
         selectedRosterMonthKey = nil
@@ -641,6 +669,7 @@ final class RosterStore: ObservableObject {
         try? FileManager.default.removeItem(at: cacheURL)
         try? FileManager.default.removeItem(at: monthCacheURL)
         try? FileManager.default.removeItem(at: changeStateURL)
+        try? FileManager.default.removeItem(at: rosterSourceCacheURL)
     }
 
     private func parseActivity(_ raw: [String: Any], fallbackID: String) -> RosterActivity? {
@@ -914,6 +943,8 @@ final class RosterStore: ObservableObject {
     private var monthCacheURL: URL {
         cacheURL.deletingLastPathComponent().appendingPathComponent("roster-months.json")
     }
+
+    private var rosterSourceCacheURL: URL { storageFolderURL.appendingPathComponent("roster-source.json") }
 
     private func normalizeMonthArchive() {
         guard !monthSnapshots.isEmpty else { return }

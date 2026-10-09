@@ -980,6 +980,7 @@ struct ContentView: View {
             PortalView(model: appState.browser, store: appState.rosterStore) { showPortal = false; selectedTab = .roster }
         }
         .onAppear { TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
+            appState.browser.resumeOfflineMonths()
         }
         .onChange(of: appState.rosterStore.snapshot) { _, _ in
             TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
@@ -987,6 +988,9 @@ struct ContentView: View {
         .onChange(of: raidoScenePhase) { _, phase in
             if phase == .active {
                 TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
+                appState.browser.resumeOfflineMonths()
+            } else {
+                appState.browser.pauseOfflineMonths()
             }
         }
     }
@@ -1122,6 +1126,12 @@ struct RosterHomeView: View {
                     .pickerStyle(.segmented)
                     .accessibilityLabel("Roster view")
 
+                    if let status = browser.offlineMonthStatus {
+                        Label(status, systemImage: "icloud.and.arrow.down")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("offline-month-status")
+                    }
+
                     if let warning = store.portalFormatWarning {
                         Label(warning, systemImage: "exclamationmark.icloud")
                             .font(.caption).foregroundStyle(MidnightTheme.warningInk)
@@ -1205,7 +1215,10 @@ struct RosterHomeView: View {
 
     private var rosterMonthNavigator: some View {
         HStack(spacing: 12) {
-            Button { store.selectPreviousRosterMonth() } label: {
+            Button {
+                store.selectPreviousRosterMonth()
+                if let month = store.selectedRosterMonth { browser.cacheRosterMonth(month) }
+            } label: {
                 Image(systemName: "chevron.left")
                     .font(.headline)
                     .frame(width: 40, height: 40)
@@ -1222,7 +1235,10 @@ struct RosterHomeView: View {
             }
             .frame(maxWidth: .infinity)
 
-            Button { store.selectNextRosterMonth() } label: {
+            Button {
+                store.selectNextRosterMonth()
+                if let month = store.selectedRosterMonth { browser.cacheRosterMonth(month) }
+            } label: {
                 Image(systemName: "chevron.right")
                     .font(.headline)
                     .frame(width: 40, height: 40)
@@ -1423,7 +1439,9 @@ struct RosterMonthCalendarView: View {
                 Text(monthTitle).font(.title3.weight(.semibold))
                 Button("Today") {
                     let today = rosterCalendarTodayISO()
-                    if store.selectRosterMonthIfCached(String(today.prefix(7))) { selectedDateISO = today }
+                    _ = store.selectRosterMonthIfCached(String(today.prefix(7)))
+                    selectedDateISO = today
+                    browser.cacheRosterMonth(String(today.prefix(7)))
                 }.font(.caption.weight(.medium)).frame(minHeight: 44)
                 Spacer(minLength: 0)
 
@@ -1438,6 +1456,12 @@ struct RosterMonthCalendarView: View {
 
             }
 
+
+            if store.rosterViewSnapshot == nil {
+                Text("This month is not saved yet. Connect to download it automatically.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("offline-month-missing")
+            }
 
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(weekdays, id: \.self) { weekday in
@@ -1530,13 +1554,8 @@ struct RosterMonthCalendarView: View {
         // Instant native navigation uses the archive/feed when available.
         _ = store.selectRosterMonthIfCached(target)
 
-        // In parallel, move the authenticated RAIDO roster page as well.
-        // Its HTML snapshot is the authoritative rich source for crew,
-        // aircraft, pickup and detailed duty data that WebCal cannot provide.
-        browser.switchRosterMonth(previous ? "previous" : "next")
-
-        // WebCal remains a fallback for fast/offline month coverage.
-        browser.refreshRosterCalendarFeed()
+        // Request the exact month independently of the visible portal's month.
+        browser.cacheRosterMonth(target)
     }
 
 }
