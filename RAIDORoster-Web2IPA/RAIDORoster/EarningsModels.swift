@@ -257,7 +257,35 @@ enum EarningsDailyPolicy {
         let home = airport(active.homeAirport)
         let sortedEvents = events.sorted { $0.order < $1.order }
         let grouped = Dictionary(grouping: days.filter { EarningsMath.date($0.day) != nil }, by: \.day)
-        let allDays = Set(grouped.keys).union(record.perDiemDays).union((record.dailyOverrides ?? [:]).keys)
+        // A roster can leave every day between positioning sectors blank. An arrival
+        // and the next departure at the same away airport bracket a continuous stay,
+        // including days with no roster row. A departure or unknown route closes the
+        // preceding interval, so separate trips cannot be joined across a home visit.
+        var stayLocations: [String: String] = [:]
+        var arrival: EarningsLocationEvent?
+        for event in sortedEvents {
+            if event.origin == nil && event.destination == nil { arrival = nil; continue }
+            if event.origin != nil {
+                if let home, let station = airport(event.origin ?? ""), station != home,
+                   let previous = arrival, airport(previous.destination ?? "") == station,
+                   let first = EarningsMath.date(previous.day), let last = EarningsMath.date(event.day), last >= first {
+                    let count = EarningsMath.utc.dateComponents([.day], from: first, to: last).day ?? 0
+                    // Location input is restricted to the current and neighboring months.
+                    if count <= 93 {
+                        for offset in 0...count {
+                            if let date = EarningsMath.utc.date(byAdding: .day, value: offset, to: first) {
+                                stayLocations[EarningsMath.day(date)] = station
+                            }
+                        }
+                    }
+                }
+                arrival = nil
+            }
+            if event.destination != nil {
+                arrival = airport(event.destination ?? "") == nil ? nil : event
+            }
+        }
+        let allDays = Set(grouped.keys).union(stayLocations.keys).union(record.perDiemDays).union((record.dailyOverrides ?? [:]).keys)
         return allDays.filter { $0.hasPrefix(month + "-") && EarningsMath.date($0) != nil }.sorted().map { day in
             let rows = grouped[day] ?? []
             let categories = rows.reduce(into: Set<String>()) { $0.formUnion($1.categories.map { $0.uppercased() }) }
@@ -266,7 +294,7 @@ enum EarningsDailyPolicy {
             let isPositioning = categories.contains("POSITIONING") || categories.contains("POS")
             let direct = isFlight || isStandby || isPositioning
             let reserve = !direct && !categories.isDisjoint(with: ["RES", "RESERVE"])
-            let label = isFlight ? "FLIGHT" : isStandby ? "STANDBY" : isPositioning ? "POSITIONING" : categories.sorted().joined(separator: " / ")
+            let label = isFlight ? "FLIGHT" : isStandby ? "STANDBY" : isPositioning ? "POSITIONING" : categories.isEmpty && stayLocations[day] != nil ? "AWAY STAY" : categories.sorted().joined(separator: " / ")
 
             if reserve {
                 return EarningsDailyLine(day: day, category: "RES", paid: active.reserveDaily,
@@ -324,7 +352,8 @@ enum EarningsDailyPolicy {
                 let before = previous.flatMap { nearby($0.day) ? $0.destination : nil }
                 let after = next.flatMap { nearby($0.day) ? $0.origin : nil }
                 let stations = rows.reduce(into: Set<String>()) { $0.formUnion($1.stations.compactMap(airport)) }
-                if let before, let after, before == after { location = before }
+                if let stay = stayLocations[day] { location = stay }
+                else if let before, let after, before == after { location = before }
                 else if let before, after == nil { location = before }
                 else if let after, before == nil { location = after }
                 else if stations.count == 1 { location = stations.first }
