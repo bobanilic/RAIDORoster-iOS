@@ -181,6 +181,14 @@ final class RosterMonthCacheTests: XCTestCase {
         XCTAssertNotNil(fixture.store.monthSnapshots["2026-07"])
         XCTAssertFalse(fixture.worker.needsRetry)
     }
+    func testYearSelectorMayResetToJanuary() async throws {
+        let fixture = try HistoryFixture(mode:.selectorsReset,target:"2025-07")
+        defer { fixture.close() }
+        fixture.worker.start(source:fixture.source)
+        try await fixture.finished()
+        XCTAssertEqual(fixture.store.monthSnapshots["2025-07"]?.items.count,5)
+        XCTAssertFalse(fixture.worker.needsRetry)
+    }
     func testRateLimitSurvivesRetryAndNewWorker() async throws {
         let fixture = try HistoryFixture(mode:.rate)
         defer { fixture.close() }
@@ -212,10 +220,12 @@ final class RosterMonthCacheTests: XCTestCase {
         defer { fixture.close() }
         let cleared = expectation(description:"Cache cleared during download")
         fixture.worker.statusChanged = { text in
-            if text?.hasPrefix("Saving 2026-07") == true { fixture.store.clearCache(); cleared.fulfill() }
+            if text?.hasPrefix("Saving 2026-07") == true { cleared.fulfill() }
         }
         fixture.worker.start(source:fixture.source)
         await fulfillment(of:[cleared],timeout:45)
+        try await Task.sleep(nanoseconds:200_000_000)
+        fixture.store.clearCache()
         // Let the stale callback return; it must never recreate the cleared cache.
         try await Task.sleep(nanoseconds:3_000_000_000)
         XCTAssertTrue(fixture.store.monthSnapshots.isEmpty)
@@ -227,7 +237,7 @@ final class RosterMonthCacheTests: XCTestCase {
 
 @MainActor
 private final class HistoryFixture {
-    enum Mode { case direct, rendered, controls, selectors, auth, rate, wrongRows, delayed, continuous }
+    enum Mode { case direct, rendered, controls, selectors, selectorsReset, auth, rate, wrongRows, delayed, continuous }
     let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let source = URL(string:"https://gjt.noc.vmc.navblue.cloud/RaidoMobile/Dialogues/HumanResources/HumanResourceRoster.aspx?hrId=fixture&year=2026&month=10")!
     let store: RosterStore
@@ -290,10 +300,10 @@ private final class HistoryFixture {
             default: break
             }
         }
-        if mode == .controls || mode == .selectors {
+        if mode == .controls || mode == .selectors || mode == .selectorsReset {
             var pages: [String:String] = [:]
-            let keys = mode == .controls ? ["2026-10","2026-09","2026-08","2026-07"] : ["2026-10","2025-10","2025-07"]
-            let controls = mode == .controls ? "<button class='switch-month-button' onclick='window.move()'>Previous</button>" : "<select id='rosterYear' onchange='window.chooseYear(this)'><option value='opaque25'>2025</option><option value='opaque26'>2026</option></select><select id='rosterMonth' onchange='window.chooseMonth(this)'><option value='7'>July</option><option value='10'>October</option></select>"
+            let keys = mode == .controls ? ["2026-10","2026-09","2026-08","2026-07"] : ["2026-10", mode == .selectorsReset ? "2025-01" : "2025-10","2025-07"]
+            let controls = mode == .controls ? "<button class='switch-month-button' onclick='window.move()'>Previous</button>" : "<select id='rosterYear' onchange='window.chooseYear(this)'><option value='opaque25'>2025</option><option value='opaque26'>2026</option></select><select id='rosterMonth' onchange='window.chooseMonth(this)'><option value='1'>January</option><option value='7'>July</option><option value='10'>October</option></select>"
             for key in keys { pages[key] = html(key).replacingOccurrences(of:"</body>",with:controls+"</body>") }
             let script = """
             <script>
@@ -301,7 +311,7 @@ private final class HistoryFixture {
             window.render=function(key){window.key=key; document.body.innerHTML=new DOMParser().parseFromString(window.pages[key],'text/html').body.innerHTML;
               const y=document.querySelector('#rosterYear'),m=document.querySelector('#rosterMonth'); if(y)y.value=key.startsWith('2025')?'opaque25':'opaque26'; if(m)m.value=String(Number(key.slice(-2)));};
             window.move=function(){const key=window.keys[window.keys.indexOf(window.key)+1]; if(key)window.render(key);};
-            window.chooseYear=function(s){window.render(s.options[s.selectedIndex].text+'-'+window.key.slice(-2));};
+            window.chooseYear=function(s){window.render(s.options[s.selectedIndex].text+'-'+\(mode == .selectorsReset ? "'01'" : "window.key.slice(-2)"));};
             window.chooseMonth=function(s){window.render(window.key.slice(0,4)+'-'+s.value.padStart(2,'0'));};
             window.render('2026-10');
             </script>

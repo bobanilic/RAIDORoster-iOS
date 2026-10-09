@@ -145,7 +145,10 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
         let planned = targetsOverride ?? RosterMonthCachePolicy.targets(current: currentMonth, offered: progress?.targets ?? [])
         for key in planned where progress?.targets.contains(key) == false { progress?.targets.append(key) }
         // A manual retry must still respect a server Retry-After response.
-        if force { progress?.failures = progress?.failures.filter { $0.value.reason == "server-rate-limit" && $0.value.retryAt > Date() } ?? [:] }
+        if force {
+            let rateLimits = progress?.failures.filter { $0.value.reason == "server-rate-limit" && $0.value.retryAt > Date() } ?? [:]
+            progress?.failures = rateLimits
+        }
         if let requestedMonth, RosterMonthCachePolicy.index(requestedMonth) != nil {
             progress?.targets.removeAll { $0 == requestedMonth }; progress?.targets.insert(requestedMonth, at: 0)
             if force { progress?.empty.removeValue(forKey: requestedMonth) }
@@ -313,8 +316,9 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
                 throw Failure.navigation
             }
             guard change["kind"] as? String == "started", let expected = change["month"] as? String else { throw Failure.navigation }
-            guard let value = try await settled(expected, web: web, requirePayload: expected == key) else { throw Failure.navigation }
-            if expected == key { return value }
+            guard let value = try await settled(expected, web: web, requirePayload: expected == key,
+                                               yearChange: change["mode"] as? String == "year") else { throw Failure.navigation }
+            if value["month"] as? String == key { return value }
             // Empty intermediate months still carry a valid month heading.
         }
         throw Failure.navigation
@@ -331,7 +335,7 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
         let value = try await web.callAsyncJavaScript("return window.RAIDOPlus?.history.inspect() || {kind:'loading'};", arguments: [:], in: nil, contentWorld: .page) as? [String: Any] ?? [:]
         try classify(value); return value
     }
-    private func settled(_ key: String, web: WKWebView, requirePayload: Bool = true) async throws -> [String: Any]? {
+    private func settled(_ key: String, web: WKWebView, requirePayload: Bool = true, yearChange: Bool = false) async throws -> [String: Any]? {
         let deadline = Date().addingTimeInterval(timing.settle)
         var previous: Data?
         while Date() < deadline {
@@ -339,9 +343,10 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
             if web.isLoading { previous = nil; continue }
             let value: [String: Any]
             do {
-                value = try await web.callAsyncJavaScript("return window.RAIDOPlus?.history.inspect(month) || {kind:'loading'};", arguments: ["month":key], in: nil, contentWorld: .page) as? [String: Any] ?? [:]
+                value = try await web.callAsyncJavaScript("return window.RAIDOPlus?.history.inspect(yearChange ? null : month) || {kind:'loading'};", arguments: ["month":key,"yearChange":yearChange], in: nil, contentWorld: .page) as? [String: Any] ?? [:]
             } catch { if web.isLoading { continue }; throw error }
             try classify(value)
+            if yearChange && !(value["month"] as? String ?? "").hasPrefix(String(key.prefix(4)) + "-") { previous = nil; continue }
             let ready = ["ready","empty"].contains(value["kind"] as? String ?? "")
             let intermediate = !requirePayload && value["month"] as? String == key && value["kind"] as? String == "format"
             guard ready || intermediate else { previous = nil; continue }
