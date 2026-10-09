@@ -161,6 +161,57 @@ struct EarningsChecks {
         let midnight = EarningsMath.date("2026-09-06")!
         expect(EarningsDailyPolicy.coveredDays(fallback: "", start: midnight.addingTimeInterval(-3600), end: midnight) == ["2026-09-05"], "Midnight ending does not create an extra paid day")
         expect(EarningsDailyPolicy.coveredDays(fallback: "", start: midnight.addingTimeInterval(-3600), end: midnight.addingTimeInterval(3600)) == ["2026-09-05", "2026-09-06"], "Cross-midnight reserve/standby classification spans both UTC days")
+        // Updated October rotation: sparse calendar between TLV -> VNO and VNO -> BEG.
+        // Blank dates are not home days when the adjoining sectors confirm an away stay.
+        var octoberDays = (1...11).map { n in
+            EarningsRosterDay(day: String(format: "2026-10-%02d", n),
+                categories: [n == 11 ? "POSITIONING" : [6, 10].contains(n) ? "STANDBY" : n == 5 ? "OFF" : "FLIGHT"])
+        }
+        octoberDays += [EarningsRosterDay(day: "2026-10-13", categories: ["OFF"]),
+                        EarningsRosterDay(day: "2026-10-26", categories: ["POSITIONING"]),
+                        EarningsRosterDay(day: "2026-10-27", categories: ["OFF"], stations: ["BEG"])]
+        let rotation = [
+            EarningsLocationEvent(day: "2026-09-30", order: "2026-09-30 18:00", origin: nil, destination: "TLV"),
+            EarningsLocationEvent(day: "2026-10-11", order: "2026-10-11 08:00", origin: "TLV", destination: nil),
+            EarningsLocationEvent(day: "2026-10-11", order: "2026-10-11 12:00", origin: nil, destination: "VNO"),
+            EarningsLocationEvent(day: "2026-10-26", order: "2026-10-26 08:00", origin: "VNO", destination: nil),
+            EarningsLocationEvent(day: "2026-10-26", order: "2026-10-26 12:00", origin: nil, destination: "BEG")
+        ]
+        let october = EarningsDailyPolicy.lines(month: "2026-10", days: octoberDays, events: rotation, record: EarningsMonth())
+        expect(october.filter(\.paid).count == 26, "Sparse October rotation pays each day through homeward POS on the 26th")
+        expect(october.first { $0.day == "2026-10-12" }?.paid == true, "Blank day after positioning is included")
+        expect(october.first { $0.day == "2026-10-20" }?.reason.contains("VNO") == true, "Away stay has a visible location explanation")
+        expect(october.first { $0.day == "2026-10-26" }?.category == "POSITIONING", "Return positioning is still paid once")
+        expect(october.first { $0.day == "2026-10-27" }?.paid == false, "OFF after return to BEG remains unpaid")
+        expect(october.allSatisfy { $0.day.hasPrefix("2026-10-") }, "Cross-month stay is scoped to selected month")
+        let octoberSum = EarningsMath.summarize(month: "2026-10", flights: [],
+            record: EarningsDailyPolicy.recordForCalculation(EarningsMonth(), lines: october), authoritativeBLHMinutes: 915)
+        expect(octoberSum.perDiemCents == 130000 && octoberSum.flightCents == 38125 && octoberSum.totalCents == 168125,
+               "26 daily payments plus 15:15 authoritative BLH = EUR1681.25")
+        var omitted = EarningsMonth(); omitted.dailyOverrides = ["2026-10-14": false]
+        expect(EarningsDailyPolicy.lines(month: "2026-10", days: octoberDays, events: rotation, record: omitted).filter(\.paid).count == 25,
+               "An explicit exclusion beats an inferred stay")
+        let exceptions = octoberDays + [EarningsRosterDay(day: "2026-10-17", categories: ["RESERVE"]),
+                                       EarningsRosterDay(day: "2026-10-18", categories: ["DND"])]
+        expect(EarningsDailyPolicy.lines(month: "2026-10", days: exceptions, events: rotation, record: EarningsMonth()).filter(\.paid).count == 24,
+               "Existing reserve and absence policy is preserved within an away stay")
+        var noAway = EarningsPayProfile.legacy(rates: EarningsRates(), homeAirport: "BEG"); noAway.offAwayDaily = false
+        expect(EarningsDailyPolicy.lines(month: "2026-10", days: octoberDays, events: rotation, record: EarningsMonth(), profile: noAway)
+            .first { $0.day == "2026-10-20" }?.paid == false, "Away payment profile setting applies to inferred dates")
+        let longStay = [EarningsLocationEvent(day: "2026-09-01", order: "2026-09-01", origin: nil, destination: "VNO"),
+                        EarningsLocationEvent(day: "2026-10-30", order: "2026-10-30", origin: "VNO", destination: nil)]
+        expect(EarningsDailyPolicy.lines(month: "2026-10", days: [], events: longStay, record: EarningsMonth()).filter(\.paid).count == 30,
+               "A confirmed long stay does not expire after seven days")
+        let homeStay = [EarningsLocationEvent(day: "2026-10-11", order: "2026-10-11", origin: nil, destination: "BEG"),
+                        EarningsLocationEvent(day: "2026-10-26", order: "2026-10-26", origin: "BEG", destination: nil)]
+        expect(EarningsDailyPolicy.lines(month: "2026-10", days: [], events: homeStay, record: EarningsMonth()).isEmpty,
+               "Blank dates at home do not create daily payments")
+        let brokenStay = rotation + [EarningsLocationEvent(day: "2026-10-17", order: "2026-10-17", origin: nil, destination: nil)]
+        expect(EarningsDailyPolicy.lines(month: "2026-10", days: [], events: brokenStay, record: EarningsMonth())
+            .first { $0.day == "2026-10-20" } == nil, "Unknown intermediate route prevents filling a potentially broken stay")
+        let incompleteStay = Array(rotation.prefix(3))
+        expect(EarningsDailyPolicy.lines(month: "2026-10", days: [], events: incompleteStay, record: EarningsMonth())
+            .first { $0.day == "2026-10-20" } == nil, "An open-ended arrival does not invent future paid dates")
         print("Passed \(checks) earnings checks")
     }
 }
