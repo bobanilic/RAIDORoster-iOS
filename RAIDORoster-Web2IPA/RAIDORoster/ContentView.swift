@@ -1742,7 +1742,6 @@ struct CrewReadinessCard: View {
     @Environment(\.raidoTheme) private var raidoVisualTheme
     let item: RosterItem
     @ObservedObject var store: RosterStore
-    @AppStorage(FlightPowerPolicy.preferenceKey) private var flightBatterySaving = true
     @AppStorage("RAIDORoster.RestAwarenessHours") private var restAwarenessHours = 10
 
     var body: some View {
@@ -7878,6 +7877,7 @@ private struct FleetMetric: View {
 }
 
 struct SettingsView: View {
+    @AppStorage(FlightPowerPolicy.preferenceKey) private var flightBatterySaving = true
     @Environment(\.raidoPalette) private var raidoColorPalette
     @Environment(\.raidoTheme) private var raidoVisualTheme
     @Environment(\.dismiss) private var dismiss
