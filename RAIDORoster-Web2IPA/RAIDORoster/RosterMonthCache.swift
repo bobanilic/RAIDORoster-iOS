@@ -28,8 +28,9 @@ enum RosterMonthCachePolicy {
         keys.formUnion((-12...2).map { key(now + $0) })
         return keys.sorted {
             let a = index($0)!, b = index($1)!
+            if (a > now) != (b > now) { return a <= now }
             let da = abs(a - now), db = abs(b - now)
-            return da == db ? a > b : da < db
+            return da == db ? a < b : da < db
         }.prefix(120).map { $0 }
     }
     static func needsDownload(_ snapshot: RosterSnapshot?, month: String, current: String, now: Date) -> Bool {
@@ -62,6 +63,9 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
     func start(source url: URL, requestedMonth: String? = nil, force: Bool = false) {
         guard active, RosterMonthCachePolicy.isRosterURL(url), let store else { return }
         if force { attempts.removeAll() }
+        if let source, RosterMonthCachePolicy.requestURL(source: source, month: currentMonth) != RosterMonthCachePolicy.requestURL(source: url, month: currentMonth) {
+            stop()
+        }
         if storeGeneration != store.cacheGeneration {
             stop(); storeGeneration = store.cacheGeneration
         }
@@ -106,12 +110,13 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
     private func fail(_ message: String) { stop(); statusChanged?(message) }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        guard let url = navigationAction.request.url, PortalBridgePolicy.isPortal(url), navigationAction.targetFrame != nil else {
+        guard self.webView === webView, let url = navigationAction.request.url, PortalBridgePolicy.isPortal(url), navigationAction.targetFrame != nil else {
             decisionHandler(.cancel); return
         }
         decisionHandler(.allow)
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard self.webView === webView else { return }
         bootstrapTimeout?.cancel(); bootstrapTimeout = nil
         guard let url = webView.url, RosterMonthCachePolicy.isRosterURL(url) else {
             fail("Sign in to Live RAIDO once to save more months. Saved months remain available."); return
@@ -132,9 +137,11 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
         }
     }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        guard self.webView === webView else { return }
         fail("Connect to save more months. Your saved roster is available.")
     }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        guard self.webView === webView else { return }
         fail("Connect to save more months. Your saved roster is available.")
     }
 
