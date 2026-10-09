@@ -1,0 +1,78 @@
+name: Fleet reliability validation
+on:
+  pull_request:
+    paths:
+      - 'RAIDORoster-Web2IPA/**'
+      - 'tests/**'
+      - 'tools/preview_announcement_reader.py'
+      - 'tools/preview_ice_tabs.py'
+      - 'tools/check_announcement_selection.py'
+      - 'tools/install_preview_ui_checks.py'
+      - 'tools/run_generated_checks.sh'
+      - '.github/workflows/fleet-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    # Avoid the macOS ARM pool when hosted capacity is exhausted.
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check timestamped sensor evidence and arrival gates
+        run: |
+          swiftc RAIDORoster-Web2IPA/RAIDORoster/FlightSensorPolicy.swift tests/FlightSensorPolicyChecks.swift -o /tmp/flight-sensor-checks
+          /tmp/flight-sensor-checks
+          python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Check bounded refresh, cancellation and indexed roster
+        run: |
+          swiftc RAIDORoster-Web2IPA/RAIDORoster/FleetTrackingPolicy.swift RAIDORoster-Web2IPA/RAIDORoster/FleetRefreshPolicy.swift tests/FleetRefreshChecks.swift -o /tmp/fleet-refresh-checks
+          /tmp/fleet-refresh-checks
+      - name: Exercise timestamp, identity, rotation and inference policy
+        run: |
+          swiftc RAIDORoster-Web2IPA/RAIDORoster/FleetTrackingPolicy.swift tests/FleetTrackingPolicyChecks.swift -o /tmp/fleet-policy-checks
+          /tmp/fleet-policy-checks
+      - name: Check offline catalogue and aircraft-specific announcements
+        run: |
+          swiftc RAIDORoster-Web2IPA/RAIDORoster/AnnouncementModels.swift tests/AnnouncementChecks.swift -o /tmp/announcement-checks
+          /tmp/announcement-checks RAIDORoster-Web2IPA/RAIDORoster/GetJetAnnouncements.json
+      - name: Check monthly earnings, hours and payment records
+        run: |
+          swiftc RAIDORoster-Web2IPA/RAIDORoster/EarningsModels.swift tests/EarningsChecks.swift -o /tmp/earnings-checks
+          /tmp/earnings-checks
+      - name: Check Pay Profile migration and contract revisions
+        run: |
+          swiftc RAIDORoster-Web2IPA/RAIDORoster/EarningsModels.swift RAIDORoster-Web2IPA/RAIDORoster/PayProfileModels.swift tests/PayProfileChecks.swift -o /tmp/pay-profile-checks
+          /tmp/pay-profile-checks
+      - name: Check encrypted Documents storage and expiry policy
+        run: |
+          swiftc RAIDORoster-Web2IPA/RAIDORoster/CrewDocumentVault.swift tests/CrewDocumentChecks.swift -o /tmp/crew-document-checks
+          /tmp/crew-document-checks
+      - name: Build complete patched iOS app
+        run: bash RAIDORoster-Web2IPA/build-unsigned-ipa.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RAIDO-2.29.8-roster-timing-IPA
+          path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
+          retention-days: 7
+          if-no-files-found: error
+      - name: Render both themes and appearance settings in iPhone simulator
+        run: python3 tools/preview_ice_tabs.py --palette-only
+      - name: Upload Ice screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RAIDO-2.29.8-timing-screenshots
+          path: |
+            /tmp/raido-ice-*.png
+            /tmp/raido-ice-app-*.log
+            /tmp/raido-ice-crash-*
+            /tmp/raido-theme-*.png
+            /tmp/raido-theme-size.json
+            /tmp/raido-ice-preview-build.log
+            /tmp/raido-map-ui-tests.log
+          retention-days: 7
+          if-no-files-found: error

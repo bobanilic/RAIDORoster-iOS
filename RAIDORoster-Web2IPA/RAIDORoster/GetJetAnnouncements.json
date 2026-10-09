@@ -1,0 +1,4711 @@
+{
+  "schemaVersion": 1,
+  "airline": "getjet",
+  "title": "Public Announcements Book",
+  "issue": "6",
+  "revision": "1",
+  "revisionDate": "2026-02-01",
+  "uncontrolledExport": true,
+  "sourceSHA256": "f02652cad675001445d5ea6f29205bb20c4dc8ae25d712dfea27a4a2c8006f1e",
+  "copyright": "© GetJet Airlines, JSC",
+  "announcements": [
+    {
+      "id": "gjt.pab.1.1.1",
+      "section": "1.1.1",
+      "title": "Standard boarding",
+      "category": "Boarding",
+      "aircraft": [],
+      "sourcePage": "1-1",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, welcome on board this",
+          "pdfPages": [
+            9
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// „GetJet Airlines” flight to [city].",
+          "pdfPages": [
+            9
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// [Airline name] flight to [city] today operated by „GetJet Airlines“.",
+          "pdfPages": [
+            9
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "If your mobile or other electronic device has a flight mode, please activate it now and use it while on board - otherwise, it must be switched off. If you notice that your device is damaged, unusually hot, or if smoke is detected, turn it off immediately and inform a cabin crew member. Also, inform us if you have lost your device on board.",
+          "pdfPages": [
+            9
+          ]
+        },
+        {
+          "id": "4",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Please ensure that all your hand baggage and larger electronic devices are stowed in the overhead lockers or under the seat in front of you. If your seat is in an emergency exit row, put all baggage into the overhead lockers only. Keep the aisle free from obstructions.",
+          "pdfPages": [
+            9
+          ]
+        },
+        {
+          "id": "5",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "We would like to inform you that this is a non-smoking flight. If you need any assistance, please use the nearest crew call button. We will be glad to help you.",
+          "pdfPages": [
+            9
+          ]
+        },
+        {
+          "id": "6",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, sveiki atvykę į",
+          "pdfPages": [
+            10
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// „GetJet Airlines” lėktuvą, vykstantį į [miestas].",
+          "pdfPages": [
+            10
+          ]
+        },
+        {
+          "id": "8",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// [Avialinijų pavadinimas] skrydį į [miestas], šiandien vykdomą „GetJet Airlines“.",
+          "pdfPages": [
+            10
+          ]
+        },
+        {
+          "id": "9",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Jeigu jūsų telefonas, ar kiti elektronikos prietaisai turi skrydžio aplinką, įjunkite ją dabar ir naudokite viso skrydžio metu. Jei to padaryti negalima, prietaisai turi būti išjungti. Pastebėjus, kad jūsų prietaisas yra pažeistas, smarkiai įkaitęs arba iš jo sklinda dūmai, nedelsdami jį išjunkite ir praneškite įgulos nariams. Taip pat informuokite mus, jei prietaisą pamestumėte lėktuvo salone.",
+          "pdfPages": [
+            10
+          ]
+        },
+        {
+          "id": "10",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Prašome įsitikinti, kad visas jūsų rankinis bagažas bei didesni elekroniniai prietaisai patalpinti lentynose arba po kėde priešais jus ir neblokuoja praėjimo. Jeigu sėdite prie avarinių išėjimų, visą bagažą talpinkite tik lentynose virš jūsų.",
+          "pdfPages": [
+            10
+          ]
+        },
+        {
+          "id": "11",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Informuojame, kad viso skrydžio metu - nerūkoma. Jeigu jums reikia pagalbos, prašome paspausti arčiausiai jūsų esantį orlaivio palydovo iškvietimo mygtuką. Džiaugsimės galėdami jums padėti.",
+          "pdfPages": [
+            10
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.1.2",
+      "section": "1.1.2",
+      "title": "Boarding during fueling operations",
+      "category": "Fueling",
+      "aircraft": [],
+      "sourcePage": "1-2",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, welcome on board this",
+          "pdfPages": [
+            10
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// „GetJet Airlines“ flight to [city].",
+          "pdfPages": [
+            10
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// [Airline name] flight to [city] today operated by „GetJet Airlines“.",
+          "pdfPages": [
+            10
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "We would like to inform you that fueling is in progress, thus we kindly ask you to take your seats as quickly as possible and ensure your seatbelts remain unfastened. Please keep the aisle free from obstructions. All hand baggage and larger electronic devices must be stowed in the overhead lockers or under the seat in front of you. If your seat is in an emergency exit row, please put all baggage into the overhead lockers only. In case of evacuation, leave your belongings behind.",
+          "pdfPages": [
+            10
+          ]
+        },
+        {
+          "id": "4",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Smoking is strictly forbidden. If your mobile or other electronic device has a flight mode, please activate it now and use it while on board – otherwise, it must be switched off. If you notice that your device is damaged, unusually hot, or if smoke is detected, please turn it off immediately and inform a cabin crew member. Should you lose your device on board, please notify cabin crew member. If you need any assistance, please use the nearest crew call button. We will be glad to help you.",
+          "pdfPages": [
+            10
+          ]
+        },
+        {
+          "id": "5",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, sveiki atvykę į",
+          "pdfPages": [
+            10
+          ]
+        },
+        {
+          "id": "6",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// „GetJet Airlines“ lėktuvą, vykstantį į [miestas].",
+          "pdfPages": [
+            10
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// [Avialinijų pavadinimas] skrydį į [miestas], šiandien vykdomą „GetJet Airlines“. Norime pranešti, jog šiuo metu lėktuvas pildomas degalais, todėl maloniai prašome jūsų kuo greičiau užimti savo vietas ir likti atsegtais saugos diržais. Įsitikinkite, kad visas jūsų rankinis bagažas bei didesni elekroniniai prietaisai patalpinti lentynose arba po kėde priešais jus ir neblokuoja praėjimo.",
+          "pdfPages": [
+            10,
+            11
+          ]
+        },
+        {
+          "id": "8",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Jeigu sėdite prie avarinių išėjimų, visą bagažą talpinkite tik lentynoje. Evakuacijos atveju visi daiktai turi būti palikti lėktuve.",
+          "pdfPages": [
+            11
+          ]
+        },
+        {
+          "id": "9",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Rūkyti griežtai draudžiama. Jeigu jūsų telefonas ar kiti elektroniniai prietaisai turi skrydžio aplinką, įjunkite ją dabar ir naudokite viso skrydžio metu, kitu atveju prietaisai turi būti išjungti. Jeigu pastebėsite, jog jūsų prietaisas yra pažeistas, smarkiai įkaitęs arba iš jo sklinda dūmai, nedelsdami jį išjunkite ir praneškite orlaivio palydovui. Taip pat, informuokite jei pametėte prietaisą lėktuvo salone. Jeigu jums reikia pagalbos, paspauskite arčiausiai jūsų esantį orlaivio palydovo iškvietimo mygtuką. Džiaugsimės galėdami jums padėti.",
+          "pdfPages": [
+            11
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.1.3",
+      "section": "1.1.3",
+      "title": "Quick boarding",
+      "category": "Boarding",
+      "aircraft": [],
+      "sourcePage": "1-3",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, to ensure an on-time departure, please occupy your seat as soon as possible.",
+          "pdfPages": [
+            11
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Please ensure that all your hand baggage and larger electronic devices are stowed in the overhead lockers or under the seat in front of you. Please ensure that smaller bags are placed under the seat in front of you only.",
+          "pdfPages": [
+            11
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Thank you for your collaboration.",
+          "pdfPages": [
+            11
+          ]
+        },
+        {
+          "id": "3",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, norėdami užtikrinti išvykimą laiku, maloniai prašome jūsų kuo greičiau užimti savo vietas.",
+          "pdfPages": [
+            11
+          ]
+        },
+        {
+          "id": "4",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Prašome įsitikinti, kad visas jūsų rankinis bagažas bei didesni elekroniniai prietaisai patalpinti lentynose arba po kėde priešais jus ir neblokuoja praėjimo. Mažesni daiktai turi būti padėti po kėde priešais jus.",
+          "pdfPages": [
+            11
+          ]
+        },
+        {
+          "id": "5",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dėkojame už bendradarbiavimą.",
+          "pdfPages": [
+            11
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.2",
+      "section": "1.2",
+      "title": "Welcome announcement",
+      "category": "Boarding",
+      "aircraft": [],
+      "sourcePage": "1-4",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Good morning [good afternoon / good evening / welcome] Ladies and Gentlemen.",
+          "pdfPages": [
+            12
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "“GetJet Airlines” crew on behalf of [name of Airlines/ tour operators], would like to (apologize for the delay and) welcome you on board this [B737/A320/A321] aircraft flying to [city].",
+          "pdfPages": [
+            12
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "The flight time will be … h … min. It is my pleasure to introduce our crew today. My name is [first name], I‘m senior cabin crew member and my colleagues at the front [first name] and at the rear of the cabin [first names], will be taking care of your comfort and safety on this flight. Let me remind you, that this is a non-smoking flight. All electronic devices transmitting radio signals must be set to flight mode or switched off while on board the aircraft. For your own safety, we require your compliance with all cabin signs and crew instructions.",
+          "pdfPages": [
+            12
+          ]
+        },
+        {
+          "id": "3",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Labas rytas [laba diena / labas vakaras / sveiki atvykę], Ponios ir Ponai.",
+          "pdfPages": [
+            12
+          ]
+        },
+        {
+          "id": "4",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "“GetJet Airlines” įgula ir skrydžių bendrovė/kelionių organizatorius [avialinijų/kelionių organizatorių pavadinimas] (atsiprašo dėl nenumatyto vėlavimo ir) džiaugiasi matydami jus šiame [B737/A320/A321] lėktuve, vykstančiame į [miestas].",
+          "pdfPages": [
+            12
+          ]
+        },
+        {
+          "id": "5",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Iki [miesto pavadinimas] skrisime ..… valandas ….. minučių. Man malonu jums pristatyti mūsų įgulą. Aš, vyresnioji (-ysis) šio skrydžio palydovė (-as) [vardas], ir mano kolegos priekyje [vardas] ir lėktuvo gale [vardai], rūpinsimės jūsų komfortu bei sauga šiame skrydyje. Primename, kad lėktuve nerūkoma. Elektronikos prietaisai, siunčiantys radijo signalus, turi būti perjungti į skrydžio aplinką arba išjungti viso skrydžio metu. Dėl jūsų pačių saugos, prašome laikytis visų lėktuvo kabinoje esančių ženklų bei įgulos narių nurodymų.",
+          "pdfPages": [
+            12
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.3.1",
+      "section": "1.3.1",
+      "title": "Airbus A320 safety demonstration",
+      "category": "Safety demonstration",
+      "aircraft": [
+        "A320"
+      ],
+      "sourcePage": "1-5",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, your crew are here to ensure that you have a safe and enjoyable flight so we would appreciate your attention while we take you through the safety features of this Airbus 320 aircraft.",
+          "pdfPages": [
+            13
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, mūsų įgulos tikslas yra užtikrinti, kad jūsų skrydis būtų ne tik malonus, bet ir saugus, todėl prašome išklausyti informaciją apie saugos priemones, esančias šiame Airbus 320 lėktuve.",
+          "pdfPages": [
+            13
+          ]
+        },
+        {
+          "id": "2",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "SEAT BELT",
+          "pdfPages": [
+            13
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "The seatbelt is fastened, adjusted and released as shown.",
+          "pdfPages": [
+            13
+          ]
+        },
+        {
+          "id": "4",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Saugos diržas yra užsegamas, užveržiamas ir atsegamas taip, kaip dabar demonstruojama.",
+          "pdfPages": [
+            13
+          ]
+        },
+        {
+          "id": "5",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "OXYGEN MASK",
+          "pdfPages": [
+            13
+          ]
+        },
+        {
+          "id": "6",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "In case of cabin pressure loss, oxygen masks will appear from the panel above your head and in the lavatories. Reach up and pull the mask towards you. Place it over your nose and mouth. Fit your own oxygen mask first before assisting others.",
+          "pdfPages": [
+            13
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Sumažėjus oro slėgiui salone, deguonies kaukės pakibs ties kiekviena keleivio kėde bei tualetuose. Patraukite kaukę žemyn ir užsidėkite uždengdami nosį ir burną. Prieš padėdami kitiems – užsidėkite deguonies kaukę patys.",
+          "pdfPages": [
+            13
+          ]
+        },
+        {
+          "id": "8",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "LIFE JACKET",
+          "pdfPages": [
+            13
+          ]
+        },
+        {
+          "id": "9",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "The life jacket is located under your seat. When directed by cabin crew, take the life jacket out and place it over your head. Pass the strap around your waist and fasten it. Adjust the strap by pulling. To inflate the life jacket, pull (this/these) red tab (-s). If the life jacket fails to inflate, blow into (this/these) tube (-s). Inflate your life jacket only when you are OUTSIDE the aircraft.",
+          "pdfPages": [
+            13
+          ]
+        },
+        {
+          "id": "10",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Gelbėjimosi liemenė yra po jūsų kėde. Po orlaivio palydovų nurodymo, išsitraukite ją ir apsivilkite per galvą. Apsijuoskite liemenį juostele ir užsekite sagtį. Užveržkite patraukdami juostelę. Staigiu judesiu patraukite šią (-ias) raudonąją (-ąsias) plokštelę (-es), ir liemenė prisipūs. Jei liemenė neprisipučia, ją galima pripūsti ir šiuo (šiais) atsarginiu (-iais) pūtikliu (-ais). Pūskite liemenę TIK lipdami iš lėktuvo.",
+          "pdfPages": [
+            13
+          ]
+        },
+        {
+          "id": "11",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "EMERGENCY EXITS",
+          "pdfPages": [
+            13
+          ]
+        },
+        {
+          "id": "12",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "The aircraft has 8 [eight] emergency exits marked with EXIT signs: 2 [two] - at the front, 4 [four] over the wings, 2 [two] - at the rear. Cabin crew will point out your nearest emergency exits. Please keep in mind that exits may be behind you. In case of evacuation, floor-level lighting will guide you to the exits.",
+          "pdfPages": [
+            13
+          ]
+        },
+        {
+          "id": "13",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Lėktuve yra 8 [aštuoni] avariniai išėjimai, pažymėti EXIT ženklais: 2 [du] - lėktuvo priekyje, 4 [keturi] - virš sparnų, 2 [du] - lėktuvo gale. Įgulos nariai nurodys jūsų artimiausius išėjimus. Atkreipkite dėmesį, kad jie gali būti už jūsų. Evakuacijos atveju šviesos grindyse žymės taką link išėjimų.",
+          "pdfPages": [
+            14
+          ]
+        },
+        {
+          "id": "14",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "SAFETY CARD",
+          "pdfPages": [
+            14
+          ]
+        },
+        {
+          "id": "15",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Please take a moment to review safety information using the safety instruction card located in your seat area. It contains information about exits, oxygen equipment, life jackets and seatbelts. It also shows the brace position which must be adopted in an emergency landing.",
+          "pdfPages": [
+            14
+          ]
+        },
+        {
+          "id": "16",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Skirkite laiko peržiūrėti saugos infromaciją esančią skrydžio saugos instrukcijoje, kurią rasite šalia jūsų vietos. Joje rasite informaciją apie lėktuvo avarinius išėjimus, deguonies sistemą, gelbėjimosi liemenes, saugos diržus. Šioje instrukcijoje taip pat pavaizduota saugi padėtis, kurią turėtumėte užimti avarinio nusileidimo atveju.",
+          "pdfPages": [
+            14
+          ]
+        },
+        {
+          "id": "17",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, the cabin crew will complete a safety check of the cabin before departure. Ensure now your seat belt is fastened and visible, seat back is in the upright position, tray table stowed, armrests down and window blinds fully opened. Laptops should be switched off and stowed away for take-off and landing. In case of evacuation leave your belongings behind. We wish you a safe and enjoyable flight.",
+          "pdfPages": [
+            14
+          ]
+        },
+        {
+          "id": "18",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir ponai, įgula netrukus atliks baigiamąjį salono patikrinimą ruošiantis skrydžiui. Įsitikinkite, kad saugos diržas yra užsegtas ir matomas, kėdės atlošas pakeltas, staliukas užlenktas, alkūnių atramos nuleistos, taip pat langų užsklandos iki galo atitrauktos. Nešiojami kompiuteriai turi būti išjungti ir nenaudojami kilimo ir nusileidimo metu. Evakuacijos atveju, visi daiktai turi būti palikti lėktuve. Linkime jums saugaus ir malonaus skrydžio.",
+          "pdfPages": [
+            14
+          ]
+        }
+      ],
+      "requiresAircraft": true
+    },
+    {
+      "id": "gjt.pab.1.3.2",
+      "section": "1.3.2",
+      "title": "Airbus A321 safety demonstration",
+      "category": "Safety demonstration",
+      "aircraft": [
+        "A321"
+      ],
+      "sourcePage": "1-7",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, your crew are here to ensure that you have a safe and enjoyable flight so we would appreciate your attention while we take you through the safety features of this Airbus 321 aircraft.",
+          "pdfPages": [
+            15
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, mūsų įgulos tikslas yra užtikrinti, kad jūsų skrydis būtų ne tik malonus, bet ir saugus, todėl prašome išklausyti informaciją apie saugos priemones, esančias šiame Airbus 321 lėktuve.",
+          "pdfPages": [
+            15
+          ]
+        },
+        {
+          "id": "2",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "SEAT BELT",
+          "pdfPages": [
+            15
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "The seatbelt is fastened, adjusted and released as shown.",
+          "pdfPages": [
+            15
+          ]
+        },
+        {
+          "id": "4",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Saugos diržas yra užsegamas, užveržiamas ir atsegamas taip, kaip dabar demonstruojama.",
+          "pdfPages": [
+            15
+          ]
+        },
+        {
+          "id": "5",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "OXYGEN MASK",
+          "pdfPages": [
+            15
+          ]
+        },
+        {
+          "id": "6",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "In case of cabin pressure loss, oxygen masks will appear from the panel above your head and in the lavatories. Reach up and pull the mask towards you. Place it over your nose and mouth. Fit your own oxygen mask first before assisting others.",
+          "pdfPages": [
+            15
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Sumažėjus oro slėgiui salone, deguonies kaukės pakibs ties kiekviena keleivio kėde bei tualetuose. Patraukite kaukę žemyn ir užsidėkite uždengdami nosį ir burną. Prieš padėdami kitiems – užsidėkite deguonies kaukę patys.",
+          "pdfPages": [
+            15
+          ]
+        },
+        {
+          "id": "8",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "LIFE JACKET",
+          "pdfPages": [
+            15
+          ]
+        },
+        {
+          "id": "9",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "The life jacket is located under your seat. When directed by cabin crew, take the life jacket out and place it over your head. Pass the strap around your waist and fasten it. Adjust the strap by pulling. To inflate the life jacket, pull (this/these) red tab (-s). If the life jacket fails to inflate, blow into (this/these) tube (-s). Inflate your life jacket only when you are OUTSIDE the aircraft.",
+          "pdfPages": [
+            15
+          ]
+        },
+        {
+          "id": "10",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Gelbėjimosi liemenė yra po jūsų kėde. Po orlaivio palydovų nurodymo, išsitraukite ją ir apsivilkite per galvą. Apsijuoskite liemenį juostele ir užsekite sagtį. Užveržkite patraukdami juostelę. Staigiu judesiu patraukite šią (-ias) raudonąją (-ąsias) plokštelę (-es), ir liemenė prisipūs. Jei liemenė neprisipučia, ją galima pripūsti ir šiuo (šiais) atsarginiu (-iais) pūtikliu (-ais). Pūskite liemenę TIK lipdami iš lėktuvo.",
+          "pdfPages": [
+            15
+          ]
+        },
+        {
+          "id": "11",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "EMERGENCY EXITS",
+          "pdfPages": [
+            15
+          ]
+        },
+        {
+          "id": "12",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "The aircraft has 8 [eight] emergency exits marked with EXIT signs. Cabin crew will point out your nearest emergency exits. Please keep in mind that exits may be behind you. In case of evacuation, floor-level lighting will guide you to the exits.",
+          "pdfPages": [
+            15
+          ]
+        },
+        {
+          "id": "13",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Lėktuve yra 8 [aštuoni] avariniai išėjimai, pažymėti EXIT ženklais. Įgulos nariai nurodys jūsų artimiausius išėjimus. Atkreipkite dėmesį, kad jie gali būti už jūsų. Evakuacijos atveju šviesos grindyse žymės taką link išėjimų.",
+          "pdfPages": [
+            15
+          ]
+        },
+        {
+          "id": "14",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "SAFETY CARD",
+          "pdfPages": [
+            16
+          ]
+        },
+        {
+          "id": "15",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Please take a moment to review safety information using the safety instruction card located in your seat area. It contains information about exits, oxygen equipment, life jackets and seatbelts. It also shows the brace position which must be adopted in an emergency landing.",
+          "pdfPages": [
+            16
+          ]
+        },
+        {
+          "id": "16",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Skirkite laiko peržiūrėti saugos infromaciją esančią skrydžio saugos instrukcijoje, kurią rasite šalia jūsų vietos. Joje rasite informaciją apie lėktuvo avarinius išėjimus, deguonies sistemą, gelbėjimosi liemenes, saugos diržus. Šioje instrukcijoje taip pat pavaizduota saugi padėtis, kurią turėtumėte užimti avarinio nusileidimo atveju.",
+          "pdfPages": [
+            16
+          ]
+        },
+        {
+          "id": "17",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, the cabin crew will complete a safety check of the cabin before departure. Ensure now your seat belt is fastened and visible, seat back is in the upright position, tray table stowed, armrests down and window blind fully opened. Laptops should be switched off and stowed away for take-off and landing. In case of evacuation leave your belongings behind. We wish you a safe and enjoyable flight.",
+          "pdfPages": [
+            16
+          ]
+        },
+        {
+          "id": "18",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir ponai, įgula netrukus atliks baigiamąjį salono patikrinimą ruošiantis skrydžiui. Įsitikinkite, kad saugos diržas yra užsegtas ir matomas, kėdės atlošas pakeltas, staliukas užlenktas, alkūnių atramos nuleistos, taip pat langų užsklandos iki galo atitrauktos. Nešiojami kompiuteriai turi būti išjungti ir nenaudojami kilimo ir nusileidimo metu. Evakuacijos atveju, visi daiktai turi būti palikti lėktuve. Linkime jums saugaus ir malonaus skrydžio.",
+          "pdfPages": [
+            16
+          ]
+        }
+      ],
+      "requiresAircraft": true
+    },
+    {
+      "id": "gjt.pab.1.3.3",
+      "section": "1.3.3",
+      "title": "Boeing 737-800 safety demonstration",
+      "category": "Safety demonstration",
+      "aircraft": [
+        "B738"
+      ],
+      "sourcePage": "1-9",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, your crew are here to ensure that you have a safe and enjoyable flight so we would appreciate your attention while we take you through the safety features of this Boeing 737-800 aircraft.",
+          "pdfPages": [
+            16
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, mūsų įgulos tikslas yra užtikrinti, kad jūsų skrydis būtų ne tik malonus, bet ir saugus, todėl prašome išklausyti informaciją apie saugos priemones, esančias šiame Boeing 737-800 lėktuve.",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "2",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "SEAT BELT",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "The seatbelt is fastened, adjusted and released as shown.",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "4",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Saugos diržas yra užsegamas, užveržiamas ir atsegamas taip, kaip dabar demonstruojama.",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "5",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "OXYGEN MASK",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "6",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "In case of cabin pressure loss, oxygen masks will appear from the panel above your head and in the lavatories. Reach up and pull the mask towards you. Place it over your nose and mouth. Fit your own oxygen mask first before assisting others.",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Sumažėjus oro slėgiui salone, deguonies kaukės pakibs ties kiekviena keleivio kėde bei tualetuose. Patraukite kaukę žemyn ir užsidėkite uždengdami nosį ir burną. Prieš padėdami kitiems – užsidėkite deguonies kaukę patys.",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "8",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "LIFE JACKET",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "9",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "The life jacket is located under your seat. When directed by cabin crew, take the life jacket out and place it over your head. Pass the strap around your waist and fasten it. Adjust the strap by pulling. To inflate the life jacket, pull (this/these) red tab (-s). If the life jacket fails to inflate, blow into (this/these) tube (-s). Inflate your life jacket only when you are OUTSIDE the aircraft.",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "10",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Gelbėjimosi liemenė yra po jūsų kėde. Po orlaivio palydovų nurodymo, išsitraukite ją ir apsivilkite per galvą. Apsijuoskite liemenį juostele ir užsekite sagtį. Užveržkite patraukdami juostelę. Staigiu judesiu patraukite šią (-ias) raudonąją (-ąsias) plokštelę (-es), ir liemenė prisipūs. Jei liemenė neprisipučia, ją galima pripūsti ir šiuo (šiais) atsarginiu (-iais) pūtikliu (-ais). Pūskite liemenę TIK lipdami iš lėktuvo.",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "11",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "EMERGENCY EXITS",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "12",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "The aircraft has 8 [eight] emergency exits marked with EXIT signs: 2 [two] - at the front, 4 [four] over the wings, 2 [two] - at the rear. Cabin crew will point out your nearest emergency exits. Please keep in mind that exits may be behind you. In case of evacuation, floor-level lighting will guide you to the exits.",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "13",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Lėktuve yra 8 [aštuoni] avariniai išėjimai, pažymėti EXIT ženklais: 2 [du] - lėktuvo priekyje, 4 [keturi] - virš sparnų, 2 [du] - lėktuvo gale. Įgulos nariai nurodys jūsų artimiausius išėjimus. Atkreipkite dėmesį, kad jie gali būti už jūsų. Evakuacijos atveju šviesos grindyse žymės taką link išėjimų.",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "14",
+          "language": "both",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "SAFETY CARD",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "15",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Please take a moment to review safety information using the safety instruction card located in your seat area. It contains information about exits, oxygen equipment, life jackets and seatbelts. It also shows the brace position which must be adopted in an emergency landing.",
+          "pdfPages": [
+            17
+          ]
+        },
+        {
+          "id": "16",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Skirkite laiko peržiūrėti saugos infromaciją esančią skrydžio saugos instrukcijoje, kurią rasite šalia jūsų vietos. Joje rasite informaciją apie lėktuvo avarinius išėjimus, deguonies sistemą, gelbėjimosi liemenes, saugos diržus. Šioje instrukcijoje taip pat pavaizduota saugi padėtis, kurią turėtumėte užimti avarinio nusileidimo atveju.",
+          "pdfPages": [
+            17,
+            18
+          ]
+        },
+        {
+          "id": "17",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, the cabin crew will complete a safety check of the cabin before departure. Ensure now your seat belt is fastened and visible, seat back is in the upright position, tray table stowed, armrests down and window blind fully opened. Laptops should be switched off and stowed away for take-off and landing. In case of evacuation leave your belongings behind. We wish you a safe and enjoyable flight.",
+          "pdfPages": [
+            18
+          ]
+        },
+        {
+          "id": "18",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir ponai, įgula netrukus atliks baigiamąjį salono patikrinimą ruošiantis skrydžiui. Įsitikinkite, kad saugos diržas yra užsegtas ir matomas, kėdės atlošas pakeltas, staliukas užlenktas, alkūnių atramos nuleistos, taip pat langų užsklandos iki galo atitrauktos. Nešiojami kompiuteriai turi būti išjungti ir nenaudojami kilimo ir nusileidimo metu. Evakuacijos atveju, visi daiktai turi būti palikti lėktuve. Linkime jums saugaus ir malonaus skrydžio.",
+          "pdfPages": [
+            18
+          ]
+        }
+      ],
+      "requiresAircraft": true
+    },
+    {
+      "id": "gjt.pab.1.4.1",
+      "section": "1.4.1",
+      "title": "Cabin lights",
+      "category": "In-flight",
+      "aircraft": [],
+      "sourcePage": "1-11",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, during take-off and landing, cabin lights will be dimmed. If necessary, please use your individual light.",
+          "pdfPages": [
+            18
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, lėktuvui kylant ir leidžiantis šviesos salone bus pritemdytos. Prireikus prašome naudotis individualiuoju apšvietimu.",
+          "pdfPages": [
+            18
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.4.2",
+      "section": "1.4.2",
+      "title": "Standard after take off",
+      "category": "In-flight",
+      "aircraft": [],
+      "sourcePage": "1-11",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, for your own safety, we recommend keeping your seatbelts fastened throughout the entire flight as unexpected turbulence may occur.",
+          "pdfPages": [
+            19
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Lavatories are located at both ends of the cabin. Please note that they are locked whenever the seatbelt sign is ON. Please be careful when opening overhead lockers as items may fall out.",
+          "pdfPages": [
+            19
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Smoking is strictly prohibited in all areas of the aircraft, including lavatories, which are fitted with smoke detectors. Tampering with a smoke detector or not complying with these regulations is considered as a threat to flight safety. It will lead to a formal report to police authorities with a fine, as a result. Also, consuming alcohol which was not purchased on board is not allowed.",
+          "pdfPages": [
+            19
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Thank you for your attention.",
+          "pdfPages": [
+            19
+          ]
+        },
+        {
+          "id": "4",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, dėl jūsų pačių saugos dėl nenumatytos oro blaškos tikimybės patariame likti prisisegus saugos diržu viso skrydžio metu.",
+          "pdfPages": [
+            19
+          ]
+        },
+        {
+          "id": "5",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Tualetai įrengti salono gale ir priekyje. Atkreipkite dėmesį, jog jie yra užrakinami, kuomet įjungiamas saugos diržų ženklas.  Maloniai prašome būti atsargiems atidarant lentynas, nes daiktai, esantys jose, gali iškristi.",
+          "pdfPages": [
+            19
+          ]
+        },
+        {
+          "id": "6",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Primename, kad rūkyti griežtai draudžiama visame orlaivyje, įskaitant tualetus, kuriuose įrengti dūmų detektoriai. Aktyvuotas dūmų detektorius arba šių nurodymų nesilaikymas laikomas skrydžio saugos pažeidimu, apie kurį pranešama policijai ir taikoma bauda. Taip pat draudžiama vartoti savo atsineštus alkoholinius gėrimus.",
+          "pdfPages": [
+            19
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dėkojame už dėmesį.",
+          "pdfPages": [
+            19
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.4.3",
+      "section": "1.4.3",
+      "title": "Smoking-on board announcement to be read every 60 min.",
+      "category": "In-flight",
+      "aircraft": [],
+      "sourcePage": "1-12",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we remind you that smoking, including electronic cigarettes, is strictly forbidden in all areas of the aircraft.",
+          "pdfPages": [
+            19
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "We inform you that passengers not complying with smoking restrictions violate the Airline’s unruly passenger policy. Failure to follow these regulations will lead to a warning that may result in lawful interference and a fine. Thank you for understanding.",
+          "pdfPages": [
+            19
+          ]
+        },
+        {
+          "id": "2",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, primename, jog rūkymas, įskaitant elektronines cigaretes, yra griežtai draudžiamas visame orlaivyje.",
+          "pdfPages": [
+            19
+          ]
+        },
+        {
+          "id": "3",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Informuojame, jog keleiviai, nesilaikantys rūkymo draudimo, pažeidžia oro linijų bendrovės Nepaklusnių Keleivių politiką. Šių nurodymų nesilaikymas gali užtraukti įspėjimą bei teisinę atsakomybę. Dėkojame už supratingumą.",
+          "pdfPages": [
+            19
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.4.4",
+      "section": "1.4.4",
+      "title": "40 min before landing",
+      "category": "Arrival",
+      "aircraft": [],
+      "sourcePage": "1-12",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, in 10 minutes captain will switch on the seat belt signs for our descent into (city name).",
+          "pdfPages": [
+            20
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Please take this time to use lavatories and begin preparation for landing.",
+          "pdfPages": [
+            20
+          ]
+        },
+        {
+          "id": "2",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, po 10 minučių kapitonas įjungs saugos diržų ženklus prieš nusileidžiant (miesto pavadinimas).",
+          "pdfPages": [
+            20
+          ]
+        },
+        {
+          "id": "3",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Skirkite šį laiką pasinaudoti tualetais ir pasiruoškite nusileidimui.",
+          "pdfPages": [
+            20
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.4.5",
+      "section": "1.4.5",
+      "title": "Landing preparation",
+      "category": "Arrival",
+      "aircraft": [],
+      "sourcePage": "1-13",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we are beginning our preparations for landing. Please ensure your seatbelts are fastened tightly, seat backs are upright, tables are stowed, put the armrest down and open up your window blinds.",
+          "pdfPages": [
+            20
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Any electronic devices transmitting radio signals must remain in flight mode or switched off. Ensure that all your hand baggage and larger electronic devices are stowed in the overhead lockers or under the seat in front of you. In case of evacuation leave your belongings behind. Please, one more time study the safety card located in your seat area. Thank you for your attention.",
+          "pdfPages": [
+            20
+          ]
+        },
+        {
+          "id": "2",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, mes pradedame pasirengimą nusileidimui. Įsitikinkite, kad jūsų saugos diržai tvirtai užsegti, kėdžių atlošai ir staleliai atlenkti statmenai, alkūnių atramos nuleistos, langų užsklandos iki galo atitrauktos.",
+          "pdfPages": [
+            20
+          ]
+        },
+        {
+          "id": "3",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Prietaisai, siunčiantys radijo signalus, turi likti perjungti į skrydžio aplinką arba išjungti. Daiktus bei didesnius elekroninius prietaisus pasidėkite lentynoje virš jūsų arba po kėde priešais jus. Evakuacijos atveju, visi daiktai turi būti palikti lėktuve. Prašome dar kartą atidžiai perskaityti skrydžio saugos instrukciją, esančią šalia jūsų vietos. Dėkojame už dėmesį.",
+          "pdfPages": [
+            20
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.5",
+      "section": "1.5",
+      "title": "Farewell",
+      "category": "Arrival",
+      "aircraft": [],
+      "sourcePage": "1-14",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, our aircraft has just landed at [name of the city, airport], where the local time is [hours, minutes] and the temperature is ….. degrees Celsius. For your own safety, please, remain seated with your seatbelt fastened until the aircraft comes to a complete stop and the seatbelt signs have been switched off. We kindly ask you to be careful when you open overhead lockers as items may fall out. Please check the area around and above you to ensure you have taken all your belongings. Electronic devices transmitting radio signals must remain in flight mode or switched off and larger devices stowed away until the seatbelt sign is off. Smoking is strictly forbidden until you reach the designated smoking area.",
+          "pdfPages": [
+            21
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "“GetJet Airlines” crew on behalf of [name of the airline/ tour operator] say goodbye to you and",
+          "pdfPages": [
+            21
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// wish you a pleasant holiday;",
+          "pdfPages": [
+            21
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// hope that you have enjoyed this flight and we look forward to seeing you again soon.",
+          "pdfPages": [
+            21
+          ]
+        },
+        {
+          "id": "4",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, our aircraft has not reached the parking area yet. Please (close the overhead lockers and) remain seated until the aircraft comes to a complete stop and the seatbelt signs have been switched off. Thank you.",
+          "pdfPages": [
+            21
+          ]
+        },
+        {
+          "id": "5",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, mūsų lėktuvas nusileido [miesto, oro uosto pavadinimas], kur vietos laikas [valandų, minučių], oro temperatūra ….. laipsnių (-iai) šilumos (šalčio). Prašome jūsų likti užsisegus saugos diržais, kol lėktuvas visiškai sustos ir užges saugos diržų ženklas. Maloniai prašome atsargiai atidarinėti lentynas, nes daiktai, esantys jose, gali iškristi. Atidžiai patikrinkite, ar pasiėmėte visus jums priklausančius daiktus. Elektronikos prietaisai turi likti skrydžio aplinkoje arba išjungti, didesni prietaisai padėti lentynoje arba po kėde priešais jus iki kol užges saugos diržų ženklai. Rūkyti griežtai draudžiama, kol nepasieksite rūkymui skirtos vietos. „GetJet Airlines” įgula kartu su [avialinijų pavadinimas/kelionių organizatorių pavadinimas] atsisveikina su jumis ir",
+          "pdfPages": [
+            21,
+            22
+          ]
+        },
+        {
+          "id": "6",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// linki jums malonaus poilsio;",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// tikisi vėl sutikti viename iš mūsų skrydžių.",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "8",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, mes dar neatvykome į stovėjimo aikštelę. Prašome (uždaryti lentynas ir) likti savo vietose, kol lėktuvas visiškai sustos ir užges saugos diržų ženklai. Ačiū.",
+          "pdfPages": [
+            22
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.5.1",
+      "section": "1.5.1",
+      "title": "Controlled disembarkation",
+      "category": "Arrival",
+      "aircraft": [],
+      "sourcePage": "1-15",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen,",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Disembarkation today will take place through the forward door only. We kindly ask all passengers to proceed towards the front section of the cabin. This measure is taken to help maintain the balance of the aircraft.",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "We appreciate your cooperation.",
+          "pdfPages": [
+            22
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.6.1",
+      "section": "1.6.1",
+      "title": "Complimentary service",
+      "category": "Service",
+      "aircraft": [],
+      "sourcePage": "1-15",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, as soon as the aircraft reaches cruising altitude, we will be offering you:",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// hot meals",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// sandwiches",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// snacks",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "4",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// refreshments",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "5",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// coffee and tea",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "6",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "If you have any questions, please ask one of our cabin crew members. Thank you for your attention.",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, po to, kai lėktuvas pakils į reikiamą aukštį, jums pasiūlysime:",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "8",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// karštųjų patiekalų,",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "9",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// sumuštinių,",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "10",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// įvairių užkandžių",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "11",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// gėrimų",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "12",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// arbatos ir kavos.",
+          "pdfPages": [
+            22
+          ]
+        },
+        {
+          "id": "13",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Jei turite klausimų, prašome kreiptis į orlaivio palydovus. Dėkojame už dėmesį.",
+          "pdfPages": [
+            22
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.6.2",
+      "section": "1.6.2",
+      "title": "Inflight service – inaccuracies",
+      "category": "Service",
+      "aircraft": [],
+      "sourcePage": "1-16",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we apologize but:",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// due to turbulence,",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// due to failure of water heaters,",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// due to failure of ovens,",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "4",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// due to shortness of time,",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "5",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "We are not able to:",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "6",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// offer goods for sale,",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "7",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// serve coffee and tea,",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "8",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// serve hot meals.",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "9",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Please accept our apologies for this inconvenience. Thank you for your attention.",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "10",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, apgailestaujame, bet:",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "11",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl oro blaškos,",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "12",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl vandens kaitintuvų gedimo,",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "13",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl orkaičių gedimo,",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "14",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl laiko stokos,",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "15",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Neturime galimybės jums pateikti/pasiūlyti:",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "16",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// parduodamų prekių,",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "17",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// kavos ir arbatos,",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "18",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// karštųjų patiekalų.",
+          "pdfPages": [
+            23
+          ]
+        },
+        {
+          "id": "19",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Nuoširdžiai atsiprašome ir tikimės jūsų supratingumo. Dėkojame už dėmesį.",
+          "pdfPages": [
+            23
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.6.3",
+      "section": "1.6.3",
+      "title": "Special meals",
+      "category": "Service",
+      "aircraft": [],
+      "sourcePage": "1-17",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we kindly ask those passengers who have pre-ordered special meals to contact the cabin crew. Thank you.",
+          "pdfPages": [
+            24
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, maloniai prašome keleivių užsisakiusių specialius patiekalus susiekti su įgulos nariais. Ačiū.",
+          "pdfPages": [
+            24
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.6.4",
+      "section": "1.6.4",
+      "title": "Onboard shop",
+      "category": "Service",
+      "aircraft": [],
+      "sourcePage": "1-17",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, there is an Onboard Shop catalogue in the seat pocket in front of you. You will be given an opportunity to buy some goods shortly.",
+          "pdfPages": [
+            24
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, kėdės kišenėje, esančioje priešais jus, rasite prekių katalogus. Netrukus galėsite išsirinkti ir įsigyti jums patikusių prekių.",
+          "pdfPages": [
+            24
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.6.5",
+      "section": "1.6.5",
+      "title": "Rubbish service",
+      "category": "Service",
+      "aircraft": [],
+      "sourcePage": "1-17",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, shortly crew will begin waste collection.",
+          "pdfPages": [
+            24
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, įgula netrukus pradės šiukšlių rinkimą salone. Iss. / Rev: 6 / 1",
+          "pdfPages": [
+            24,
+            25
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.7.1",
+      "section": "1.7.1",
+      "title": "Delay (pax go to waiting lounge)",
+      "category": "Disruptions",
+      "aircraft": [],
+      "sourcePage": "1-18",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we apologize, but due to:",
+          "pdfPages": [
+            25
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// sudden change of weather conditions;",
+          "pdfPages": [
+            25
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// technical issues;",
+          "pdfPages": [
+            25
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Our departure is delayed for [h min]. (As soon as the bus arrives) You are kindly requested to disembark, taking all your hand baggage with you, and proceed to the waiting lounge. We do apologize for the inconvenience. Thank you for your attention.",
+          "pdfPages": [
+            25
+          ]
+        },
+        {
+          "id": "4",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, labai gaila, tačiau dėl:",
+          "pdfPages": [
+            25
+          ]
+        },
+        {
+          "id": "5",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// staiga pablogėjusių oro sąlygų;",
+          "pdfPages": [
+            25
+          ]
+        },
+        {
+          "id": "6",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// techninių kliūčių;",
+          "pdfPages": [
+            25
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Mūsų skrydis atidėtas [val. min]. (Kai tik atvažiuos autobusas) maloniai prašome išlipti iš lėktuvo su visais jums priklausančiais daiktais ir vykti į laukimo salę.  Atsiprašome už sukeltus nepatogumus. Dėkojame už jūsų dėmesį.",
+          "pdfPages": [
+            25
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.7.2",
+      "section": "1.7.2",
+      "title": "Delay of departure (aircraft change)",
+      "category": "Disruptions",
+      "aircraft": [],
+      "sourcePage": "1-18",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we apologize, but due to technical issues, we have to change our aircraft. (As soon as the bus arrives) you are kindly requested to disembark, taking all your hand baggage with you. Until another aircraft is prepared for our flight, we kindly ask that you wait in the airport lounge. Further information will be provided there. We do apologize for the inconvenience. Thank you for your attention.",
+          "pdfPages": [
+            25
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, apgailestaujame, tačiau dėl techninių nesklandumų mums reikia persėsti į kitą lėktuvą. (Kai tik atvažiuos autobusas) maloniai prašome išlipti iš lėktuvo su visais jums priklausančiais daiktais. Kol bus parengtas kitas lėktuvas, prašome jūsų palaukti oro uosto laukimo salėje. Ten gausite tolimesnę informaciją. Atsiprašome už sukeltus nepatogumus. Dėkojame už dėmesį.",
+          "pdfPages": [
+            25
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.7.3",
+      "section": "1.7.3",
+      "title": "Delay of departure (pax stay on board)",
+      "category": "Disruptions",
+      "aircraft": [],
+      "sourcePage": "1-19",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we would like to inform you that:",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// due to minor technical issues;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// because of the unfavourable weather;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// due to the de-icing of the aircraft;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "4",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// due to the considerable cargo – baggage loading;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "5",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// we are waiting for some missing passengers;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "6",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// due to late arrival of connecting passengers;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "7",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// because of the late loading of catering;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "8",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// due to security check;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "9",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// due to air traffic congestion at [name] airport.",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "10",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "our departure is delayed for ….. h. …. min. Since we are expecting to leave shortly please remain in your seats. Thank you for your attention.",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "11",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, pranešame, kad mūsų išskridimas:",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "12",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl techninių priežasčių;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "13",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl nepalankių oro sąlygų;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "14",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl ledo šalinimo procedūros;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "15",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl bagažo/krovinio krovimo;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "16",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl keleivių vėlavimo į lėktuvą;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "17",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl tranzitinių keleivių vėlavimo;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "18",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl vėlavimo pakrauti maistą keleiviams;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "19",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl saugumo kontrolės;",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "20",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl didelio lėktuvų eismo [pavadinimas] oro uoste.",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "21",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "į [miesto pavadinimas] atidėtas ….. val. … min. Tikimės netrukus išskristi, tad prašome likti savo vietose. Dėkojame už dėmesį.",
+          "pdfPages": [
+            26
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.1",
+      "section": "1.8.1",
+      "title": "Turbulence",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-20",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we are now crossing a zone of turbulence. For your safety, we kindly request you to return to your seats and fasten your seatbelts. Stay in your seat with your seatbelt fastened until the seatbelt signs have been switched off. Lavatories are not in use at the moment. Thank you for your attention.",
+          "pdfPages": [
+            26
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, šiuo metu skrendame oro blaškos zonoje. Dėl jūsų saugos maloniai prašome nedelsiant grįžti į savo vietas ir užsisegti saugos diržus. Likite prisisegę iki kol bus išjungti saugos diržų ženklai. Tualetais šiuo metu naudotis draudžiama. Dėkojame už dėmesį.",
+          "pdfPages": [
+            27
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.2",
+      "section": "1.8.2",
+      "title": "Turbulence (discontinuing service)",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-20",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Due to turbulence for safety reasons",
+          "pdfPages": [
+            27
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// we are unable to commence our meal / drink service;",
+          "pdfPages": [
+            27
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// we have to discontinue our meal / drink service;",
+          "pdfPages": [
+            27
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "We will commence / continue our service as soon as the fasten seatbelt signs are switched off.",
+          "pdfPages": [
+            27
+          ]
+        },
+        {
+          "id": "4",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dėl oro blaškos, saugos sumetimais mes",
+          "pdfPages": [
+            27
+          ]
+        },
+        {
+          "id": "5",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// negalime pradėti aptarnavimo maistu / gėrimais;",
+          "pdfPages": [
+            27
+          ]
+        },
+        {
+          "id": "6",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// stabdome aptarnavimą (maistu / gėrimais);",
+          "pdfPages": [
+            27
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Aptarnavimą pradėsime / tęsime, kai bus išjungti saugos diržų ženklai.",
+          "pdfPages": [
+            27
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.3",
+      "section": "1.8.3",
+      "title": "Headcount",
+      "category": "Boarding",
+      "aircraft": [],
+      "sourcePage": "1-20",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, for security reasons it is required to verify the number of passengers on board. The cabin crew will perform a headcount. Therefore, we kindly ask you to remain seated. Thank you.",
+          "pdfPages": [
+            27
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, saugumo sumetimais privalome įsitikinti, kad keleivių skaičius sutampa su nurodytu dokumentuose. Įgula netrukus suskaičiuos visus keleivius. Kad būtų lengviau tą padaryti, prašome jūsų sėdėti savo vietose. Ačiū.",
+          "pdfPages": [
+            27
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.4",
+      "section": "1.8.4",
+      "title": "Disinsection",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-21",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, the cabin of the aircraft needs to be disinsected. Please remain seated during this procedure. We would like to inform you that spray which is used is certified and not dangerous to your health. For passengers having respiratory disorders, please push crew call-button. Thank you for your attention.",
+          "pdfPages": [
+            27
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, lėktuvo salonas turi būti išpurkštas dezinsekcine priemone. Prašome jūsų šios procedūros metu likti savo vietose. Norime pranešti, jog naudojama priemonė yra sertifikuota ir nepavojinga sveikatai. Keleivius, turinčius kvėpavimo takų sutrikimų ar ligų, prašome paspausti orlaivio palydovo iškvietimo mygtuką. Dėkoju už jūsų dėmesį.",
+          "pdfPages": [
+            27,
+            28
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.5",
+      "section": "1.8.5",
+      "title": "Rejected take-off",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-21",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and gentlemen, the take-off has been stopped for safety reasons. Please remain seated with your seatbelts fastened and wait for further instructions. Thank you.",
+          "pdfPages": [
+            28
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, saugos sumetimais kilimas buvo nutrauktas. Prašome likti savo vietose užsegtais saugos diržais ir laukti tolimesnių instrukcijų. Ačiū.",
+          "pdfPages": [
+            28
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.6",
+      "section": "1.8.6",
+      "title": "Go around",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-22",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, captain has decided to perform a go-around. This is a completely standard procedure. Further information will be given as soon as possible. In the meantime, please remain seated with your seatbelt fastened. Thank you.",
+          "pdfPages": [
+            28
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir ponai, kapitonas nusprendė atlikti pakartotinį nusileidimo ratą. Tai standartinė procedūra. Daugiau informacijos pateiksime artimiausiu metu. Tuo tarpu prašome likti sėdint prisegtais saugos diržais. Ačiū.",
+          "pdfPages": [
+            28
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.7",
+      "section": "1.8.7",
+      "title": "Refueling with pax onboard",
+      "category": "Fueling",
+      "aircraft": [],
+      "sourcePage": "1-22",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we are now refueling the aircraft. Please remain seated with your seatbelt unfastened. We remind you that smoking is strictly forbidden. Aisles, exit areas and lavatories must remain unobstructed at this time. Any electronic devices transmitting radio signals must be set to flight mode or switched off. Thank you for your attention.",
+          "pdfPages": [
+            29
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, šiuo metu lėktuvas yra pildomas degalais. Prašome būti savo vietose atsegtais saugos diržais. Primename, kad lėktuve rūkyti draudžiama. Prašome neblokuoti avarinių išėjimų, nestovėti praėjimuose ir nesinaudoti tualetais. Jeigu jūsų telefonas ar kiti elektroniniai prietaisai turi skrydžio aplinką, įsijunkite ją dabar, kitu atveju prietaisai turi būti išjungti. Dėkojame už dėmesį.",
+          "pdfPages": [
+            29
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.8",
+      "section": "1.8.8",
+      "title": "Before fueling during disembarkation",
+      "category": "Fueling",
+      "aircraft": [],
+      "sourcePage": "1-23",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we would like to inform you that the fueling will be in progress after landing. We ask you to orderly pack your belongings and be prepared to disembark.",
+          "pdfPages": [
+            29
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Smoking is strictly forbidden. Your mobile or other electronic devices must remain in flight mode until you are outside the aircraft. Aisles, exit areas and lavatories must remain unobstructed at this time.",
+          "pdfPages": [
+            29
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Thank you for your attention.",
+          "pdfPages": [
+            29
+          ]
+        },
+        {
+          "id": "3",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, norime pranešti, jog po nusileidimo vyks kuro pylimas, todėl prašome susidėti jums priklausančius daiktus ir būti pasiruošus palikti lėktuvą.",
+          "pdfPages": [
+            29
+          ]
+        },
+        {
+          "id": "4",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Rūkymas griežtai draudžiamas. Jūsų telefonas ir kiti elektroniniai prietaisai turi būti skrydžio aplinkoje iki tol, kol paliksite lėktuvą. Prašome neblokuoti avarinių išėjimų, nestovėti praėjimuose ir nesinaudoti tualetais.",
+          "pdfPages": [
+            29
+          ]
+        },
+        {
+          "id": "5",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dėkojame už dėmesį.",
+          "pdfPages": [
+            29
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.9",
+      "section": "1.8.9",
+      "title": "Fueling during disembarkation",
+      "category": "Fueling",
+      "aircraft": [],
+      "sourcePage": "1-23",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we would like to inform you that we are now refueling the aircraft. We ask you to open your seat belts and orderly leave the aircraft.",
+          "pdfPages": [
+            30
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Smoking is strictly forbidden. Your mobile or other electronic devices must remain in flight mode until you are outside the aircraft. Aisles, exit areas and lavatories must remain unobstructed at this time.",
+          "pdfPages": [
+            30
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Thank you for your attention.",
+          "pdfPages": [
+            30
+          ]
+        },
+        {
+          "id": "3",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, norime informuoti, jog šiuo metu vyksta kuro pylimas, todėl prašome atsisegti saugos diržus ir tvarkingai palikti lėktuvą.",
+          "pdfPages": [
+            30
+          ]
+        },
+        {
+          "id": "4",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Rūkymas griežtai draudžiamas. Jūsų telefonas ir kiti elektroniniai prietaisai turi būti skrydžio aplinkoje iki tol, kol paliksite lėktuvą. Prašome neblokuoti avarinių išėjimų, nestovėti praėjimuose ir nesinaudoti tualetais.",
+          "pdfPages": [
+            30
+          ]
+        },
+        {
+          "id": "5",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dėkojame už dėmesį.",
+          "pdfPages": [
+            30
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.10",
+      "section": "1.8.10",
+      "title": "Call for doctor",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-24",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, our passenger requires urgent medical help. If there is a doctor on board, please contact cabin crew.",
+          "pdfPages": [
+            30
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// We apologize but due to our passenger's health, we have to make an immediate landing at [name] airport. Thank you for your attention.",
+          "pdfPages": [
+            30
+          ]
+        },
+        {
+          "id": "2",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, mūsų keleiviui reikalinga skubi medikų pagalba.",
+          "pdfPages": [
+            30
+          ]
+        },
+        {
+          "id": "3",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Jei lėktuve yra gydytojas, prašome jūsų apie tai pranešti orlaivio palydovams.",
+          "pdfPages": [
+            30
+          ]
+        },
+        {
+          "id": "4",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// Apgailestaujame, tačiau dėl vieno iš keleivių sveikatos būklės mums teks leistis [pavadinimas] oro uoste. Dėkojame už dėmesį.",
+          "pdfPages": [
+            30
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.11",
+      "section": "1.8.11",
+      "title": "Severe allergy",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-24",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we have a passenger with a severe // nut or (any other) // allergy. We won’t be selling any products with // nuts or peanuts or (any other) //, and we ask that you do not consume any while you are onboard the aircraft. Thank you for your cooperation.",
+          "pdfPages": [
+            30
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, šiandien su mumis skrenda keleivis, turintis sunkią alergiją // riešutams ar (bet kuri kita) //. Todėl mes neparduosime jokių produktų su // riešutais ar žemės riešutais, ar (bet kurių kitų) //, taip pat prašome jūsų nevartoti jų viso skrydžio metu. Dėkojame už bendradarbiavimą.",
+          "pdfPages": [
+            30,
+            31
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.12",
+      "section": "1.8.12",
+      "title": "Waiting for information",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-24",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we are waiting for further information. We appreciate your patience and cooperation. We will inform you about situation as soon as possible.",
+          "pdfPages": [
+            31
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, šiuo metu laukiame tolesnės informacijos. Dėkojame už kantrybę ir bendradarbiavimą. Netrukus informuosime jus apie situaciją.",
+          "pdfPages": [
+            31
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.13",
+      "section": "1.8.13",
+      "title": "Immigration cards",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-25",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we will shortly begin distributing immigration cards. You need to complete the form in capital letters. Please keep the completed card with your passport for presentation to the immigration officers at the airport. If you have any questions, please contact our cabin crew. Thank you.",
+          "pdfPages": [
+            31
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, netrukus išdalinsime imigracines korteles. Pildyti būtina spausdintinėmis didžiosiomis raidėmis anglų kalba. Užpildytas korteles ir savo pasus paruoškite pateikti pasienio kontrolės tarnybai. Jei turite klausimų, prašome kreiptis į orlaivio palydovus. Dėkojame už dėmesį.",
+          "pdfPages": [
+            31
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.14",
+      "section": "1.8.14",
+      "title": "Health declaration form",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-25",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, shortly cabin crew will distribute Health Declaration forms. Please fill those forms before leaving the aircraft and hand them to the airport personnel on request. Thank You",
+          "pdfPages": [
+            31
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, netrukus orlaivio palydovai dalins sveikatos deklaracijos formas. Prašome užpildyti šias formas prieš paliekant orlaivį bei atiduoti jas oro uosto personalui, kai būsite paprašyti. Ačiū.",
+          "pdfPages": [
+            31
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.15",
+      "section": "1.8.15",
+      "title": "Waiting area",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-25",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, now we are flying over [name of the airport]. We regret to inform you that due to heavy traffic at the airport our landing will be delayed for about ….. min.",
+          "pdfPages": [
+            31,
+            32
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, mes dabar skrendame virš [oro uosto pavadinimas]. Apgailestaujame, tačiau dėl intensyvaus lėktuvų eismo mums teks laukti leidimo nusileisti apie ..… min.",
+          "pdfPages": [
+            32
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.16",
+      "section": "1.8.16",
+      "title": "Diversion",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-26",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we very much regret to inform you that:",
+          "pdfPages": [
+            32
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// due to technical reasons;",
+          "pdfPages": [
+            32
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// due to unfavourable weather conditions at [name] airport.",
+          "pdfPages": [
+            32
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "We are diverting  / reverting  to [name of the airport]. We expect to land there in about ..… h. ..… min. You will receive further information as soon as possible.",
+          "pdfPages": [
+            32
+          ]
+        },
+        {
+          "id": "4",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, pranešame, kad:",
+          "pdfPages": [
+            32
+          ]
+        },
+        {
+          "id": "5",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl techninių priežasčių;",
+          "pdfPages": [
+            32
+          ]
+        },
+        {
+          "id": "6",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// dėl nepalankų oro sąlygų [pavadinimas] oro uoste.",
+          "pdfPages": [
+            32
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Mes skrisime  /  grįšime  į [oro uosto  pavadinimas]. Tikimės  nusileisti   po ….. val. … min. Detalesnę informaciją pateiksime kaip įmanoma greičiau.",
+          "pdfPages": [
+            32
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.17",
+      "section": "1.8.17",
+      "title": "Searching for the pax",
+      "category": "Boarding",
+      "aircraft": [],
+      "sourcePage": "1-26",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, may I have your attention, please. Mr./Mrs. [name, surname], please contact cabin crew. Thank you.",
+          "pdfPages": [
+            32
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, prašome jūsų atkreipti dėmesį. Pono / Ponios [vardas, pavardė] prašome kreiptis į orlaivio palydovus. Ačiū.",
+          "pdfPages": [
+            32
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.18",
+      "section": "1.8.18",
+      "title": "Check of boarding card",
+      "category": "Boarding",
+      "aircraft": [],
+      "sourcePage": "1-26",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, please prepare your boarding cards / passports for control check. Thank you.",
+          "pdfPages": [
+            32
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, maloniai prašome jūsų paruošti įlaipinimo korteles / pasus patikrai. Ačiū.",
+          "pdfPages": [
+            33
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.19",
+      "section": "1.8.19",
+      "title": "Questionnaire",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-27",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, tour operator [name] thank you for using its services and asks to give your opinion on the quality of the services provided. We shall shortly begin distributing forms. We kindly ask you to fill them in and return them to the cabin crew. Thank you.",
+          "pdfPages": [
+            33
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, kelionių organizatorius [pavadinimas] dėkoja jums, kad naudojatės jo paslaugomis ir norėtų žinoti jūsų nuomonę apie siūlomų paslaugų kokybę. Netrukus jums išdalinsime anketas, kurias maloniai prašome užpildyti ir grąžinti orlaivio palydovams. Ačiū.",
+          "pdfPages": [
+            33
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.20",
+      "section": "1.8.20",
+      "title": "De-icing",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-27",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, due to current weather conditions, de-icing of our aircraft will take place. This is the standard procedure, please remain seated at this time.",
+          "pdfPages": [
+            33
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, dėl esamų oro sąlygų, netrukus nuo mūsų lėktuvo bus šalinamas sniegas/ledas. Tai standartinė procedūra, kurios metu prašome būti savo vietose.",
+          "pdfPages": [
+            33
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.21",
+      "section": "1.8.21",
+      "title": "Return to gate",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-27",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, we regret to inform you that due to a technical fault we have to return to the parking area. For your own safety, please, remain seated with your seatbelt fastened until the aircraft comes to a complete stop and the seatbelt signs have been switched off.",
+          "pdfPages": [
+            33
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Further information will be given as soon as possible.",
+          "pdfPages": [
+            33
+          ]
+        },
+        {
+          "id": "2",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, apgailestaujame, tačiau dėl techninių kliūčių mes priversti grįžti į stovėjimo aikštelę. Prašome jūsų likti užsisegus saugos diržais, kol lėktuvas visiškai sustos ir užges saugos diržų ženklai.",
+          "pdfPages": [
+            33
+          ]
+        },
+        {
+          "id": "3",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Tolesnę informaciją pateiksime kiek galėdami greičiau.",
+          "pdfPages": [
+            33
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.22",
+      "section": "1.8.22",
+      "title": "Request to be seated due to special services (doctor, police)",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-28",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, please remain seated and allow the:",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// medical services;",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// customer offices;",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// border guards;",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "4",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// police offices",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "5",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "to board first. Thank you for your cooperation.",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "6",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, prašome sėdėti savo vietose, kol pirmieji į lėktuvą užeis:",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// medicinos darbuotojai;",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "8",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// muitinės darbuotojai;",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "9",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// pasieniečiai;",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "10",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// policijos darbuotojai.",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "11",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dėkojame už supratingumą.",
+          "pdfPages": [
+            34
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.23",
+      "section": "1.8.23",
+      "title": "Mist in the cabin",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-28",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, as the air conditioning system is working at maximum, some misting is occurring in the cabin. It will vanish soon. This is the standard procedure.",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Thank you for your attention.",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "2",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, migla, kurią matote salone, atsirado įjungus kondicionavimo sistemą. Netrukus garai išnyks. Tai standartinė procedūra.",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "3",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dėkojame už dėmesį.",
+          "pdfPages": [
+            34
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.24",
+      "section": "1.8.24",
+      "title": "Hand baggage identification",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-28",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, for security reasons, we need to conduct baggage identification. The cabin crew will be checking all items on board, so please be aware of the location of your belongings. Thank you for your cooperation.",
+          "pdfPages": [
+            34
+          ]
+        },
+        {
+          "id": "1",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, saugumo sumetimais privalome identifikuoti lėktuvo salone esantį bagažą. Prašome nurodyti palydovams jums priklausančius daiktus. Dėkojame už bendradarbiavimą. Date: 01-02-2026 Iss. / Rev: 6 / 1",
+          "pdfPages": [
+            34,
+            35
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.8.25",
+      "section": "1.8.25",
+      "title": "Immediate disembarkation for safety",
+      "category": "Other situations",
+      "aircraft": [],
+      "sourcePage": "1-29",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, please disembark immediately, taking all your belongings with you. Please follow further instructions from the cabin crew and ground staff. Thank you for your attention.",
+          "pdfPages": [
+            35
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// For security reasons passengers are required to identify their baggage, please follow further instructions from the cabin crew and ground staff.",
+          "pdfPages": [
+            35
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// Please disembark for baggage identification and follow ground staff instructions. Please return to the aircraft as directed by ground staff.",
+          "pdfPages": [
+            35
+          ]
+        },
+        {
+          "id": "3",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, prašome jūsų skubiai išlipti iš lėktuvo su visais jums priklausančiais daiktais. Prašome sekti orlaivio palydovų bei oro uosto darbuotojų nurodymus. Dėkojame už dėmesį.",
+          "pdfPages": [
+            35
+          ]
+        },
+        {
+          "id": "4",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// Saugumo sumetimais keleiviai prašomi identifikuoti savo bagažą lėktuve. Prašome sekti orlaivio palydovų bei oro uosto darbuotojų nurodymus.",
+          "pdfPages": [
+            35
+          ]
+        },
+        {
+          "id": "5",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// Prašome išlipti bagažo identifikavimui ir sekti oro uosto darbuotojų nurodymus. Grįžkite į lėktuvą leidus oro uosto darbuotojams.",
+          "pdfPages": [
+            35
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.9.1",
+      "section": "1.9.1",
+      "title": "Transit welcome (all pax continue to fly)",
+      "category": "Transit",
+      "aircraft": [],
+      "sourcePage": "1-29",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen,",
+          "pdfPages": [
+            35
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// We are ready to continue our flight to [city].The flight time will be … h … min.",
+          "pdfPages": [
+            35
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// We would like to apologize for the delay and inform you that we are ready to continue our flight to [city]. The flight time will be … h … min.",
+          "pdfPages": [
+            35
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Let me remind you, that this is a non-smoking flight. Any electronic devices transmitting radio signals must be set to flight mode or switched off while on board the aircraft. Now sit back, relax and enjoy the flight. Thank you.",
+          "pdfPages": [
+            35
+          ]
+        },
+        {
+          "id": "4",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai,",
+          "pdfPages": [
+            35
+          ]
+        },
+        {
+          "id": "5",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// Mes esame pasiruošę tęsti skrydį į [miestas]. Iki [miesto] skrisime ... valandas ... minučių.",
+          "pdfPages": [
+            35
+          ]
+        },
+        {
+          "id": "6",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// Norime atsiprašyti dėl nenumatyto vėlavimo ir informuoti, jog esame pasiruošę tęsti skrydį į [miestas]. Iki [miesto] skrisime ... valandas ... minučių.",
+          "pdfPages": [
+            35
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Primename, kad lėktuve nerūkoma. Elektronikos prietaisai, siunčiantys radijo signalus, turi būti perjungti į skrydžio aplinką arba išjungti viso skrydžio metu. Dabar kviečiame patogiai įsitaisyti, atsipalaiduoti ir mėgautis skrydžiu. Dėkojame. Iss. / Rev: 4 / 2",
+          "pdfPages": [
+            35,
+            36
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.9.2",
+      "section": "1.9.2",
+      "title": "Transit welcome followed by crew change (all pax continue to fly)",
+      "category": "Transit",
+      "aircraft": [],
+      "sourcePage": "1-30",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen,",
+          "pdfPages": [
+            36
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// I would like to introduce your new crew. I am your senior cabin crew member [name] and my colleagues [names] at the front and [names] at the rear of the cabin will be taking care of your comfort and safety on this aircraft flying to [city].",
+          "pdfPages": [
+            36
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "The flight time will be … h … min.",
+          "pdfPages": [
+            36
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Let me remind you, that this is a non-smoking flight. Any electronic devices transmitting radio signals must be set to flight mode or switched off while on board the aircraft. Now sit back, relax and enjoy the flight.",
+          "pdfPages": [
+            36
+          ]
+        },
+        {
+          "id": "4",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Thank you.",
+          "pdfPages": [
+            36
+          ]
+        },
+        {
+          "id": "5",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai,",
+          "pdfPages": [
+            36
+          ]
+        },
+        {
+          "id": "6",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// Norėčiau jums pristatyti jūsų naują įgulą. Aš, vyresnioji (-ysis) šio skrydžio palydovė (-as) [vardas] ir mano kolegos [vardas] lėktuvo priekyje ir [vardai] lėktuvo gale rūpinsimės jūsų komfortu bei sauga šiame lėktuve skrendančiame į [miestas].",
+          "pdfPages": [
+            36
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Iki [miesto pavadinimas] skrisime ..… valandas ….. minučių.",
+          "pdfPages": [
+            36
+          ]
+        },
+        {
+          "id": "8",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Primename, kad lėktuve nerūkoma. Elektronikos prietaisai, siunčiantys radijo signalus, turi būti perjungti į skrydžio aplinką arba išjungti viso skrydžio metu. Dabar kviečiame atsipalaiduoti ir mėgautis skrydžiu.",
+          "pdfPages": [
+            36
+          ]
+        },
+        {
+          "id": "9",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dėkojame.",
+          "pdfPages": [
+            36
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.9.3",
+      "section": "1.9.3",
+      "title": "Transit (all pax continue to fly)",
+      "category": "Transit",
+      "aircraft": [],
+      "sourcePage": "1-31",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen [our apologies for the delay], our aircraft has just landed at [name of the city, airport], where the local time is [hours, minutes].",
+          "pdfPages": [
+            37
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "For your own safety, please, remain seated with your seatbelt fastened until the aircraft comes to a complete stop and the seatbelt sign has been switched off. Electronic devices should remain switched off until the aircraft doors have been opened. Smoking is strictly forbidden on board. We expect to leave for [name of the city, airport] in [h, min].",
+          "pdfPages": [
+            37
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "During the stopover, fueling will be in progress. Please unfasten the seatbelts, make sure seat backs are upright, tables are stowed, also put the armrest down and open up your window blinds. All your hand baggage has to be stowed in the overhead lockers or under the seat in front of you. Flight time to …. [name of the city, airport] ....h....min.",
+          "pdfPages": [
+            37
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// We would like to ask you to proceed to the waiting lounge. Please, take all your hand baggage and travel documents along.",
+          "pdfPages": [
+            37
+          ]
+        },
+        {
+          "id": "4",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// Another crew will be taking over. It was our pleasure to have you on board with us, enjoy the rest of your trip.",
+          "pdfPages": [
+            37
+          ]
+        },
+        {
+          "id": "5",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Thank you for your attention.",
+          "pdfPages": [
+            37
+          ]
+        },
+        {
+          "id": "6",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai [atsiprašome dėl nenumatyto uždelsimo], mūsų lėktuvas nusileido [miesto, oro uosto pavadinimas], kur vietos laikas [valandų, minučių].",
+          "pdfPages": [
+            37
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Prašome jūsų likti užsisegus saugos diržais, kol lėktuvas visiškai sustos ir užges saugos diržų ženklas. Elektronikos prietaisai turi likti skrydžio aplinkoje arba išjungti, kol lėktuvo durys bus atidarytos. Rūkyti lėktuve griežtai draudžiama. Į [miesto, oro uosto pavadinimas] tikimės išvykti po ..… val ..… min.",
+          "pdfPages": [
+            37
+          ]
+        },
+        {
+          "id": "8",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Stovėjimo metu lėktuvas bus pildomas degalais. Prašome atsisegti saugos diržus, įsitikinkite, kad kėdžių atlošai ir staleliai atlenkti statmenai, alkūnių atramos nuleistos, langų užsklandos iki galo atitrauktos. Daiktus  pasidėkite lentynoje  virš  jūsų arba po kėde priešais jus. Iki [miesto pavadinimas] skrisime [val. min].",
+          "pdfPages": [
+            37
+          ]
+        },
+        {
+          "id": "9",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// Lėktuvo stovėjimo metu prašome eiti į laukimo salę. Pasiimkite visus jums priklausančius daiktus ir kelionės dokumentus.",
+          "pdfPages": [
+            37
+          ]
+        },
+        {
+          "id": "10",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// Netrukus pasikeis lėktuvo įgula. Buvo malonu skristi su jumis, linkime puikios tolimesnės kelionės.",
+          "pdfPages": [
+            37
+          ]
+        },
+        {
+          "id": "11",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dėkojame už dėmesį.",
+          "pdfPages": [
+            37
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.9.4",
+      "section": "1.9.4",
+      "title": "Transit (some pax leaving)",
+      "category": "Transit",
+      "aircraft": [],
+      "sourcePage": "1-32",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, our aircraft has just landed at [name of the city, airport], where the local time is [hours, minutes] and the temperature is ….. degrees Celsius. For your own safety, please, remain seated with your seatbelt fastened until the aircraft comes to a complete stop and the seatbelt sign has been switched off. We kindly request you to be careful when you open overhead lockers as items may fall out. Please check the area around and above you to ensure you have taken all your belongings. Electronic devices should remain switched off until the aircraft doors have been opened. Smoking is strictly forbidden until you reach the designated smoking area.",
+          "pdfPages": [
+            37,
+            38
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Captain and his crew say goodbye to the passengers terminating their trip here in  [name of the city]. We hope that you have enjoyed this flight and we are looking forward to seeing you again soon.",
+          "pdfPages": [
+            38
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Some information for our remaining passengers. We are expected to leave for [name of the city, airport] in [h, min]. Cabin crew will ask you to recognize your hand baggage after transit passengers disembark. We kindly ask you to remain in your seats during the stopover, unfasten the seatbelts and refrain from smoking.",
+          "pdfPages": [
+            38
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// We would like to ask you to proceed to the waiting lounge. Please, take all your hand baggage and travel documents along.",
+          "pdfPages": [
+            38
+          ]
+        },
+        {
+          "id": "4",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// Another crew will be taking over. It was our pleasure to have you on board with us, enjoy the rest of your trip.",
+          "pdfPages": [
+            38
+          ]
+        },
+        {
+          "id": "5",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Thank you for your attention.",
+          "pdfPages": [
+            38
+          ]
+        },
+        {
+          "id": "6",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, mūsų lėktuvas nusileido [miesto, oro uosto pavadinimas], kur vietos laikas [valandų, minučių], oro temperatūra ….. laipsniai(-ių) šilumos/šalčio. Prašome jūsų likti užsisegus saugos diržais, kol lėktuvas visiškai sustos ir užges saugos diržų ženklai. Maloniai prašome atsargiai atidarinėti lentynas, nes daiktai, esantys jose, gali iškristi. Atidžiai patikrinkite, ar pasiėmėte visus jums priklausančius daiktus. Elektronikos prietaisai turi likti skrydžio aplinkoje arba išjungti, kol lėktuvo durys bus atidarytos. Rūkyti griežtai draudžiama, kol nepasieksite rūkymui skirtos vietos.",
+          "pdfPages": [
+            38
+          ]
+        },
+        {
+          "id": "7",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Lėktuvo vadas ir įgula atsisveikina su keleiviais, kurie baigė savo skrydį [miesto pavadinimas]. Tikimės, kad skrydis jums patiko ir mes vėl susitiksime viename iš mūsų skrydžių.",
+          "pdfPages": [
+            38
+          ]
+        },
+        {
+          "id": "8",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Keleivių, tęsiančių skrydį mūsų lėktuvu, dėmesiui. Į [miesto, oro uosto pavadinimas] tikimės išvykti po ..… val ..… min. Keleiviams išlipus orlaivio palydovai paprašys jūsų atpažinti savo bagažą. Prašome lėktuvo stovėjimo metu likti savo vietose ir atsisegti saugos diržus bei nerūkyti.",
+          "pdfPages": [
+            38
+          ]
+        },
+        {
+          "id": "9",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// Prašome lėktuvo stovėjimo metu eiti į laukimo salę. Pasiimkite visus jums priklausančius daiktus ir kelionės dokumentus.",
+          "pdfPages": [
+            38
+          ]
+        },
+        {
+          "id": "10",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "// Netrukus pasikeis lėktuvo įgula. Buvo malonu skristi su jumis, linkime puikios tolimesnės kelionės.",
+          "pdfPages": [
+            38
+          ]
+        },
+        {
+          "id": "11",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dėkojame už dėmesį.",
+          "pdfPages": [
+            38
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.1.9.5",
+      "section": "1.9.5",
+      "title": "Transit (reseating passengers to their seats)",
+      "category": "Transit",
+      "aircraft": [],
+      "sourcePage": "1-33",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, will you please return to your original seats, as shown on your boarding cards, as the other seats are reserved for the joining passengers.",
+          "pdfPages": [
+            38
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Thank you for your attention.",
+          "pdfPages": [
+            38
+          ]
+        },
+        {
+          "id": "2",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, prašome jus grįžti į vietas, nurodytas jūsų įlaipinimo kortelėse, kadangi kitos vietos yra rezervuotos prisijungiantiems keleiviams.",
+          "pdfPages": [
+            39
+          ]
+        },
+        {
+          "id": "3",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dėkojame už dėmesį.",
+          "pdfPages": [
+            39
+          ]
+        }
+      ],
+      "requiresAircraft": false
+    },
+    {
+      "id": "gjt.pab.2.1",
+      "section": "2.1",
+      "title": "Emergency landing on ground",
+      "category": "Emergency",
+      "aircraft": [],
+      "sourcePage": "2-1",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, attention, please! This is an emergency announcement.",
+          "pdfPages": [
+            39
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "We are forced to make an emergency landing in ... minutes. Please keep calm and follow instructions.",
+          "pdfPages": [
+            39
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Return to your seats and tightly fasten your seatbelts. Put your seatbacks in the upright position with armrests down. Make sure tray tables and hand baggage are securely stowed. Remove ties, sharp objects, dentures, glasses, and high-heeled shoes, and place them in the seat pocket or another secure location to ensure they do not become loose.",
+          "pdfPages": [
+            39
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "CABIN CREW DEMO POSITIONS",
+          "pdfPages": [
+            39
+          ]
+        },
+        {
+          "id": "4",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Cabin crew are now going to show you the location of the emergency exits:",
+          "pdfPages": [
+            39
+          ]
+        },
+        {
+          "id": "5",
+          "language": "en",
+          "kind": "heading",
+          "aircraft": [
+            "B738",
+            "A320"
+          ],
+          "text": "B737 - 800 / A320",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "6",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [
+            "B738",
+            "A320"
+          ],
+          "text": "There are 2 [two] exits in the front; 4 [four] overwing exits are in the middle; There are 2 [two] exits in the rear.",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "7",
+          "language": "en",
+          "kind": "heading",
+          "aircraft": [
+            "A321"
+          ],
+          "text": "A321",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "8",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [
+            "A321"
+          ],
+          "text": "There are 8 [eight] emergency exits. Your nearest emergency exits are: 2 [two] exits in the front; 2 [two] exits in the rear.",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "9",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Floor lever lighting will lead you to the emergency exits.",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "10",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Now, the cabin crew will show you how to get in the brace position. When you hear the command “BRACE BRACE! HEADS DOWN STAY DOWN!” you have to take up the following position:",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "11",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Place feet flat on the floor. Put hands on top of your head, but do not cross fingers. Put your hands in a way to protect your head and face. Lean forward, rest your forehead on the chair in front of you. If you have no seat in front - bend fully down, put your hand under the knees.",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "12",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "The correct brace position can be found on the safety card in the seat pocket in front of you. Please take it now and study one more time. Remain seated in this position until the aircraft comes to a complete stop.",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "13",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "In case of an evacuation, leave all your belongings behind.",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "14",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "If there are any personnel on board from the following professions, would they please identify themselves to the Cabin Crew: AIRCREW, FIRE CREW, POLICE, ARMED FORCES OR MEDICAL PERSONNEL. Thank you.",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "15",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, dėmesio!",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "16",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Mes priversti atlikti avarinį nusileidimą po ... minučių. Prašome išlikti ramiems ir sutelkti visą dėmesį į orlaivio palydovus.",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "17",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Grįžkite į savo vietas ir tvirtai užsisekite saugos diržus. Atlenkite sėdynių atlošus ir stalelius į vertikalią padėtį ir nuleiskite porankius. Įsitikinkite, kad rankinis bagažas yra saugiai padėtas po kėde priešais jus arba į lentynas, esančias virš jūsų.",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "18",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Nusiimkite kaklaraiščius, aštrius daiktus, dantų protezus, akinius ir aukštakulnius, sudėkite juos į kėdės kišenę arba kitą saugią vietą, kad šie netaptų palaidi.",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "19",
+          "language": "lt",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "CABIN CREW DEMO POSITIONS",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "20",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Orlaivio palydovai jums parodys, kur lėktuve yra išdėstyti avariniai išėjimai:",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "21",
+          "language": "lt",
+          "kind": "heading",
+          "aircraft": [
+            "B738",
+            "A320"
+          ],
+          "text": "B737 - 800 / A320",
+          "pdfPages": [
+            40
+          ]
+        },
+        {
+          "id": "22",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [
+            "B738",
+            "A320"
+          ],
+          "text": "There are 2 [two] exits in the front; 4 [four] overwing exits are in the middle; There are 2 [two] exits in the rear.",
+          "pdfPages": [
+            40,
+            41
+          ]
+        },
+        {
+          "id": "23",
+          "language": "lt",
+          "kind": "heading",
+          "aircraft": [
+            "A321"
+          ],
+          "text": "A321",
+          "pdfPages": [
+            41
+          ]
+        },
+        {
+          "id": "24",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [
+            "A321"
+          ],
+          "text": "There are 8 [eight] emergency exits. Your nearest emergency exits are: 2 [two] exits in the front; 2 [two] exits in the rear.",
+          "pdfPages": [
+            41
+          ]
+        },
+        {
+          "id": "25",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Apšvietimas grindyse nurodys kelią iki avarinių išėjimų.",
+          "pdfPages": [
+            41
+          ]
+        },
+        {
+          "id": "26",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dabar orlaivio palydovai parodys jums, kokia turi būti saugi kūno padėtis avarinio nusileidimo metu. Išgirdę komandą „BRACE BRACE! HEADS DOWN STAY DOWN!”:",
+          "pdfPages": [
+            41
+          ]
+        },
+        {
+          "id": "27",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Pastatykite kojas tvirtai ant grindų. Padėkite rankas ant viršutinės galvos dalies, tačiau nesukryžiuokite pirštų.  Laikykite rankas taip, kad apsaugotumėte veidą ir galvą. Pasilenkite į priekį, kakta įsiremkite į kėdę, esančią priešais jus. Jei kėdės priešais jus nėra, visiškai prisilenkite prie kelių, rankomis apglėbkite kojas, plaštakas laikykite po keliais.",
+          "pdfPages": [
+            41
+          ]
+        },
+        {
+          "id": "28",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Teisinga saugi kūno padėtis avarinio nusileidimo metu pavaizduota saugumo kortelėje, esančioje kėdės kišenėje priešais jus. Prašome paimti ją ir dar kartą susipažinti. Būkite tokioje padėtyje iki kol lėktuvas visiškai sustos.",
+          "pdfPages": [
+            41
+          ]
+        },
+        {
+          "id": "29",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Evakuacijos atveju visus asmeninius daiktus palikite lėktuve.",
+          "pdfPages": [
+            41
+          ]
+        },
+        {
+          "id": "30",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, jeigu salone yra šių profesijų atstovai: ĮGULOS NARIAI, GAISRININKAI, POLICININKAI, KARIŠKIAI ARBA MEDIKAI, prašome juos kreiptis į orlaivio palydovus.   Ačiū.",
+          "pdfPages": [
+            41
+          ]
+        }
+      ],
+      "requiresAircraft": true
+    },
+    {
+      "id": "gjt.pab.2.2",
+      "section": "2.2",
+      "title": "Ditching",
+      "category": "Emergency",
+      "aircraft": [],
+      "sourcePage": "2-3",
+      "segments": [
+        {
+          "id": "0",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ladies and Gentlemen, attention, please! This is an emergency announcement.",
+          "pdfPages": [
+            41
+          ]
+        },
+        {
+          "id": "1",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "We are forced to make an emergency landing on water in ... minutes. Please keep calm and follow  instructions.",
+          "pdfPages": [
+            41
+          ]
+        },
+        {
+          "id": "2",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Return to your seats. Put your seatbacks in the upright position with armrests down. Make sure tray tables and hand baggage are securely stowed. Remove ties, sharp objects, dentures, glasses, and high-heeled shoes, and place them in the seat pocket or another secure location to ensure they do not become loose.",
+          "pdfPages": [
+            41
+          ]
+        },
+        {
+          "id": "3",
+          "language": "en",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "CABIN CREW DEMO POSITIONS",
+          "pdfPages": [
+            41
+          ]
+        },
+        {
+          "id": "4",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Cabin crew are going to show you how to put on and use your life jacket. First:",
+          "pdfPages": [
+            41
+          ]
+        },
+        {
+          "id": "5",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Put on all your clothes. Remove the life jacket from under your seat, open the bag and take it out. Pull it over your head, but do not inflate it. Do not inflate your life jacket until you leave the aircraft. Pass the strap around your waist and fasten it. Adjust the strap by pulling. After leaving the aircraft pull the red handle to inflate your life jacket. The life jacket can also be inflated by blowing into this tube. Passengers traveling with children under the age of 2. Attention please. Put and inflate given infant life vests.",
+          "pdfPages": [
+            41,
+            42
+          ]
+        },
+        {
+          "id": "6",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Now, fasten your seatbelts tightly.",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "7",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "The cabin crew are going to show you the location of the emergency exits:",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "8",
+          "language": "en",
+          "kind": "heading",
+          "aircraft": [
+            "A320"
+          ],
+          "text": "A320",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "9",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [
+            "A320"
+          ],
+          "text": "There are 2 [two] exits in the front; 4 [four] overwing exits are in the middle; There are 2 [two] exits in the rear.",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "10",
+          "language": "en",
+          "kind": "heading",
+          "aircraft": [
+            "A321"
+          ],
+          "text": "A321",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "11",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [
+            "A321"
+          ],
+          "text": "There are 8 [eight] emergency exits. Your nearest emergency exits are: 2 [two] exits in the front; 2 [two] exits in the rear.",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "12",
+          "language": "en",
+          "kind": "heading",
+          "aircraft": [
+            "B738"
+          ],
+          "text": "B737 – 800",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "13",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [
+            "B738"
+          ],
+          "text": "There are 2 [two] exits in the front; 4 [four] overwing exits are in the middle.",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "14",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Floor lever lighting will lead you to the emergency exits.",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "15",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Now, the cabin crew will show you how to do the brace position. When you hear the command “BRACE BRACE! HEADS DOWN, STAY DOWN!” you have to take up the following position:",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "16",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Place feet flat on the floor. Put hands on top of your head, do not cross your fingers. Put your hands in a way to protect your head and face. Lean forward, rest your forehead on the chair in front of you. If you have no seat in front - bend fully down, put your hand under your knees.",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "17",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "The correct brace position can be found on the safety card in the seat pocket in front of you. Please take it now and study one more time. Remain seated in this position until the aircraft comes to a complete stop.",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "18",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "In case of evacuation, leave all your belongings behind.",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "19",
+          "language": "en",
+          "kind": "text",
+          "aircraft": [],
+          "text": "If there are any personnel on board from the following professions, would they please identify themselves to the cabin crew: AIRCREW, FIRE CREW, POLICE, ARMED FORCES OR MEDICAL PERSONNEL. Thank you",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "20",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, dėmesio!",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "21",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Mes priversti atlikti avarinį nusileidimą ant vandens po ... minučių. Prašome išlikti ramiems ir sutelkti visą dėmesį į orlaivio palydovus.",
+          "pdfPages": [
+            42
+          ]
+        },
+        {
+          "id": "22",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Grįžkite į savo vietas. Atlenkite sėdynių atlošus ir stalelius į vertikalią padėtį ir nuleiskite porankius. Įsitikinkite, kad rankinis bagažas yra saugiai padėtas po kėde priešais jus arba į lentynas, esančias virš jūsų. Nusiimkite kaklaraiščius, aštrius daiktus, dantų protezus, akinius ir aukštakulnius, sudėkite juos į kėdės kišenę arba kitą saugią vietą, kad šie netaptų palaidi.",
+          "pdfPages": [
+            42,
+            43
+          ]
+        },
+        {
+          "id": "23",
+          "language": "lt",
+          "kind": "heading",
+          "aircraft": [],
+          "text": "CABIN CREW DEMO POSITIONS",
+          "pdfPages": [
+            43
+          ]
+        },
+        {
+          "id": "24",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dabar orlaivio palydovai pademonstruos, kaip apsivilkti ir naudotis gelbėjimosi liemene:",
+          "pdfPages": [
+            43
+          ]
+        },
+        {
+          "id": "25",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Apsivilkite visus rūbus. Ištraukite gelbėjimosi liemenę iš po savo kėdės, atidarykite pakuotę ir išimkite liemenę. Apsivilkite  ją per galvą, tačiau nepūskite. Nepūskite gelbėjimosi  liemenės lėktuve. Apsijuoskite liemenį juostele ir užsekite sagtį. Užveržkite patraukdami juostelę. Po evakuacijos patraukite raudoną (-ąsias) rankenėlę (-es) žemyn liemenei pripūsti. Gelbėjimosi liemenė taip pat gali būti pripučiama atsarginiu (-iais) pūtikliu (-iais). Keleiviai keliaujantys su vaikais iki 2 metų amžiaus, dėmesio. Apvilkite liemene vaikus ir pripūskite liemenę.",
+          "pdfPages": [
+            43
+          ]
+        },
+        {
+          "id": "26",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dabar tvirtai prisisekite saugos diržus.",
+          "pdfPages": [
+            43
+          ]
+        },
+        {
+          "id": "27",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Orlaivio palydovai jums pademonstruos, kur lėktuve yra išdėstyti avariniai išėjimai:",
+          "pdfPages": [
+            43
+          ]
+        },
+        {
+          "id": "28",
+          "language": "lt",
+          "kind": "heading",
+          "aircraft": [
+            "A320"
+          ],
+          "text": "A320",
+          "pdfPages": [
+            43
+          ]
+        },
+        {
+          "id": "29",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [
+            "A320"
+          ],
+          "text": "2 [du] avariniai išėjimai yra lėktuvo priekyje; 4 [keturi] avariniai išėjimai yra prie lėktuvo sparno; 2 [du] avariniai išėjimai yra lėktuvo gale.",
+          "pdfPages": [
+            43
+          ]
+        },
+        {
+          "id": "30",
+          "language": "lt",
+          "kind": "heading",
+          "aircraft": [
+            "A321"
+          ],
+          "text": "A321",
+          "pdfPages": [
+            43
+          ]
+        },
+        {
+          "id": "31",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [
+            "A321"
+          ],
+          "text": "Lėktuve yra 8 [aštuoni] avariniai išėjimai. 2 [du] išėjimai yra sekcijos priekyje; 2 [du] išėjimai yra sekcijos gale.",
+          "pdfPages": [
+            43
+          ]
+        },
+        {
+          "id": "32",
+          "language": "lt",
+          "kind": "heading",
+          "aircraft": [
+            "B738"
+          ],
+          "text": "B737 - 800",
+          "pdfPages": [
+            43
+          ]
+        },
+        {
+          "id": "33",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [
+            "B738"
+          ],
+          "text": "2 [du] avariniai išėjimai yra lėktuvo priekyje; 4 [keturi] avariniai išėjimai yra prie lėktuvo sparno.",
+          "pdfPages": [
+            43
+          ]
+        },
+        {
+          "id": "34",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Apšvietimas grindyse, nuves jus iki avarinių išėjimų.",
+          "pdfPages": [
+            43
+          ]
+        },
+        {
+          "id": "35",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Dabar skrydžio palydovai parodys jums, kokia turi būti saugi kūno padėtis avarinio nusileidimo metu. Išgirdę komandą „BRACE BRACE! HEADS DOWN STAY DOWN!”:",
+          "pdfPages": [
+            43
+          ]
+        },
+        {
+          "id": "36",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Pastatykite kojas ant grindų. Padėkite rankas antkad apsaugotumėte veidą ir galvą. Pasilenkite į priekį, kakta įsiremkite į kėdę, esančią priešais jus. Jeigu priešais nėra kėdės, visiškai prisilenkite prie kelių, rankomis  apglėbkite kojas, plaštakas laikykite po keliais.",
+          "pdfPages": [
+            43
+          ]
+        },
+        {
+          "id": "37",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Teisinga saugi kūno padėtis avarinio nusileidimo metu pavaizduota saugumo kortelėje, esančioje kėdės kišenėje priešais jus. Prašome paimti ją ir dar kartą susipažinti. Būkite tokioje padėtyje iki kol lėktuvas visiškai sustos. Evakuacijos atveju visus asmeninius daiktus palikite lėktuve.",
+          "pdfPages": [
+            43,
+            44
+          ]
+        },
+        {
+          "id": "38",
+          "language": "lt",
+          "kind": "text",
+          "aircraft": [],
+          "text": "Ponios ir Ponai, jeigu salone yra šių profesijų atstovai: ĮGULOS NARIAI, GAISRININKAI, POLICININKAI, KARIŠKIAI ARBA MEDIKAI, prašome juos kreiptis į orlaivio palydovus. Ačiū.",
+          "pdfPages": [
+            44
+          ]
+        }
+      ],
+      "requiresAircraft": true
+    }
+  ]
+}

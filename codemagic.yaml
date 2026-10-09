@@ -1,22 +1,52 @@
 workflows:
   raido-ios-unsigned:
-    name: RAIDO Roster unsigned IPA
+    name: RAIDO Roster 2.26.1 unsigned IPA
     instance_type: mac_mini_m2
     max_build_duration: 20
     working_directory: RAIDORoster-Web2IPA
     environment:
       xcode: 26.5
+    triggering:
+      events:
+        - push
+        - pull_request
+      branch_patterns:
+        - pattern: 'codex/getjet-fleet-reliability'
+          include: true
+          source: true
+      cancel_previous_builds: true
     scripts:
       - name: Show Xcode version
         script: xcodebuild -version
+      - name: Run regression checks
+        script: |
+          set -euo pipefail
+          python3 -m unittest discover -s ../tests -p 'test_*.py'
+          swiftc RAIDORoster/FlightSensorPolicy.swift ../tests/FlightSensorPolicyChecks.swift -o /tmp/flight-sensor-checks
+          /tmp/flight-sensor-checks
+          swiftc RAIDORoster/FleetTrackingPolicy.swift ../tests/FleetTrackingPolicyChecks.swift -o /tmp/fleet-policy-checks
+          /tmp/fleet-policy-checks
+          swiftc RAIDORoster/AnnouncementModels.swift ../tests/AnnouncementChecks.swift -o /tmp/announcement-checks
+          /tmp/announcement-checks RAIDORoster/GetJetAnnouncements.json
+          swiftc RAIDORoster/EarningsModels.swift ../tests/EarningsChecks.swift -o /tmp/earnings-checks
+          /tmp/earnings-checks
+          swiftc RAIDORoster/EarningsModels.swift RAIDORoster/PayProfileModels.swift ../tests/PayProfileChecks.swift -o /tmp/pay-profile-checks
+          /tmp/pay-profile-checks
+          swiftc RAIDORoster/CrewDocumentVault.swift ../tests/CrewDocumentChecks.swift -o /tmp/crew-document-checks
+          /tmp/crew-document-checks
       - name: Build unsigned IPA
         script: |
+          set -euo pipefail
           chmod +x build-unsigned-ipa.sh
-          ./build-unsigned-ipa.sh
+          ./build-unsigned-ipa.sh 2>&1 | tee xcode-build.log
       - name: Package IPA for iPhone download
         script: |
-          rm -f RAIDORoster-V2.19.5-unsigned.zip
-          /usr/bin/zip -j RAIDORoster-V2.19.5-unsigned.zip RAIDORoster-unsigned.ipa
+          set -euo pipefail
+          rm -f RAIDO-2.26.1-fleet-responsiveness-IPA.zip
+          /usr/bin/zip -j RAIDO-2.26.1-fleet-responsiveness-IPA.zip RAIDORoster-unsigned.ipa
+          python3 ../tools/verify_raido_artifacts.py
     artifacts:
       - RAIDORoster-unsigned.ipa
-      - RAIDORoster-V2.19.5-unsigned.zip
+      - RAIDO-2.26.1-fleet-responsiveness-IPA.zip
+      - artifact-verification.json
+      - xcode-build.log
