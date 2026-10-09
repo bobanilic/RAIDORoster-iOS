@@ -3221,10 +3221,10 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         storageUnlockObserver = NotificationCenter.default.addObserver(forName: UIApplication.protectedDataDidBecomeAvailableNotification,
             object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in
-                guard let self, storageRestorationDeferred else { return }
-                restoreSession(now: Date())
-                resumeRestoredSession(now: Date())
-                migrateLegacyTrails()
+                guard let self, self.storageRestorationDeferred else { return }
+                self.restoreSession(now: Date())
+                self.resumeRestoredSession(now: Date())
+                self.migrateLegacyTrails()
             }
         }
         Task { @MainActor [weak self] in self?.resumeRestoredSession(now: Date()) }
