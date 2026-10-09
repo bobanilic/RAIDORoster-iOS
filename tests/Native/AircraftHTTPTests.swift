@@ -2,8 +2,8 @@ import XCTest
 @testable import RAIDORoster
 
 final class AircraftHTTPTests: XCTestCase {
-    private func session(status: Int = 200, headers: [String: String] = [:], failure: URLError.Code? = nil) -> URLSession {
-        AircraftURLProtocol.reset(status: status, headers: headers, failure: failure)
+    private func session(status: Int = 200, headers: [String: String] = [:], failure: URLError.Code? = nil, payloadSize: Int = 2) -> URLSession {
+        AircraftURLProtocol.reset(status: status, headers: headers, failure: failure, payloadSize: payloadSize)
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [AircraftURLProtocol.self]
         return URLSession(configuration: config)
@@ -36,6 +36,16 @@ final class AircraftHTTPTests: XCTestCase {
         XCTAssertEqual(AircraftURLProtocol.starts.count, 1)
         _ = try await client.data(for: request(), session: session, cacheSeconds: 0)
         XCTAssertEqual(AircraftURLProtocol.starts.count, 2)
+    }
+    func testCacheEvictsToRespectMemoryBudget() async throws {
+        let session = session(payloadSize: 1_500_000); defer { session.invalidateAndCancel() }
+        let client = AircraftHTTPClient(spacing: 0)
+        for index in 0..<4 { _ = try await client.data(for: request("large-\(index)"), session: session) }
+        XCTAssertEqual(AircraftURLProtocol.starts.count, 4)
+        _ = try await client.data(for: request("large-3"), session: session)
+        XCTAssertEqual(AircraftURLProtocol.starts.count, 4, "Recent entries remain cached")
+        _ = try await client.data(for: request("large-0"), session: session)
+        XCTAssertEqual(AircraftURLProtocol.starts.count, 5, "Old entries are evicted before total data exceeds 4 MiB")
     }
     func testPostBodiesAreSeparateCacheEntries() async throws {
         let session = session(); defer { session.invalidateAndCancel() }
@@ -99,20 +109,21 @@ private final class AircraftURLProtocol: URLProtocol, @unchecked Sendable {
     private static var status = 200
     private static var headers: [String: String] = [:]
     private static var failure: URLError.Code?
+    private static var payloadSize = 2
     static var starts: [Date] { lock.lock(); defer { lock.unlock() }; return times }
-    static func reset(status: Int, headers: [String: String], failure: URLError.Code?) {
+    static func reset(status: Int, headers: [String: String], failure: URLError.Code?, payloadSize: Int) {
         lock.lock(); defer { lock.unlock() }
-        times = []; self.status = status; self.headers = headers; self.failure = failure
+        times = []; self.status = status; self.headers = headers; self.failure = failure; self.payloadSize = payloadSize
     }
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         Self.lock.lock(); Self.times.append(Date())
-        let code = Self.status, headers = Self.headers, failure = Self.failure
+        let code = Self.status, headers = Self.headers, failure = Self.failure, size = Self.payloadSize
         Self.lock.unlock()
         if let failure { client?.urlProtocol(self, didFailWithError: URLError(failure)); return }
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: code, httpVersion: "HTTP/1.1", headerFields: headers)!, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data("{}".utf8))
+        client?.urlProtocol(self, didLoad: Data(repeating: 32, count: size))
         client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() { }

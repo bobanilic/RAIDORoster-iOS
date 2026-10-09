@@ -79,7 +79,8 @@ actor AircraftHTTPClient {
             let value = Response(data: bytes, http: http, receivedAt: now)
             if cacheEnabled, cacheSeconds > 0, bytes.count <= 2 * 1_024 * 1_024 {
                 cache = cache.filter { $0.value.expiresAt > now }
-                if cache.count >= 128, let oldest = cache.min(by: { $0.value.response.receivedAt < $1.value.response.receivedAt })?.key {
+                while cache.count >= 128 || cache.values.reduce(0, { $0 + $1.response.data.count }) + bytes.count > 4 * 1_024 * 1_024 {
+                    guard let oldest = cache.min(by: { $0.value.response.receivedAt < $1.value.response.receivedAt })?.key else { break }
                     cache.removeValue(forKey: oldest)
                 }
                 cache[key] = Entry(response: value, expiresAt: now.addingTimeInterval(cacheSeconds))

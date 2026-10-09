@@ -7,8 +7,8 @@ is cooperative during pacing and URLSession requests. A late parallel success
 cannot clear a newer rate-limit cooldown.
 
 ADS-B responses are cached in memory for 10 seconds, route responses for 60
-seconds and photo metadata for one hour, with at most 128 entries and a 2 MiB
-per-entry limit. Each entry retains its original receipt time. Existing Fleet
+seconds and photo metadata for one hour, with at most 128 entries, a 2 MiB
+per-entry limit and a 4 MiB total data budget. Each entry retains its original receipt time. Existing Fleet
 observations remain visible through outages with their original age. No new
 background polling is introduced.
 
