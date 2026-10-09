@@ -19,7 +19,8 @@ final class ProtectedStorageTests: XCTestCase {
         XCTAssertEqual(object["schemaVersion"] as? Int, 1)
         XCTAssertNotNil(object["savedAt"])
         XCTAssertEqual(try file.url.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true)
-        #if os(iOS)
+        // Simulator does not expose device Data Protection attributes.
+        #if os(iOS) && !targetEnvironment(simulator)
         let protection = try FileManager.default.attributesOfItem(atPath: file.url.path)[.protectionKey]
         XCTAssertEqual((protection as? FileProtectionType)?.rawValue ?? (protection as? String), FileProtectionType.completeUntilFirstUserAuthentication.rawValue)
         #endif
