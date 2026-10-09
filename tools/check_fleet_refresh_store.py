@@ -14,6 +14,7 @@ with tempfile.TemporaryDirectory(prefix='fleet-store-') as directory:
                        (root / 'tests/FleetStoreChecks.swift.inc').read_text())
     executable = Path(directory) / 'checks'
     subprocess.run(['swiftc', str(root / 'RAIDORoster-Web2IPA/RAIDORoster/FleetTrackingPolicy.swift'),
-                    str(root / 'RAIDORoster-Web2IPA/RAIDORoster/FleetRefreshPolicy.swift'), str(fixture),
+                    str(root / 'RAIDORoster-Web2IPA/RAIDORoster/FleetRefreshPolicy.swift'),
+                    str(root / 'RAIDORoster-Web2IPA/RAIDORoster/AircraftHTTPClient.swift'), str(fixture),
                     '-o', str(executable)], check=True)
     subprocess.run([str(executable)], check=True, timeout=20)

@@ -2191,7 +2191,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     private var networkTrackDegrees: Double?
     private var networkObservationAt: Date?
     private var hybridTask: Task<Void, Never>?
-    private var networkRequestTask: Task<(Data, URLResponse), Error>?
+    private var networkRequestTask: Task<AircraftHTTPClient.Response, Error>?
     private var lastFusedTrailAt: Date?
     private enum CompanionPhase: String, Codable { case parked, armed, groundCandidate, taxiOut, takeoffRoll, airborne, descent, taxiIn, complete }
     private var companionPhase: CompanionPhase = .parked
@@ -2478,14 +2478,15 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("RAIDORoster/2.23", forHTTPHeaderField: "User-Agent")
         do {
-            let requestTask = Task { try await URLSession.shared.data(for: request) }
+            let requestTask = Task { try await AircraftHTTPClient.shared.data(for: request) }
             networkRequestTask = requestTask
             defer { networkRequestTask = nil }
-            let (data, response) = try await withTaskCancellationHandler {
+            let receipt = try await withTaskCancellationHandler {
                 try await requestTask.value
             } onCancel: { requestTask.cancel() }
-            guard powerResources.network, !Task.isCancelled, let http = response as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode),
+            let data = receipt.data
+            guard powerResources.network, !Task.isCancelled,
+                  (200..<300).contains(receipt.http.statusCode),
                   let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let aircraft = (root["ac"] as? [[String: Any]])?.first,
                   let lat = aircraft["lat"] as? Double,
@@ -2502,7 +2503,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
             } else {
                 networkAltitudeMeters = nil
             }
-            networkObservationAt = Date().addingTimeInterval(-seen)
+            networkObservationAt = receipt.receivedAt.addingTimeInterval(-seen)
             return true
         } catch {
             return false
@@ -6619,10 +6620,10 @@ private final class FleetLiveStore: ObservableObject {
     private let historyCacheKey = "RAIDORoster.FleetHistory.V2"
     private let maximumHistoryPerAircraft = 720
     private var retryAfter: Date?
-    private var providerRetryAfter: [String: Date] = [:]
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
+    private let httpClient: AircraftHTTPClient
     private let session: URLSession
     private static func makeSession() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
@@ -6638,7 +6639,8 @@ private final class FleetLiveStore: ObservableObject {
     private let cacheLoad: Task<([FleetLiveSnapshot], [String: [FleetTrackObservation]]), Never>
     private let cacheWriter = FleetCacheWriter()
 
-    init(session: URLSession? = nil) {
+    init(session: URLSession? = nil, httpClient: AircraftHTTPClient = .shared) {
+        self.httpClient = httpClient
         self.session = session ?? Self.makeSession()
         cacheLoad = Task.detached(priority: .utility) {
             let defaults = UserDefaults.standard
@@ -6932,8 +6934,6 @@ private final class FleetLiveStore: ObservableObject {
 
     private func fetchAircraft(_ registration: String, expectedHex: String?,
                                provider: FleetProviderSpec) async -> FleetProviderFetchResult {
-        if let retry = providerRetryAfter[provider.name], Date() < retry { return .failed }
-
         let segment = expectedHex == nil ? provider.registrationPath : provider.hexPath
         let identity = expectedHex ?? registration
         guard let encoded = identity.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
@@ -6945,14 +6945,8 @@ private final class FleetLiveStore: ObservableObject {
         request.setValue("RAIDORoster/2.23.0", forHTTPHeaderField: "User-Agent")
 
         do {
-            let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse else { return .failed }
-            if http.statusCode == 429 {
-                let delay = FleetTrackingPolicy.retryDelay(http.value(forHTTPHeaderField: "Retry-After"), now: Date())
-                providerRetryAfter[provider.name] = Date().addingTimeInterval(delay)
-                return .failed
-            }
-            guard (200..<300).contains(http.statusCode) else { return .failed }
+            let receipt = try await httpClient.data(for: request, session: session)
+            let data = receipt.data
 
             let result = try await Task.detached { try JSONDecoder().decode(ADSBLOLResponse.self, from: data) }.value
             guard !result.ac.isEmpty else { return .empty }
@@ -6961,7 +6955,7 @@ private final class FleetLiveStore: ObservableObject {
                                             requested: registration, expectedHex: expectedHex)
             }) else { return .failed }
 
-            let receivedAt = Date()
+            let receivedAt = receipt.receivedAt
             let referenceAt = FleetTrackingPolicy.sourceDate(epoch: result.now, receivedAt: receivedAt)
             let hasPosition = FleetTrackingPolicy.validCoordinate(latitude: aircraft.lat, longitude: aircraft.lon)
             let snapshot = FleetLiveSnapshot(
@@ -7009,9 +7003,8 @@ private final class FleetLiveStore: ObservableObject {
         request.setValue("RAIDORoster/2.17", forHTTPHeaderField: "User-Agent")
         request.httpBody = try encoder.encode(body)
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode) else { return [:] }
+        let receipt = try await httpClient.data(for: request, session: session, cacheSeconds: 60)
+        let data = receipt.data
 
         let results = try decoder.decode([ADSBLOLRouteResult].self, from: data)
         var byCallsign: [String: String] = [:]
@@ -7603,10 +7596,9 @@ private final class FleetAircraftPhotoStore: ObservableObject {
         request.timeoutInterval = 10
         request.setValue("RAIDORoster/2.23.0", forHTTPHeaderField: "User-Agent")
 
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        guard let receipt = try? await AircraftHTTPClient.shared.data(for: request, cacheSeconds: 3_600),
+              !Task.isCancelled,
+              let root = try? JSONSerialization.jsonObject(with: receipt.data) as? [String: Any],
               let photos = root["photos"] as? [[String: Any]],
               let first = photos.first,
               let thumbnail = first["thumbnail"] as? [String: Any],
@@ -7684,7 +7676,7 @@ private struct FleetAircraftDetailView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.white.opacity(0.85))
                             if let photographer = photo.photographer {
-                                Text("Photo: \(photographer) • Planespotters.net")
+                                Text("© \(photographer) • Planespotters.net")
                                     .font(.caption2)
                                     .foregroundStyle(.white.opacity(0.72))
                             }

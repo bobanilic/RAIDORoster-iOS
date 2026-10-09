@@ -3,7 +3,7 @@ workflows:
   raido-ios-unsigned:
     name: RAIDO validated unsigned IPA
     instance_type: mac_mini_m2
-    max_build_duration: 40
+    max_build_duration: 60
     environment:
       xcode: 16.4
     triggering:
@@ -19,6 +19,13 @@ workflows:
     scripts:
       - name: Check, build and verify committed source
         script: bash tools/ci.sh all
+      - name: Native XCTest
+        script: bash tools/ci.sh native-tests
+      - name: Theme and map simulator checks
+        script: bash tools/ci.sh preview
     artifacts:
       - RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
       - RAIDORoster-Web2IPA/artifact-verification.json
+      - RAIDORoster-Web2IPA/build/NativeTests.xcresult
+      - /tmp/raido-*.png
+      - /tmp/raido-*.log
