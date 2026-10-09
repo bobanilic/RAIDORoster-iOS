@@ -1810,17 +1810,16 @@ final class RosterStore: ObservableObject {
     private var changeStateURL: URL { storageFolderURL.appendingPathComponent("roster-changes.json") }
 
     private func saveChangeState() {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
         let bundle = RosterChangeBundle(capturedAt: Date(), changes: latestChanges)
-        if let data = try? encoder.encode(bundle) { try? data.write(to: changeStateURL, options: .atomic) }
+        do { try ProtectedJSONFile<RosterChangeBundle>(url: changeStateURL).save(bundle) }
+        catch { DeviceCacheStorage.report("Save roster changes", error: error) }
     }
 
     private func loadChangeState() {
-        guard let data = try? Data(contentsOf: changeStateURL) else { return }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        guard let bundle = try? decoder.decode(RosterChangeBundle.self, from: data), !bundle.changes.isEmpty else { return }
+        let loaded: RosterChangeBundle?
+        do { loaded = try ProtectedJSONFile<RosterChangeBundle>(url: changeStateURL).load() }
+        catch { DeviceCacheStorage.report("Load roster changes", error: error); return }
+        guard let bundle = loaded, !bundle.changes.isEmpty else { return }
         let migrated = bundle.changes.map { change in
             RosterDayChange(
                 dateISO: change.dateISO,
@@ -1867,44 +1866,36 @@ final class RosterStore: ObservableObject {
     }
 
     private func saveMonthSnapshots() {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(monthSnapshots) {
-            try? data.write(to: monthCacheURL, options: .atomic)
-        }
+        do { try ProtectedJSONFile<[String: RosterSnapshot]>(url: monthCacheURL).save(monthSnapshots) }
+        catch { DeviceCacheStorage.report("Save roster months", error: error) }
     }
 
     private func save(_ snapshot: RosterSnapshot) {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(snapshot) {
-            try? data.write(to: cacheURL, options: .atomic)
-        }
+        do { try ProtectedJSONFile<RosterSnapshot>(url: cacheURL).save(snapshot) }
+        catch { DeviceCacheStorage.report("Save roster", error: error) }
     }
 
     private func load() {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        if let data = try? Data(contentsOf: monthCacheURL),
-           let months = try? decoder.decode([String: RosterSnapshot].self, from: data) {
-            monthSnapshots = months
-        }
-
-        if let data = try? Data(contentsOf: cacheURL),
-           let latest = try? decoder.decode(RosterSnapshot.self, from: data) {
-            snapshot = latest
-            let key = monthKey(for: latest)
-            monthSnapshots[key] = latest
-            selectedRosterMonthKey = key
-            saveMonthSnapshots()
-        } else if let key = monthSnapshots.keys.sorted().last {
+        var archiveReadable = true
+        do { monthSnapshots = try ProtectedJSONFile<[String: RosterSnapshot]>(url: monthCacheURL).load() ?? [:] }
+        catch { archiveReadable = false; DeviceCacheStorage.report("Load roster months", error: error) }
+        do {
+            if let latest = try ProtectedJSONFile<RosterSnapshot>(url: cacheURL).load() {
+                snapshot = latest
+                let key = monthKey(for: latest)
+                monthSnapshots[key] = latest
+                selectedRosterMonthKey = key
+            }
+        } catch { DeviceCacheStorage.report("Load roster", error: error) }
+        if snapshot == nil, let key = monthSnapshots.keys.sorted().last {
             snapshot = monthSnapshots[key]
             selectedRosterMonthKey = key
         }
-            normalizeMonthArchive()
-        saveMonthSnapshots()
-}
+        normalizeMonthArchive()
+        // An unreadable archive must never be replaced with a partial or empty one.
+        if archiveReadable { saveMonthSnapshots() }
+    }
+
 }
 
 @MainActor
@@ -3197,6 +3188,7 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     }
     private var trailPersistenceKey: String?
     private var lastTrailPersistAt: Date?
+    private var legacyTrailMigrationStarted = false
     private let trailStoragePrefix = "RAIDORoster.FlightTrail.V1."
 
     private let maximumNetworkObservationAge: TimeInterval = 90
@@ -3225,6 +3217,16 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         authorizationStatus = manager.authorizationStatus
         refreshLocationServicesAvailability()
         restoreSession(now: Date())
+        migrateLegacyTrails()
+        storageUnlockObserver = NotificationCenter.default.addObserver(forName: UIApplication.protectedDataDidBecomeAvailableNotification,
+            object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, storageRestorationDeferred else { return }
+                restoreSession(now: Date())
+                resumeRestoredSession(now: Date())
+                migrateLegacyTrails()
+            }
+        }
         Task { @MainActor [weak self] in self?.resumeRestoredSession(now: Date()) }
     }
 
@@ -3298,29 +3300,55 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
         guard trailPersistenceKey != key else { return }
         trailPersistenceKey = key
         loadPersistedTrail()
+        migrateLegacyTrails()
+    }
+
+    private func migrateLegacyTrails() {
+        guard !legacyTrailMigrationStarted else { return }
+        legacyTrailMigrationStarted = true
+        let keys = UserDefaults.standard.dictionaryRepresentation().keys.filter { $0.hasPrefix(trailStoragePrefix) }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            for key in keys {
+                do {
+                    let file: ProtectedJSONFile<[PersistedTrailPoint]> = try DeviceCacheStorage.file(DeviceCacheStorage.trailName(key), folder: "Trails")
+                    _ = try file.loadMigrating(key: key)
+                } catch {
+                    DeviceCacheStorage.report("Migrate legacy trail", error: error)
+                    legacyTrailMigrationStarted = false
+                    return
+                }
+                await Task.yield()
+            }
+            do {
+                try DeviceCacheStorage.removeExpiredTrails(in: DeviceCacheStorage.folder("Trails"),
+                    keeping: trailPersistenceKey.map(DeviceCacheStorage.trailName))
+            } catch { DeviceCacheStorage.report("Expire flight trails", error: error) }
+        }
     }
 
     private func loadPersistedTrail() {
-        guard let key = trailPersistenceKey,
-              let data = UserDefaults.standard.data(forKey: key),
-              let points = try? JSONDecoder().decode([PersistedTrailPoint].self, from: data) else {
-            fusedTrail = []
-            return
-        }
-        fusedTrail = points.suffix(1_500).map {
-            CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
-        }
+        guard let key = trailPersistenceKey else { fusedTrail = []; return }
+        do {
+            let file: ProtectedJSONFile<[PersistedTrailPoint]> = try DeviceCacheStorage.file(DeviceCacheStorage.trailName(key), folder: "Trails")
+            let points = try file.loadMigrating(key: key) ?? []
+            fusedTrail = points.suffix(1_500).filter {
+                (-90...90).contains($0.latitude) && (-180...180).contains($0.longitude)
+            }.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+            try DeviceCacheStorage.removeExpiredTrails(in: file.url.deletingLastPathComponent(), keeping: file.url.lastPathComponent)
+        } catch { DeviceCacheStorage.report("Load flight trail", error: error) }
     }
 
     private func persistFusedTrail(now: Date, force: Bool = false) {
         guard let key = trailPersistenceKey, !fusedTrail.isEmpty else { return }
         if !force, let last = lastTrailPersistAt, now.timeIntervalSince(last) < 30 { return }
-        let points = fusedTrail.suffix(1_500).map {
-            PersistedTrailPoint(latitude: $0.latitude, longitude: $0.longitude)
-        }
-        guard let data = try? JSONEncoder().encode(points) else { return }
-        UserDefaults.standard.set(data, forKey: key)
-        lastTrailPersistAt = now
+        let points = fusedTrail.suffix(1_500).map { PersistedTrailPoint(latitude: $0.latitude, longitude: $0.longitude) }
+        do {
+            let file: ProtectedJSONFile<[PersistedTrailPoint]> = try DeviceCacheStorage.file(DeviceCacheStorage.trailName(key), folder: "Trails")
+            try file.save(points, now: now)
+            UserDefaults.standard.removeObject(forKey: key)
+            lastTrailPersistAt = now
+        } catch { DeviceCacheStorage.report("Save flight trail", error: error) }
     }
 
     func configureAircraftTracking(registration: String?) {
@@ -4136,8 +4164,11 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
     private var lastSessionPersistAt: Date?
     private var lastPersistedPhase: CompanionPhase?
     private var resumeAfterRestore = false
+    private var storageRestorationDeferred = false
+    private var storageUnlockObserver: NSObjectProtocol?
 
     private func persistSession(now: Date, force: Bool = false) {
+        guard !storageRestorationDeferred else { return }
         guard force || lastPersistedPhase != companionPhase || lastSessionPersistAt.map({ now.timeIntervalSince($0) >= 15 }) ?? true else { return }
         let state = PersistedSession(key: automaticKey, registration: trackedRegistration, routeText: activeRouteText,
             phase: companionPhase, tracking: isTracking, automatic: automaticMonitoring,
@@ -4147,17 +4178,30 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
             trailKey: trailPersistenceKey, taxiOut: taxiOutStartedAt, takeoff: airborneAt,
             landing: landedAt, sensorLanding: landedUsingSensors, progress: lastMeasuredProgress,
             progressAt: lastMeasuredProgressAt, savedAt: now)
-        if let data = try? JSONEncoder().encode(state) { UserDefaults.standard.set(data, forKey: sessionStorageKey) }
-        lastSessionPersistAt = now; lastPersistedPhase = companionPhase
+        do {
+            let file: ProtectedJSONFile<PersistedSession> = try DeviceCacheStorage.file("session.json")
+            try file.save(state, now: now)
+            UserDefaults.standard.removeObject(forKey: sessionStorageKey)
+            lastSessionPersistAt = now; lastPersistedPhase = companionPhase
+        } catch { DeviceCacheStorage.report("Save flight session", error: error) }
     }
 
     private func restoreSession(now: Date) {
-        if let data = UserDefaults.standard.data(forKey: completedStorageKey),
-           let values = try? JSONDecoder().decode([String: Date].self, from: data) {
-            completedSectors = values.filter { (0...7 * 24 * 60 * 60).contains(now.timeIntervalSince($0.value)) }
+        let saved: PersistedSession?
+        do {
+            let completed: ProtectedJSONFile<[String: Date]> = try DeviceCacheStorage.file("completed.json")
+            if let values = try completed.loadMigrating(key: completedStorageKey) {
+                completedSectors = values.filter { (0...7 * 24 * 60 * 60).contains(now.timeIntervalSince($0.value)) }
+            }
+            let session: ProtectedJSONFile<PersistedSession> = try DeviceCacheStorage.file("session.json")
+            saved = try session.loadMigrating(key: sessionStorageKey)
+        } catch {
+            storageRestorationDeferred = true
+            DeviceCacheStorage.report("Restore flight session", error: error)
+            return
         }
-        guard let data = UserDefaults.standard.data(forKey: sessionStorageKey),
-              let state = try? JSONDecoder().decode(PersistedSession.self, from: data),
+        storageRestorationDeferred = false
+        guard let state = saved,
               (0...18 * 60 * 60).contains(now.timeIntervalSince(state.savedAt)),
               state.key.map({ completedSectors[$0] == nil }) ?? true,
               state.tracking, state.phase != .complete,
@@ -4202,7 +4246,11 @@ private final class TodayLiveFlightLocationManager: NSObject, ObservableObject, 
             if let key = automaticKey, completedSectors[key] == nil {
                 completedSectors[key] = now
                 completedSectors = completedSectors.filter { (0...7 * 24 * 60 * 60).contains(now.timeIntervalSince($0.value)) }
-                if let data = try? JSONEncoder().encode(completedSectors) { UserDefaults.standard.set(data, forKey: completedStorageKey) }
+                do {
+                    let file: ProtectedJSONFile<[String: Date]> = try DeviceCacheStorage.file("completed.json")
+                    try file.save(completedSectors, now: now)
+                    UserDefaults.standard.removeObject(forKey: completedStorageKey)
+                } catch { DeviceCacheStorage.report("Save completed sectors", error: error) }
             }
             if isTracking { stop() }
             return
