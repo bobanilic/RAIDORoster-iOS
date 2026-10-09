@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = '3.1.0';
+  const VERSION = '3.1.1';
   if (window !== window.top) return;
   const SCHEMA_VERSION = 1;
   if (window.RAIDOPlus?.version === VERSION) {
@@ -30,8 +30,22 @@
     return (h >>> 0).toString(36);
   }
 
+  // Detached HTML has no layout: textContent joins neighbouring blocks/cells.
+  // Preserve those boundaries without inserting spaces inside inline text.
+  function readableText(node, detached = false) {
+    if (!node) return '';
+    if (!detached && node.innerText) return node.innerText;
+    const copy = node.cloneNode(true);
+    copy.querySelectorAll('script,style,noscript,template').forEach(el => el.remove());
+    copy.querySelectorAll('br,p,div,h1,h2,h3,h4,h5,h6,table,thead,tbody,tfoot,tr,td,th,li,ul,ol,section,article,header,footer,nav,dl,dt,dd').forEach(el => {
+      el.before(node.ownerDocument.createTextNode(' '));
+      el.after(node.ownerDocument.createTextNode(' '));
+    });
+    return copy.textContent || '';
+  }
+
   function monthlyBLH(root = document) {
-    const text = compact(root.body?.innerText || root.body?.textContent || '').slice(0, 120000);
+    const text = compact(readableText(root.body, root !== document)).slice(0, 120000);
     // N-OC renders the monthly summary as "BLH 70:48".
     const match = text.match(/\bBLH\s+(\d{1,3}:\d{2})\b/i);
     if (!match) return '';
@@ -43,7 +57,7 @@
   }
 
   function pageMonth(root = document) {
-    const text = upper(root.body?.innerText || root.body?.textContent || '').slice(0, 120000);
+    const text = upper(readableText(root.body, root !== document)).slice(0, 120000);
     const m = text.match(/\b(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+(20\d{2})\b/);
     if (!m) return null;
     const month = MONTH_NAMES.indexOf(m[1]) + 1;
@@ -389,10 +403,11 @@
     const bySignature = new Map();
 
     activityTables(root).forEach((table, sourceIndex) => {
-      const representations = Array.from(new Set([
-        compact(table.innerText || ''),
-        compact(table.textContent || '')
-      ].filter(Boolean)));
+      const representations = root !== document ? [compact(readableText(table, true))]
+        : Array.from(new Set([
+          compact(table.innerText || ''),
+          compact(table.textContent || '')
+        ].filter(Boolean)));
 
       representations.forEach((text, representationIndex) => {
         splitLogicalActivities(text).forEach((logical, logicalIndex) => {

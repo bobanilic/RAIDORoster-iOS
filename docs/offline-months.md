@@ -38,3 +38,9 @@ An actual WebKit fixture exercises fetched HTML with the real extractor and
 checks that fetched scripts do not run and the visible month stays unchanged.
 Authenticated server month coverage and a cold-start offline check require a
 device test with the owner's login.
+
+Detached month HTML has no rendered layout. The extractor now preserves block
+and table-cell boundaries when reading text, instead of joining a heading such
+as `July 2026` to the following `BLH` label. Scripts/styles are excluded from
+that text. WebKit regression fixtures cover September, July and June with
+adjacent blocks/cells, month matching, BLH, routes and UTC departure times.
