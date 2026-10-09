@@ -1,0 +1,13 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.build/
+DerivedData/
+**/xcuserdata/
+*.xcuserstate
+RAIDORoster-Web2IPA/build/
+RAIDORoster-Web2IPA/Payload/
+RAIDORoster-Web2IPA/*.ipa
+RAIDORoster-Web2IPA/*-IPA.zip
+RAIDORoster-Web2IPA/artifact-verification.json
+RAIDORoster-Web2IPA/xcode-build.log

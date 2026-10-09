@@ -17,7 +17,7 @@ swiftc "$ROOT/RAIDORoster/FlightTrackingStatus.swift" "$ROOT/../tests/FlightTrac
 swiftc "$ROOT/RAIDORoster/MapPresentationPolicy.swift" "$ROOT/../tests/MapPresentationChecks.swift" -o "$CHECKS/map-presentation"
 "$CHECKS/map-presentation" "$ROOT/RAIDORoster/OfflinePlaceLabels.json"
 
-# The patch chain changes these models. Check the exact generated sources too.
+# Check the exact committed application models.
 run_check() {
   local name="$1"
   shift
@@ -40,9 +40,9 @@ python3 - "$CHECKS" <<'PY'
 import json, sys
 from pathlib import Path
 root = Path(sys.argv[1])
-legacy = json.loads((root / 'legacy.json').read_text())
+legacy = json.loads((root.parents[2] / 'tests/fixtures/legacy-earnings.json').read_text())
 profile = json.loads((root / 'profile.json').read_text())
 if legacy != profile:
-    raise SystemExit('FAIL: generated default Pay Profile differs from pre-profile earnings')
+    raise SystemExit('FAIL: default Pay Profile differs from pre-profile earnings')
 print(f'Passed legacy/default Pay Profile parity: {len(legacy)} synthetic scenarios')
 PY

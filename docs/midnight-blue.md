@@ -1,3 +1,5 @@
+> Historical feature notes. The app now builds committed source directly; see [source-build.md](source-build.md).
+
 # Midnight Blue · 2.20.8
 
 Implements the selected Midnight Blue concept with native SwiftUI components.

@@ -1,3 +1,5 @@
+> Historical feature notes. The app now builds committed source directly; see [source-build.md](source-build.md).
+
 # Flight Companion 2.26.0
 
 The build applies `v2226_sensor_driver.py` after v2225. The patch reads the

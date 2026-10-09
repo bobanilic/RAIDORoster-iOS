@@ -1,3 +1,0 @@
-version=2.19.7
-run_id=37871024961
-commit=c17482e18c4a395f45eba40e18e04a3a45ee3dd5

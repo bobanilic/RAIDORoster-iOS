@@ -60,10 +60,16 @@ struct EarningsSummary: Codable, Equatable {
     var lineCheckCents = 0
     var adjustmentCents = 0
     var reimbursementCents = 0
+    // Optional preserves decoding of payment snapshots saved before Pay Profile.
+    var basicSalaryCents: Int?
+    var dutyDayCents: Int?
     var missingFlights = 0
     var reviewCount = 0
     var unconfirmedFlights = 0
-    var totalCents: Int { flightCents + perDiemCents + lineCheckCents + adjustmentCents + reimbursementCents }
+    var totalCents: Int {
+        flightCents + perDiemCents + lineCheckCents + adjustmentCents + reimbursementCents
+            + (basicSalaryCents ?? 0) + (dutyDayCents ?? 0)
+    }
 }
 
 struct EarningsPayment: Codable {
@@ -127,6 +133,12 @@ enum EarningsMath {
         return NSDecimalNumber(decimal: decimal * 100).intValue
     }
     static func hours(_ minutes: Int) -> String { String(format: "%d:%02d", minutes / 60, minutes % 60) }
+    static func parseMonthlyBLH(_ text: String) -> Int? {
+        let pieces = text.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ":", omittingEmptySubsequences: false)
+        guard pieces.count == 2, pieces[0].allSatisfy(\.isNumber), pieces[1].count == 2,
+              let h = Int(pieces[0]), let m = Int(pieces[1]), h >= 0, h <= 300, m >= 0, m < 60 else { return nil }
+        return h * 60 + m
+    }
     static func parseHours(_ text: String) -> Int? {
         let pieces = text.split(separator: ":", omittingEmptySubsequences: false)
         guard pieces.count == 2, pieces[0].allSatisfy(\.isNumber), pieces[1].count == 2,
@@ -143,8 +155,9 @@ enum EarningsMath {
         guard b > a, let distance = utc.dateComponents([.day], from: a, to: b).day, distance <= 366 else { return [] }
         return (0...distance).compactMap { utc.date(byAdding: .day, value: $0, to: a).map(day) }
     }
-    static func summarize(month: String, flights: [EarningsFlight], record: EarningsMonth) -> EarningsSummary {
+    static func summarize(month: String, flights: [EarningsFlight], record: EarningsMonth, authoritativeBLHMinutes: Int? = nil, profile: EarningsPayProfile? = nil) -> EarningsSummary {
         var result = EarningsSummary()
+        let active = profile ?? .legacy(rates: record.rates, homeAirport: record.homeAirport)
         var minutesByRate: [Int: Int] = [:]
         var seen = Set<String>()
         for flight in flights where flight.day.hasPrefix(month + "-") && seen.insert(flight.id).inserted {
@@ -157,13 +170,23 @@ enum EarningsMath {
             if let actual { result.confirmedMinutes += actual } else { result.unconfirmedFlights += 1 }
             if let minutes = actual ?? flight.scheduledMinutes {
                 result.estimatedMinutes += minutes
-                minutesByRate[record.rates.hourly(edit?.role ?? .cc), default: 0] += minutes
+                minutesByRate[active.blockRate(edit?.role ?? active.defaultRole), default: 0] += minutes
             } else { result.missingFlights += 1 }
-            if edit?.lineCheck == true { result.lineCheckCents += record.rates.lineCheck }
+            if edit?.lineCheck == true { result.lineCheckCents += active.lineCheckCents }
         }
         result.reviewCount += record.flights.keys.filter { !seen.contains($0) }.count
-        result.flightCents = minutesByRate.reduce(0) { $0 + hourlyPay(minutes: $1.value, rate: $1.key) }
-        result.perDiemCents = record.perDiemDays.filter { $0.hasPrefix(month + "-") && date($0) != nil }.count * record.rates.perDiem
+        if let authoritativeBLHMinutes {
+            // RAIDO/N-OC monthly BLH is authoritative for CC block pay. Individual sector edits
+            // remain available for review/line-check metadata, but do not replace RAIDO's total.
+            result.estimatedMinutes = authoritativeBLHMinutes
+            result.flightCents = hourlyPay(minutes: authoritativeBLHMinutes, rate: active.blockRate(active.defaultRole))
+        } else {
+            result.flightCents = minutesByRate.reduce(0) { $0 + hourlyPay(minutes: $1.value, rate: $1.key) }
+        }
+        result.perDiemCents = record.perDiemDays.filter { $0.hasPrefix(month + "-") && date($0) != nil }.count * active.dailyAllowanceCents
+        result.basicSalaryCents = EarningsPayProfileEngine.basicSalary(active)
+        let flightDays = Set(flights.filter { $0.day.hasPrefix(month + "-") }.map(\.day)).count
+        result.dutyDayCents = EarningsPayProfileEngine.dutySupplement(flightDays: flightDays, profile: active)
         for adjustment in record.adjustments {
             if adjustment.kind == .reimbursement { result.reimbursementCents += adjustment.signedCents }
             else { result.adjustmentCents += adjustment.signedCents }
@@ -229,8 +252,9 @@ enum EarningsDailyPolicy {
         let count = EarningsMath.utc.dateComponents([.day], from: first, to: last).day ?? 0
         return (0...max(0, count)).compactMap { EarningsMath.utc.date(byAdding: .day, value: $0, to: first).map(EarningsMath.day) }
     }
-    static func lines(month: String, days: [EarningsRosterDay], events: [EarningsLocationEvent], record: EarningsMonth) -> [EarningsDailyLine] {
-        let home = airport(record.homeAirport ?? "BEG")
+    static func lines(month: String, days: [EarningsRosterDay], events: [EarningsLocationEvent], record: EarningsMonth, profile: EarningsPayProfile? = nil) -> [EarningsDailyLine] {
+        let active = profile ?? .legacy(rates: record.rates, homeAirport: record.homeAirport)
+        let home = airport(active.homeAirport)
         let sortedEvents = events.sorted { $0.order < $1.order }
         let grouped = Dictionary(grouping: days.filter { EarningsMath.date($0.day) != nil }, by: \.day)
         let allDays = Set(grouped.keys).union(record.perDiemDays).union((record.dailyOverrides ?? [:]).keys)
@@ -244,8 +268,11 @@ enum EarningsDailyPolicy {
             let reserve = !direct && !categories.isDisjoint(with: ["RES", "RESERVE"])
             let label = isFlight ? "FLIGHT" : isStandby ? "STANDBY" : isPositioning ? "POSITIONING" : categories.sorted().joined(separator: " / ")
 
-            // RES is never payable, including away from home and despite stale/manual paid dates.
-            if reserve { return EarningsDailyLine(day: day, category: "RES", paid: false, reason: "Reserve · unpaid", needsReview: false, reserveOnly: true) }
+            if reserve {
+                return EarningsDailyLine(day: day, category: "RES", paid: active.reserveDaily,
+                    reason: active.reserveDaily ? "Reserve · daily payment" : "Reserve · unpaid",
+                    needsReview: false, reserveOnly: true)
+            }
 
             // Explicit crew correction is authoritative for every non-RES day.
             if let override = record.dailyOverrides?[day] {
@@ -253,17 +280,21 @@ enum EarningsDailyPolicy {
             }
 
             if !categories.isDisjoint(with: ["DND", "VACATION", "LEAVE", "SICK", "SICKNESS"]) {
-                return EarningsDailyLine(day: day, category: label, paid: false, reason: "Unpaid absence", needsReview: false, reserveOnly: false)
+                return EarningsDailyLine(day: day, category: label, paid: active.absenceDaily,
+                    reason: active.absenceDaily ? "Absence · daily payment" : "Unpaid absence",
+                    needsReview: false, reserveOnly: false)
             }
 
-            // Payroll practice confirmed by the crew member: STB receives the EUR50 daily payment even at home base.
             if isStandby {
-                return EarningsDailyLine(day: day, category: "STANDBY", paid: true, reason: "Standby · daily payment", needsReview: false, reserveOnly: false)
+                return EarningsDailyLine(day: day, category: "STANDBY", paid: active.standbyDaily,
+                    reason: active.standbyDaily ? "Standby · daily payment" : "Standby · unpaid",
+                    needsReview: false, reserveOnly: false)
             }
 
-            // Positioning is treated as a paid operational day. It does not earn block-hour pay.
             if isPositioning {
-                return EarningsDailyLine(day: day, category: "POSITIONING", paid: true, reason: "Positioning · daily payment", needsReview: false, reserveOnly: false)
+                return EarningsDailyLine(day: day, category: "POSITIONING", paid: active.positioningDaily,
+                    reason: active.positioningDaily ? "Positioning · daily payment" : "Positioning · unpaid",
+                    needsReview: false, reserveOnly: false)
             }
 
             // Resolve whether the crew member was at home base or away. Same-day first-origin/last-destination
@@ -303,32 +334,36 @@ enum EarningsDailyPolicy {
             // FLIGHT at home base earns only block-hour pay. Any flight day away from home also earns the daily payment.
             if isFlight {
                 if away == true {
-                    return EarningsDailyLine(day: day, category: "FLIGHT", paid: true, reason: "Flight duty away from home · \(location ?? "away")", needsReview: false, reserveOnly: false)
+                    return EarningsDailyLine(day: day, category: "FLIGHT", paid: active.flightAwayDaily, reason: active.flightAwayDaily ? "Flight duty away from home · \(location ?? "away")" : "Away flight · daily payment disabled", needsReview: false, reserveOnly: false)
                 }
                 if away == false {
-                    return EarningsDailyLine(day: day, category: "FLIGHT", paid: false, reason: "Home-base flight duty · BLH only", needsReview: false, reserveOnly: false)
+                    return EarningsDailyLine(day: day, category: "FLIGHT", paid: active.flightHomeDaily, reason: active.flightHomeDaily ? "Home-base flight · daily payment" : "Home-base flight duty · BLH only", needsReview: false, reserveOnly: false)
                 }
                 if record.perDiemDays.contains(day) {
-                    return EarningsDailyLine(day: day, category: "FLIGHT", paid: true, reason: "Confirmed away duty date", needsReview: false, reserveOnly: false)
+                    return EarningsDailyLine(day: day, category: "FLIGHT", paid: active.flightAwayDaily, reason: active.flightAwayDaily ? "Confirmed away duty date" : "Away flight · daily payment disabled", needsReview: false, reserveOnly: false)
                 }
                 return EarningsDailyLine(day: day, category: "FLIGHT", paid: false, reason: "Duty location unclear · review", needsReview: true, reserveOnly: false)
             }
 
             // OFF/other non-absence days receive per diem whenever the crew member remains outside home base.
             if away == true {
-                return EarningsDailyLine(day: day, category: label, paid: true, reason: "Away from home · \(location ?? "away")", needsReview: false, reserveOnly: false)
+                return EarningsDailyLine(day: day, category: label, paid: active.offAwayDaily, reason: active.offAwayDaily ? "Away from home · \(location ?? "away")" : "Away day · daily payment disabled", needsReview: false, reserveOnly: false)
             }
             if away == false {
                 return EarningsDailyLine(day: day, category: label, paid: false, reason: "At home · \(home ?? "home") · unpaid", needsReview: false, reserveOnly: false)
             }
             if record.perDiemDays.contains(day) {
-                return EarningsDailyLine(day: day, category: label, paid: true, reason: "Confirmed away date", needsReview: false, reserveOnly: false)
+                return EarningsDailyLine(day: day, category: label, paid: active.offAwayDaily, reason: active.offAwayDaily ? "Confirmed away date" : "Away day · daily payment disabled", needsReview: false, reserveOnly: false)
             }
             return EarningsDailyLine(day: day, category: label, paid: false, reason: "Location unclear · review", needsReview: true, reserveOnly: false)
         }
     }
-    static func recordForCalculation(_ record: EarningsMonth, lines: [EarningsDailyLine]) -> EarningsMonth {
+    static func recordForCalculation(_ record: EarningsMonth, lines: [EarningsDailyLine], profile: EarningsPayProfile? = nil) -> EarningsMonth {
         var result = record
+        let active = profile ?? .legacy(rates: record.rates, homeAirport: record.homeAirport)
+        result.rates = EarningsRates(cc: active.ccBlockRateCents, scc: active.sccBlockRateCents,
+                                     perDiem: active.dailyAllowanceCents, lineCheck: active.lineCheckCents)
+        result.homeAirport = active.homeAirport
         result.perDiemDays = Set(lines.filter(\.paid).map(\.day))
         if lines.contains(where: { $0.category == "STANDBY" && $0.paid }) {
             result.adjustments.removeAll { $0.kind == .standby }

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>RAIDORoster can add your roster duties to Calendar when you ask it to.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>RAIDORoster uses your location for Flight Companion position and automatic flight detection.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>RAIDORoster uses low-power background location near a rostered departure to arm Flight Companion automatically, then stops after the flight session.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>RAIDORoster uses Motion &amp; Fitness sensors for Flight Companion phase detection and flight-state diagnostics.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>RAIDORoster uses Face ID to unlock your private Crew Documents vault.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Scan paper documents into your private crew document storage.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+</dict>
+</plist>

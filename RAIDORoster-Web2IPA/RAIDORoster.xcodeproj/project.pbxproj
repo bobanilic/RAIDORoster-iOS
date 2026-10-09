@@ -10,6 +10,26 @@
 		A00000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* ContentView.swift */; };
 		A00000000000000000000003 /* RosterWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* RosterWebView.swift */; };
 		A00000000000000000000004 /* RosterEnhancements.js in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* RosterEnhancements.js */; };
+		A00000000000000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000007 /* Assets.xcassets */; };
+A19800000000000000000001 /* FleetTrackingPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19800000000000000000001 /* FleetTrackingPolicy.swift */; };
+A19900000000000000000001 /* AnnouncementModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000001 /* AnnouncementModels.swift */; };
+A19900000000000000000002 /* AnnouncementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000002 /* AnnouncementsView.swift */; };
+A19900000000000000000003 /* GetJetAnnouncements.json in Resources */ = {isa = PBXBuildFile; fileRef = B19900000000000000000003 /* GetJetAnnouncements.json */; };
+A22000000000000000000001 /* EarningsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22000000000000000000001 /* EarningsModels.swift */; };
+A22000000000000000000002 /* EarningsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22000000000000000000002 /* EarningsView.swift */; };
+A22100000000000000000001 /* CrewDocumentVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22100000000000000000001 /* CrewDocumentVault.swift */; };
+A22100000000000000000002 /* CrewDocumentServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22100000000000000000002 /* CrewDocumentServices.swift */; };
+A22100000000000000000003 /* CrewDocumentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22100000000000000000003 /* CrewDocumentsView.swift */; };
+A222000000000000000001 /* PayProfileModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B222000000000000000001 /* PayProfileModels.swift */; };
+		A22500000000000000000001 /* GlobalAirportIndex.json in Resources */ = {isa = PBXBuildFile; fileRef = B22500000000000000000001 /* GlobalAirportIndex.json */; };
+		A22600000000000000000001 /* FlightSensorPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22600000000000000000001 /* FlightSensorPolicy.swift */; };
+		A22700000000000000000001 /* FleetRefreshPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22700000000000000000001 /* FleetRefreshPolicy.swift */; };
+		A22800000000000000000001 /* AirportTimeZones.json in Resources */ = {isa = PBXBuildFile; fileRef = B22800000000000000000001 /* AirportTimeZones.json */; };
+		A22800000000000000000002 /* OfflineLand.json in Resources */ = {isa = PBXBuildFile; fileRef = B22800000000000000000002 /* OfflineLand.json */; };
+		A22900000000000000000001 /* AppearanceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22900000000000000000001 /* AppearanceModels.swift */; };
+		A22910000000000000000001 /* FlightTrackingStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22910000000000000000001 /* FlightTrackingStatus.swift */; };
+A22920000000000000000001 /* MapPresentationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22920000000000000000001 /* MapPresentationPolicy.swift */; };
+A22920000000000000000002 /* OfflinePlaceLabels.json in Resources */ = {isa = PBXBuildFile; fileRef = B22920000000000000000002 /* OfflinePlaceLabels.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -17,8 +37,29 @@
 		B00000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B00000000000000000000003 /* RosterWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RosterWebView.swift; sourceTree = "<group>"; };
 		B00000000000000000000004 /* RosterEnhancements.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = RosterEnhancements.js; sourceTree = "<group>"; };
+		B00000000000000000000007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B00000000000000000000005 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = SOURCE_ROOT; };
 		B00000000000000000000006 /* RAIDORoster.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RAIDORoster.app; sourceTree = BUILT_PRODUCTS_DIR; };
+B19800000000000000000001 /* FleetTrackingPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FleetTrackingPolicy.swift; sourceTree = "<group>"; };
+B19900000000000000000001 /* AnnouncementModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementModels.swift; sourceTree = "<group>"; };
+B19900000000000000000002 /* AnnouncementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementsView.swift; sourceTree = "<group>"; };
+B19900000000000000000003 /* GetJetAnnouncements.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = GetJetAnnouncements.json; sourceTree = "<group>"; };
+B22000000000000000000001 /* EarningsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarningsModels.swift; sourceTree = "<group>"; };
+B22000000000000000000002 /* EarningsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EarningsView.swift; sourceTree = "<group>"; };
+B22100000000000000000001 /* CrewDocumentVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrewDocumentVault.swift; sourceTree = "<group>"; };
+B22100000000000000000002 /* CrewDocumentServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrewDocumentServices.swift; sourceTree = "<group>"; };
+B22100000000000000000003 /* CrewDocumentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrewDocumentsView.swift; sourceTree = "<group>"; };
+B222000000000000000001 /* PayProfileModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PayProfileModels.swift; sourceTree = "<group>"; };
+		B22500000000000000000001 /* GlobalAirportIndex.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = GlobalAirportIndex.json; sourceTree = "<group>"; };
+		B22600000000000000000001 /* FlightSensorPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightSensorPolicy.swift; sourceTree = "<group>"; };
+		B22700000000000000000001 /* FleetRefreshPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FleetRefreshPolicy.swift; sourceTree = "<group>"; };
+		B22800000000000000000001 /* AirportTimeZones.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = AirportTimeZones.json; sourceTree = "<group>"; };
+		B22800000000000000000002 /* OfflineLand.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = OfflineLand.json; sourceTree = "<group>"; };
+		B22900000000000000000001 /* AppearanceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceModels.swift; sourceTree = "<group>"; };
+		B22910000000000000000001 /* FlightTrackingStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightTrackingStatus.swift; sourceTree = "<group>"; };
+B22920000000000000000001 /* MapPresentationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapPresentationPolicy.swift; sourceTree = "<group>"; };
+B22920000000000000000002 /* OfflinePlaceLabels.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = OfflinePlaceLabels.json; sourceTree = "<group>"; };
+		B22990000000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -40,8 +81,29 @@
 			children = (
 				B00000000000000000000001 /* RAIDORosterApp.swift */,
 				B00000000000000000000002 /* ContentView.swift */,
+				B22990000000000000000001 /* Info.plist */,
+B22920000000000000000002 /* OfflinePlaceLabels.json */,
+B22920000000000000000001 /* MapPresentationPolicy.swift */,
+				B22910000000000000000001 /* FlightTrackingStatus.swift */,
+				B22900000000000000000001 /* AppearanceModels.swift */,
+				B22800000000000000000002 /* OfflineLand.json */,
+				B22800000000000000000001 /* AirportTimeZones.json */,
+				B22700000000000000000001 /* FleetRefreshPolicy.swift */,
+				B22600000000000000000001 /* FlightSensorPolicy.swift */,
+				B22500000000000000000001 /* GlobalAirportIndex.json */,
+ B222000000000000000001 /* PayProfileModels.swift */,
+ B22100000000000000000003 /* CrewDocumentsView.swift */,
+ B22100000000000000000002 /* CrewDocumentServices.swift */,
+ B22100000000000000000001 /* CrewDocumentVault.swift */,
+ B22000000000000000000002 /* EarningsView.swift */,
+ B22000000000000000000001 /* EarningsModels.swift */,
+ B19900000000000000000003 /* GetJetAnnouncements.json */,
+ B19900000000000000000002 /* AnnouncementsView.swift */,
+ B19900000000000000000001 /* AnnouncementModels.swift */,
+ B19800000000000000000001 /* FleetTrackingPolicy.swift */,
 				B00000000000000000000003 /* RosterWebView.swift */,
 				B00000000000000000000004 /* RosterEnhancements.js */,
+				B00000000000000000000007 /* Assets.xcassets */,
 			);
 			path = RAIDORoster;
 			sourceTree = "<group>";
@@ -95,44 +157,57 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		C00000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000004 /* RosterEnhancements.js in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
+		C00000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000004 /* RosterEnhancements.js in Resources */, A22920000000000000000002 /* OfflinePlaceLabels.json in Resources */, A22800000000000000000002 /* OfflineLand.json in Resources */, A22800000000000000000001 /* AirportTimeZones.json in Resources */, A22500000000000000000001 /* GlobalAirportIndex.json in Resources */, A19900000000000000000003 /* GetJetAnnouncements.json in Resources */, A00000000000000000000005 /* Assets.xcassets in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		C00000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000001 /* RAIDORosterApp.swift in Sources */, A00000000000000000000002 /* ContentView.swift in Sources */, A00000000000000000000003 /* RosterWebView.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		C00000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000001 /* RAIDORosterApp.swift in Sources */, A00000000000000000000002 /* ContentView.swift in Sources */, A22920000000000000000001 /* MapPresentationPolicy.swift in Sources */, A22910000000000000000001 /* FlightTrackingStatus.swift in Sources */, A22900000000000000000001 /* AppearanceModels.swift in Sources */, A22700000000000000000001 /* FleetRefreshPolicy.swift in Sources */, A22600000000000000000001 /* FlightSensorPolicy.swift in Sources */, A222000000000000000001 /* PayProfileModels.swift in Sources */, A22100000000000000000003 /* CrewDocumentsView.swift in Sources */, A22100000000000000000002 /* CrewDocumentServices.swift in Sources */, A22100000000000000000001 /* CrewDocumentVault.swift in Sources */, A22000000000000000000002 /* EarningsView.swift in Sources */, A22000000000000000000001 /* EarningsModels.swift in Sources */, A19900000000000000000002 /* AnnouncementsView.swift in Sources */, A19900000000000000000001 /* AnnouncementModels.swift in Sources */, A19800000000000000000001 /* FleetTrackingPolicy.swift in Sources */, A00000000000000000000003 /* RosterWebView.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
 		F10000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Debug; };
 		F10000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Release; };
 		F10000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 			CODE_SIGN_STYLE = Automatic;
-			CURRENT_PROJECT_VERSION = 3;
+			CURRENT_PROJECT_VERSION = 2298;
 			DEVELOPMENT_TEAM = "";
 			GENERATE_INFOPLIST_FILE = YES;
+			INFOPLIST_FILE = RAIDORoster/Info.plist;
+
+
+
+
 			INFOPLIST_KEY_CFBundleDisplayName = "RAIDO Roster";
 			INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 			INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 			INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 			IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-			MARKETING_VERSION = 2.1;
+			MARKETING_VERSION = 2.29.8;
 			PRODUCT_BUNDLE_IDENTIFIER = com.bobanilic.raidoroster;
 			PRODUCT_NAME = "$(TARGET_NAME)";
 			SWIFT_EMIT_LOC_STRINGS = YES;
 			SWIFT_VERSION = 5.0;
+			SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 			TARGETED_DEVICE_FAMILY = 1;
 		}; name = Debug; };
 		F10000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 			CODE_SIGN_STYLE = Automatic;
-			CURRENT_PROJECT_VERSION = 3;
+			CURRENT_PROJECT_VERSION = 2298;
 			DEVELOPMENT_TEAM = "";
 			GENERATE_INFOPLIST_FILE = YES;
+			INFOPLIST_FILE = RAIDORoster/Info.plist;
+
+
+
+
 			INFOPLIST_KEY_CFBundleDisplayName = "RAIDO Roster";
 			INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 			INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 			INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 			IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-			MARKETING_VERSION = 2.1;
+			MARKETING_VERSION = 2.29.8;
 			PRODUCT_BUNDLE_IDENTIFIER = com.bobanilic.raidoroster;
 			PRODUCT_NAME = "$(TARGET_NAME)";
 			SWIFT_EMIT_LOC_STRINGS = YES;

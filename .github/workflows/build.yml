@@ -1,64 +1,63 @@
-name: Build unsigned IPA
-
+name: RAIDO validation and unsigned IPA
 on:
   workflow_dispatch:
+  pull_request:
+    paths: ['RAIDORoster-Web2IPA/**', 'tools/**', 'tests/**', '.github/workflows/**']
   push:
     branches: [main]
-    paths:
-      - 'RAIDORoster-Web2IPA/**'
-      - '.github/workflows/build.yml'
-
+    paths: ['RAIDORoster-Web2IPA/**', 'tools/**', 'tests/**', '.github/workflows/**']
 permissions:
-  contents: write
-
+  contents: read
+concurrency:
+  group: raido-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  build:
-    runs-on: macos-15
-    timeout-minutes: 20
+  release:
+    runs-on: macos-15-intel
+    timeout-minutes: 25
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Record build attempt
-        run: |
-          cat > .github/latest-attempt.txt <<EOF
-          version=2.19.7
-          run_id=${{ github.run_id }}
-          commit=${{ github.sha }}
-          EOF
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/latest-attempt.txt
-          git commit -m "Build attempt 2.19.7 [skip ci]" || true
-          git push || true
-
-      - name: Build unsigned IPA
-        run: |
-          cd RAIDORoster-Web2IPA
-          chmod +x build-unsigned-ipa.sh
-          ./build-unsigned-ipa.sh
-
-      - name: Upload IPA
-        id: upload_ipa
-        uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v4
+      - name: Read authoritative version
+        id: version
+        run: echo "version=$(python3 tools/version.py --field version)" >> "$GITHUB_OUTPUT"
+      - name: Check, build and verify committed source
+        run: bash tools/ci.sh all
+      - uses: actions/upload-artifact@v4
         with:
-          name: RAIDORoster-V2.19.7-unsigned-IPA
-          path: RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
+          name: RAIDO-${{ steps.version.outputs.version }}-IPA
+          path: |
+            RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa
+            RAIDORoster-Web2IPA/artifact-verification.json
           if-no-files-found: error
           retention-days: 14
-
-      - name: Record build receipt
-        if: success()
-        run: |
-          cat > .github/latest-build.txt <<EOF
-          version=2.19.7
-          run_id=${{ github.run_id }}
-          artifact_id=${{ steps.upload_ipa.outputs.artifact-id }}
-          artifact_digest=${{ steps.upload_ipa.outputs.artifact-digest }}
-          commit=${{ github.sha }}
-          EOF
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/latest-build.txt
-          git commit -m "Build receipt 2.19.7 [skip ci]" || exit 0
-          git push
+  simulator:
+    needs: release
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: RAIDO-${{ needs.release.outputs.version }}-IPA
+          path: RAIDORoster-Web2IPA
+      - name: Check approved themes and map gestures
+        run: bash tools/ci.sh preview
+      - name: Shut down simulator before runner cleanup
+        if: always()
+        run: xcrun simctl shutdown all || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RAIDO-${{ needs.release.outputs.version }}-simulator
+          path: |
+            /tmp/raido-*.png
+            /tmp/raido-*.log
+            /tmp/raido-theme-size.json
+          if-no-files-found: warn
+          retention-days: 7
