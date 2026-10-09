@@ -1,5 +1,7 @@
 (() => {
-  const VERSION = '2.4.0';
+  const VERSION = '3.0.0';
+  if (window !== window.top) return;
+  const SCHEMA_VERSION = 1;
   if (window.RAIDOPlus?.version === VERSION) {
     window.RAIDOPlus.extractNow();
     return;
@@ -8,6 +10,7 @@
   let observer;
   let timer;
   let lastDigest = '';
+  let formatFailureSent = false;
 
   const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   const MONTH_NAMES = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
@@ -678,16 +681,29 @@
     };
   }
 
+  function reportFormatFailure() {
+    if (!/\/HumanResourceRoster\.aspx$/i.test(location.pathname) || formatFailureSent ||
+        !window.webkit?.messageHandlers?.rosterCache) return;
+    formatFailureSent = true;
+    window.webkit.messageHandlers.rosterCache.postMessage({ schemaVersion: SCHEMA_VERSION,
+      error: 'portal-format-changed', sourceURL: location.origin + location.pathname });
+  }
+
   function post(b) {
     if (!window.webkit?.messageHandlers?.rosterCache) return;
     const v = validation(b);
-    if (!v.isValid) return;
+    if (!v.isValid) {
+      reportFormatFailure();
+      return;
+    }
+    formatFailureSent = false;
 
     const digest = hash(b.activities.map(a => `${a.sig}|${a.transferNote}|${a.activityNote}|${a.dayNote}|${a.aircraftReg}`).join('\n'));
     if (digest === lastDigest) return;
     lastDigest = digest;
 
     window.webkit.messageHandlers.rosterCache.postMessage({
+      schemaVersion: SCHEMA_VERSION,
       version: 2.4,
       parser: v.parser,
       sourceURL: location.origin + location.pathname,
@@ -810,7 +826,7 @@
     try {
       const b = build();
       post(b);
-    } catch (_) {}
+    } catch (_) { reportFormatFailure(); }
   }
 
   function schedule() {

@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import UIKit
+import os
 
 @MainActor
 final class RosterBrowserModel: ObservableObject {
@@ -24,7 +25,7 @@ final class RosterBrowserModel: ObservableObject {
     var preferredStartURL: URL {
         if let saved = UserDefaults.standard.string(forKey: "RAIDORoster.LastPortalURL"),
            let url = URL(string: saved),
-           url.host == Self.startURL.host {
+           PortalBridgePolicy.isPortal(url) {
             return url
         }
         return Self.startURL
@@ -80,7 +81,7 @@ final class RosterBrowserModel: ObservableObject {
     }
 
     func refreshRosterCalendarFeed() {
-        guard let webView else { return }
+        guard let webView, let url = webView.url, PortalBridgePolicy.isPortal(url) else { return }
         let script = #"""
         (() => {
           const downloadPage = '/RaidoMobile/Dialogues/HumanResources/DownloadRosterAsExternalCalendar.aspx';
@@ -122,7 +123,9 @@ final class RosterBrowserModel: ObservableObject {
               const field = doc.querySelector('#MasterMain_txtDownloadLink');
               if (!field || !field.value) throw new Error('N-OC calendar subscription link unavailable');
               const feedURL = field.value.replace(/^webcal:/i, 'https:');
-              return fetch(feedURL, { cache:'no-store' });
+              const u = new URL(feedURL, location.href);
+              if (u.protocol !== 'https:' || u.hostname !== 'gjt.noc.vmc.navblue.cloud' || (u.port && u.port !== '443')) throw new Error('Unexpected calendar host');
+              return fetch(u.href, { cache:'no-store', redirect:'error' });
             })
             .then(r => { if(!r.ok) throw new Error('Calendar feed HTTP '+r.status); return r.text(); })
             .then(raw => {
@@ -142,7 +145,7 @@ final class RosterBrowserModel: ObservableObject {
                 };
               }).filter(x => x.dateISO);
               window.webkit.messageHandlers.rosterCalendarFeed.postMessage({
-                source:'n-oc-webcal', capturedAt:new Date().toISOString(), events
+                schemaVersion:1, source:'n-oc-webcal', capturedAt:new Date().toISOString(), events
               });
             })
             .catch(() => {});
@@ -296,7 +299,7 @@ struct RosterWebView: UIViewRepresentable {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         config.defaultWebpagePreferences.allowsContentJavaScript = true
-        config.preferences.javaScriptCanOpenWindowsAutomatically = true
+        config.preferences.javaScriptCanOpenWindowsAutomatically = false
 
         let controller = WKUserContentController()
         controller.add(context.coordinator, name: "rosterCache")
@@ -304,14 +307,16 @@ struct RosterWebView: UIViewRepresentable {
         config.userContentController = controller
 
         if let source = Self.extractorSource() {
-            controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: false))
+            controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         }
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
+        #if DEBUG
         webView.isInspectable = true
+        #endif
 
         let refresh = UIRefreshControl()
         refresh.addTarget(context.coordinator, action: #selector(Coordinator.refresh(_:)), for: .valueChanged)
@@ -354,6 +359,12 @@ struct RosterWebView: UIViewRepresentable {
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard let model else { return }
+            let origin = message.frameInfo.securityOrigin
+            guard PortalBridgePolicy.acceptsOrigin(scheme: origin.protocol, host: origin.host,
+                port: origin.port, mainFrame: message.frameInfo.isMainFrame) else {
+                Logger(subsystem: "com.bobanilic.raidoroster", category: "Portal").warning("Rejected script message from untrusted frame")
+                return
+            }
             switch message.name {
             case "rosterCache":
                 Task { @MainActor in model.store.ingest(messageBody: message.body) }
@@ -406,21 +417,29 @@ struct RosterWebView: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            if let url = navigationAction.request.url,
-               let scheme = url.scheme?.lowercased(),
-               !["http", "https", "about"].contains(scheme) {
-                UIApplication.shared.open(url)
+            guard let url = navigationAction.request.url else { decisionHandler(.cancel); return }
+            if url.absoluteString == "about:blank" { decisionHandler(.allow); return }
+            let action = PortalBridgePolicy.navigation(url,
+                userTapped: navigationAction.navigationType == .linkActivated,
+                popup: navigationAction.targetFrame == nil)
+            switch action {
+            case .portal: decisionHandler(.allow)
+            case .external:
                 decisionHandler(.cancel)
-                return
+                UIApplication.shared.open(url)
+            case .blocked:
+                decisionHandler(.cancel)
+                if navigationAction.targetFrame?.isMainFrame == true {
+                    model?.loadError = "This destination is outside the approved RAIDO portal. Your saved roster is available."
+                }
             }
-            decisionHandler(.allow)
         }
 
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-            if navigationAction.targetFrame == nil, let url = navigationAction.request.url {
-                webView.load(URLRequest(url: url))
-            }
+            // Never replace the signed-in portal with popup content. User-tapped
+            // supported links are handled by the navigation policy above.
             return nil
         }
+
     }
 }
