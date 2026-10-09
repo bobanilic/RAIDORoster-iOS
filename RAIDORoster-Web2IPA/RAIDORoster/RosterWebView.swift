@@ -14,9 +14,14 @@ final class RosterBrowserModel: ObservableObject {
     @Published var diagnosticStatus: String?
     @Published var monthNavigationStatus: String?
     @Published private(set) var offlineMonthStatus: String?
+    @Published private(set) var offlineMonthNeedsRetry = false
+    private var portalVisible = false
     private lazy var offlineCache: RosterOfflineCache = {
         let cache = RosterOfflineCache(store: store)
-        cache.statusChanged = { [weak self] in self?.offlineMonthStatus = $0 }
+        cache.statusChanged = { [weak self, weak cache] in
+            self?.offlineMonthStatus = $0
+            self?.offlineMonthNeedsRetry = cache?.needsRetry ?? false
+        }
         return cache
     }()
 
@@ -43,6 +48,7 @@ final class RosterBrowserModel: ObservableObject {
     }
 
     func resumeOfflineMonths() {
+        guard !portalVisible else { return }
         offlineCache.resume()
         let source = store.rosterSourceURL ?? (RosterMonthCachePolicy.isRosterURL(preferredStartURL) ? preferredStartURL : nil)
         if let source { offlineCache.start(source: source) }
@@ -50,9 +56,27 @@ final class RosterBrowserModel: ObservableObject {
 
     func pauseOfflineMonths() { offlineCache.pause() }
 
+    func setPortalVisible(_ visible: Bool) {
+        portalVisible = visible
+        if visible { pauseOfflineMonths() }
+        else {
+            // Returning from a refreshed or newly signed-in portal is an
+            // explicit opportunity to retry failed months immediately.
+            resumeOfflineMonths()
+            retryOfflineMonths()
+        }
+    }
+
+    func retryOfflineMonths() {
+        guard !portalVisible, let source = store.rosterSourceURL else { return }
+        offlineCache.resume(); offlineCache.start(source: source, force: true)
+    }
+
+    func copyHistoryDiagnostics() { UIPasteboard.general.string = offlineCache.diagnosticText }
+
     fileprivate func rosterPageLoaded(_ url: URL) {
         store.rememberRosterSourceURL(url)
-        offlineCache.start(source: url, force: true)
+        if !portalVisible { offlineCache.start(source: url) }
     }
 
     func cacheRosterMonth(_ month: String) {

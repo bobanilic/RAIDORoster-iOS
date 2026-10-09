@@ -978,6 +978,8 @@ struct ContentView: View {
         .foregroundStyle(MidnightTheme.ink)
         .sheet(isPresented: $showPortal) {
             PortalView(model: appState.browser, store: appState.rosterStore) { showPortal = false; selectedTab = .roster }
+                .onAppear { appState.browser.setPortalVisible(true) }
+                .onDisappear { appState.browser.setPortalVisible(false) }
         }
         .onAppear { TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
             appState.browser.resumeOfflineMonths()
@@ -1127,9 +1129,16 @@ struct RosterHomeView: View {
                     .accessibilityLabel("Roster view")
 
                     if let status = browser.offlineMonthStatus {
-                        Label(status, systemImage: "icloud.and.arrow.down")
-                            .font(.caption).foregroundStyle(.secondary)
-                            .accessibilityIdentifier("offline-month-status")
+                        HStack {
+                            Label(status, systemImage: "icloud.and.arrow.down")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .accessibilityIdentifier("offline-month-status")
+                            Spacer(minLength: 8)
+                            if browser.offlineMonthNeedsRetry {
+                                Button("Retry") { browser.retryOfflineMonths() }.font(.caption.weight(.semibold))
+                            }
+                        }
+                        .contextMenu { Button("Copy history diagnostics") { browser.copyHistoryDiagnostics() } }
                     }
 
                     if let warning = store.portalFormatWarning {

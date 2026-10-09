@@ -397,6 +397,7 @@ final class RosterStore: ObservableObject {
 
         guard parsed.count >= (archiveOnly && expectedMonth != nil ? 1 : 5),
               parsed.count == validation.datedRows,
+              parsed.contains(where: { $0.dateISO?.hasPrefix(validation.month + "-") == true }),
               parsed.allSatisfy({ $0.dateISO != nil }) else { return false }
 
         let old = archiveOnly ? monthSnapshots[validation.month] : snapshot
@@ -408,6 +409,15 @@ final class RosterStore: ObservableObject {
             validation: validation,
             monthlyBLH: (payload["monthlyBLH"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         )
+
+        // A downloader acknowledgement means the archive actually reached disk.
+        // Persist before publishing or reporting changes so a failed write is retryable.
+        if archiveOnly {
+            var next = monthSnapshots
+            next[validation.month] = newSnapshot
+            do { try ProtectedJSONFile<[String: RosterSnapshot]>(url: monthCacheURL).save(next) }
+            catch { DeviceCacheStorage.report("Save downloaded roster month", error: error); return false }
+        }
 
         if (!archiveOnly || validation.month == currentRosterMonthKey()),
            let old,
@@ -431,7 +441,6 @@ final class RosterStore: ObservableObject {
                 snapshot = newSnapshot
                 save(newSnapshot)
             }
-            saveMonthSnapshots()
             return true
         }
 
@@ -671,6 +680,7 @@ final class RosterStore: ObservableObject {
         try? FileManager.default.removeItem(at: monthCacheURL)
         try? FileManager.default.removeItem(at: changeStateURL)
         try? FileManager.default.removeItem(at: rosterSourceCacheURL)
+        try? FileManager.default.removeItem(at: offlineHistoryStateURL)
     }
 
     private func parseActivity(_ raw: [String: Any], fallbackID: String) -> RosterActivity? {
@@ -946,6 +956,8 @@ final class RosterStore: ObservableObject {
     }
 
     private var rosterSourceCacheURL: URL { storageFolderURL.appendingPathComponent("roster-source.json") }
+
+    var offlineHistoryStateURL: URL { storageFolderURL.appendingPathComponent("roster-history-progress.json") }
 
     private func normalizeMonthArchive() {
         guard !monthSnapshots.isEmpty else { return }
