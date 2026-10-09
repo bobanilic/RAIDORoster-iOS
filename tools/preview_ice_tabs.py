@@ -22,13 +22,15 @@ content = root / 'RAIDORoster/ContentView.swift'
 app = root / 'RAIDORoster/RAIDORosterApp.swift'
 announcement_view = root / 'RAIDORoster/AnnouncementsView.swift'
 original_content, original_app = content.read_text(), app.read_text()
+store_source = root / 'RAIDORoster/RosterStore.swift'
+original_store = store_source.read_text()
 original_announcements = announcement_view.read_text()
 project = root / 'RAIDORoster.xcodeproj'
 original_project = (project / 'project.pbxproj').read_bytes()
 test_scheme = None
 preview = r'''
 extension RosterStore {
-    fileprivate func installIceFixture() {
+    func installIceFixture() {
         let today = Date(), calendar = Calendar.current
         let year = calendar.component(.year, from: today), month = calendar.component(.month, from: today)
         let currentDay = calendar.component(.day, from: today)
@@ -123,7 +125,9 @@ try:
     generated = generated.replace('private var todayMapSource = "auto"', 'private var todayMapSource = "offline"')
     # Display all Fleet definitions immediately, without polling or network data.
     generated = generated.replace('@State private var showOtherFleet = false', '@State private var showOtherFleet = true')
-    content.write_text(generated + preview)
+    fixture, preview_views = preview.split('struct IcePreviewRoot: View {', 1)
+    store_source.write_text(original_store + fixture)
+    content.write_text(generated + 'struct IcePreviewRoot: View {' + preview_views)
     host = original_app.replace('ContentView()', 'IcePreviewRoot()')
     host = host.replace('        RaidoAppearancePreferences.migrate(.standard)', '''
         let args = ProcessInfo.processInfo.arguments
@@ -239,6 +243,7 @@ finally:
     stderr = Path('/tmp/raido-ice-app-stderr.log')
     if stderr.exists(): print(stderr.read_text(errors='replace')[-6000:])
     content.write_text(original_content); app.write_text(original_app)
+    store_source.write_text(original_store)
     announcement_view.write_text(original_announcements)
     (project / 'project.pbxproj').write_bytes(original_project)
     if test_scheme is not None: test_scheme.unlink(missing_ok=True)

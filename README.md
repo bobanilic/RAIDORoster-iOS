@@ -38,3 +38,5 @@ The offline map and bundled announcements require no map-tile service. Offline a
 See `docs/` for feature notes and [the source migration record](docs/source-build.md). Older version-specific notes describe historical implementations; the current build entry point is `tools/ci.sh`.
 
 Native XCTest coverage for roster ingestion, bridge validation and the actual web extractor can be run from the shared `RAIDORosterTests` scheme in Xcode, or with `bash tools/ci.sh native-tests` on macOS. Portal fixtures contain synthetic duties only.
+
+`RosterStore.swift` owns roster ingestion, month archives and change tracking. Views remain in `ContentView.swift`; the native test target exercises the store independently using a temporary cache directory and disabled calendar/notification side effects.
