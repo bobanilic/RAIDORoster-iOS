@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: raido-${{ github.workflow }}-${{ github.ref }}
+  group: raido-bounded-cleanup-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   release:
