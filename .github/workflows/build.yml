@@ -50,6 +50,7 @@ jobs:
         run: bash tools/ci.sh startup
       - name: Shut down simulator before runner cleanup
         if: always()
+        timeout-minutes: 1
         run: xcrun simctl shutdown all || true
       - uses: actions/upload-artifact@v4
         if: always()
@@ -72,6 +73,7 @@ jobs:
         run: bash tools/ci.sh native-tests
       - name: Shut down simulator before runner cleanup
         if: always()
+        timeout-minutes: 1
         run: xcrun simctl shutdown all || true
       - uses: actions/upload-artifact@v4
         if: always()

@@ -40,4 +40,7 @@ try:
     if finished is None or finished.returncode:
         raise SystemExit(1 if finished is None else finished.returncode)
 finally:
-    subprocess.run(['xcrun', 'simctl', 'shutdown', device['udid']], check=False)
+    try:
+        subprocess.run(['xcrun', 'simctl', 'shutdown', device['udid']], check=False, timeout=30)
+    except subprocess.TimeoutExpired:
+        print('Simulator shutdown timed out; runner cleanup will finish it', file=sys.stderr)
