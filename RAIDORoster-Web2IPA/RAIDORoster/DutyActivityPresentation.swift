@@ -79,12 +79,16 @@ private struct DutyActivitySurface: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius:24,style:.continuous) }
     func body(content:Content) -> some View {
-        if appearance == "solid" || reduceTransparency {
-            content.background(Color(red:0.065,green:0.10,blue:0.14),in:shape)
-        } else if #available(iOS 26.0, *) {
-            content.glassEffect(.regular,in:shape)
-        } else {
-            content.background(.ultraThinMaterial,in:shape)
+        // WidgetKit can lose foreground content captured by glassEffect.
+        // Keep the card content outside the effect in both appearance modes.
+        content.background {
+            if appearance == "solid" || reduceTransparency {
+                shape.fill(Color(red:0.065,green:0.10,blue:0.14))
+            } else if #available(iOS 26.0, *) {
+                shape.fill(Color.clear).glassEffect(.regular,in:shape)
+            } else {
+                shape.fill(.ultraThinMaterial)
+            }
         }
     }
 }

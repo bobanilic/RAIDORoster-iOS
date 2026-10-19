@@ -1,5 +1,17 @@
 # Lock Screen duty countdowns — 2.29.20
 
+## 2.29.23 foreground rendering fix
+
+Device feedback showed the glass surface rendering while all labels and timers
+disappeared. The glass effect is now applied only to an empty background shape;
+the foreground card content stays outside that effect in every appearance mode.
+This also keeps the foreground view hierarchy stable when appearance changes.
+Apple Developer Forums thread 789384 reports matching disappearing-text symptoms
+with glassEffect in widgets. This is a targeted rendering workaround, not proof
+that all WidgetKit glass behavior is fixed. The installed Lock Screen preview
+still needs device validation. No new dependency, timer or background work is
+introduced.
+
 ## 2.29.22 lead times and glass surface
 
 Show before pickup/report offers 2, 4, 6 or 8 hours; the default remains 2.
