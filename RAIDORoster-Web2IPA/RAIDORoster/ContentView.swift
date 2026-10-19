@@ -47,8 +47,11 @@ struct RosterActivity: Codable, Equatable, Identifiable {
     let crew: [CrewMember]
     let rawText: String
 
+    // Earlier caches classified RLCN's "Hotel relocation" description as HOTEL.
+    var isHotelRelocation: Bool { code.uppercased() == "RLCN" || category.uppercased() == "RELOCATION" }
+
     var isAuxiliary: Bool {
-        ["HOTEL", "EXPENSE", "RELOCATION"].contains(category.uppercased())
+        isHotelRelocation || ["HOTEL", "EXPENSE", "RELOCATION"].contains(category.uppercased())
     }
 
     var isFlight: Bool { category.uppercased() == "FLIGHT" }
@@ -119,6 +122,11 @@ struct RosterItem: Identifiable, Codable, Equatable {
 
     var hotelAssignments: [RosterActivity] {
         uniqueActivities((activeHotels ?? []) + activityList.filter { $0.category.uppercased() == "HOTEL" })
+            .filter { !$0.isHotelRelocation }
+    }
+
+    var relocationActivities: [RosterActivity] {
+        uniqueActivities(activityList + (activeHotels ?? [])).filter(\.isHotelRelocation)
     }
 
     var reportLocal: String {
@@ -514,7 +522,7 @@ final class DutyReminderScheduler: ObservableObject {
                     }
                     let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_GB")
                     formatter.timeZone = TodayPriorityPolicy.calendar(for:event).timeZone; formatter.dateFormat = "d MMM"
-                    content.body = [formatter.string(from:event.date),event.clock,event.detail,event.missing.joined(separator:" · ")]
+                    content.body = [formatter.string(from:event.date),event.clock,event.detail,event.notes,event.missing.joined(separator:" · ")]
                         .filter { !$0.isEmpty }.joined(separator:" · ")
                     content.userInfo = ["raidoPriorityID":event.id]
                     content.sound = .default
@@ -5366,7 +5374,7 @@ struct DutyBriefingView: View {
 
     private var hasLogistics: Bool {
         !item.pickups.isEmpty || !item.transferNotes.isEmpty || !item.hotelAssignments.isEmpty ||
-        item.activityList.contains { $0.category.uppercased() == "RELOCATION" }
+        !item.relocationActivities.isEmpty
     }
 }
 
@@ -5731,7 +5739,7 @@ struct LogisticsCard: View {
                 )
             }
 
-            ForEach(item.activityList.filter { $0.category.uppercased() == "RELOCATION" }, id: \.id) { relocation in
+            ForEach(item.relocationActivities, id: \.id) { relocation in
                 InfoRow(icon: "arrow.left.arrow.right", title: "Hotel relocation", value: relocation.timeText)
             }
 
@@ -9666,6 +9674,7 @@ private struct IceSelectedRosterDay: View {
                 if item.sectorCount > 0 { Text("\(item.sectorCount) sectors").font(.caption).foregroundStyle(.secondary) }
             }
             HistoricalFlightRouteCard(item: item, dayItems: dayItems).id(item.dateISO)
+            RosterRelocationSection(items: dayItems.isEmpty ? [item] : dayItems)
             IcePickupCard(item: item)
             IceDutyAgenda(item: item)
             NavigationLink { RosterDetailView(item: item) } label: {
@@ -9726,7 +9735,7 @@ struct TodayView: View {
                                     DisclosureGroup("Aircraft") { AircraftCard(item: item).padding(.top, 8) }
                                         .font(.subheadline).padding(13).midnightCard(radius: 13)
                                 }
-                                if !item.hotelAssignments.isEmpty || !item.transferNotes.isEmpty || item.activityList.contains(where: { $0.category == "RELOCATION" }) {
+                                if !item.hotelAssignments.isEmpty || !item.transferNotes.isEmpty || !item.relocationActivities.isEmpty {
                                     DisclosureGroup("Hotel & transport") { LogisticsCard(item: item).padding(.top, 8) }
                                         .font(.subheadline).padding(13).midnightCard(radius: 13)
                                 }

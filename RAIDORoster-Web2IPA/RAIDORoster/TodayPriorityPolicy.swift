@@ -17,9 +17,23 @@ struct TodayPriorityEvent: Identifiable, Equatable {
     var missing: [String] = []
     var hotelQuery = ""
     var reference = ""
+    var notes = ""
+    var endClock = ""
 }
 
 enum TodayPriorityPolicy {
+    static func localDayLabel(_ date: Date, event: TodayPriorityEvent, now: Date) -> String {
+        let calendar = Self.calendar(for: event)
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_GB")
+        formatter.timeZone = calendar.timeZone; formatter.dateFormat = "d MMM"
+        if calendar.isDate(date, inSameDayAs: now) { return "Today · " + formatter.string(from: date) }
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now), calendar.isDate(date, inSameDayAs: tomorrow) {
+            return "Tomorrow · " + formatter.string(from: date)
+        }
+        formatter.dateFormat = "EEE, d MMM"
+        return formatter.string(from: date)
+    }
+
     static func countdown(to date: Date, now: Date) -> String {
         let minutes = max(0, Int(ceil(date.timeIntervalSince(now) / 60)))
         if minutes == 0 { return "Now" }

@@ -1,4 +1,15 @@
-# Today priorities and historical route previews — 2.29.18
+# Today priorities and historical route previews — 2.29.19
+
+The 2.29.19 follow-up recognizes RLCN before generic hotel descriptions and keeps
+relocations in the day record when standby or flight duties are present. Native
+views recover older misclassified RLCN entries from cached hotel metadata, exclude
+them from hotel-stay lists, and show a separate relocation card on the selected
+calendar day. Activity instructions such as using Bolt appear on the card,
+details and reminders. Duty report/release times remain independent of relocation.
+
+The precaution sheet uses compact themed cards without Crew Control/briefing
+shortcuts. Start and report/pickup dates are labeled separately in roster local
+time, including an explicit Tomorrow label for overnight references.
 
 Today has an urgency-sorted priority area and a compact pickup/alcohol strip
 above the tab bar. Both use the same minute-aligned timestamp and refresh on

@@ -95,7 +95,7 @@ enum TodayPriorityAdapter {
                 date: date, end: end, hasTime: true, zoneID: (pickupZone ?? fallbackZone).identifier,
                 clock: clock(date, zone: pickupZone), capturedAt: capturedAt))
         }
-        for activity in item.activityList where activity.category.uppercased() == "RELOCATION" {
+        for activity in item.relocationActivities {
             let moveZone = zone(activity: activity, item: item)
             let moveCalendar = calendar(moveZone ?? fallbackZone)
             let stamp = parseUTCStamp(activity.startUTC)
@@ -108,18 +108,22 @@ enum TodayPriorityAdapter {
             let dateEnd = moveCalendar.date(byAdding: .day, value: 1, to: moveCalendar.startOfDay(for: date))!
             let end = timed ? max(finish ?? date.addingTimeInterval(3600), date.addingTimeInterval(3600)) : dateEnd
             let hotelNames = ([activity.hotelName] + item.hotelAssignments.map(\.hotelName))
-                .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty && !["-","–","N/A"].contains($0.uppercased()) }
+                .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty && !["-","–","N/A","RELOCATION","HOTEL RELOCATION"].contains($0.uppercased()) }
             let hotels = NSOrderedSet(array: hotelNames).array as? [String] ?? []
             let detail = hotels.isEmpty ? "Hotel relocation" : hotels.joined(separator: " · ")
             var missing = [String]()
             if !timed { missing.append("Relocation time not provided") }
             if hotels.isEmpty { missing.append("Hotel details not provided") }
-            if activity.pickup.isEmpty && activity.transferNote.isEmpty { missing.append("Transport details not provided") }
+            let noteValues = [activity.transferNote,activity.activityNote,activity.dayNote].filter { !$0.isEmpty }
+            let notes = (NSOrderedSet(array: noteValues).array as? [String] ?? []).joined(separator: "\n\n")
+            let transportProvided = !activity.pickup.isEmpty || !activity.transferNote.isEmpty || notes.range(of: #"\b(bolt|uber|taxi|transfer|transport|shuttle|pickup|pick.up)\b"#, options: .caseInsensitive) != nil
+            if !transportProvided { missing.append("Transport details not provided") }
             events.append(.init(id: "relocation-" + activity.id, kind: .relocation, itemID: item.id,
                 title: "Hotel relocation", detail: detail, date: date, end: end, hasTime: timed,
                 zoneID: (moveZone ?? fallbackZone).identifier, clock: timed ? clock(date, zone: moveZone) : "Time not provided",
                 capturedAt: capturedAt, missing: missing,
-                hotelQuery: hotels.last.map { $0 + " " + (TodayGlobalAirportIndex.point(for: activity.station)?.name ?? activity.station) } ?? ""))
+                hotelQuery: hotels.last.map { $0 + " " + (TodayGlobalAirportIndex.point(for: activity.station)?.name ?? activity.station) } ?? "",
+                notes: notes, endClock: timed ? finish.map { clock($0, zone: moveZone) } ?? "" : ""))
         }
         let transportText = (item.transferNotes + item.activityList.map(\.pickup)).joined(separator: " ")
         let explicitTransport = item.activityList.contains { !$0.pickup.isEmpty } || transportText.range(of: #"\b(pickup|pick.up|PU\s+at|transport arranged|transfer arranged|shuttle)\b"#, options: .caseInsensitive) != nil
@@ -149,6 +153,8 @@ struct TodayPriorityPanel: View {
     @Environment(\.raidoTheme) private var theme
 
     var body: some View {
+        let _ = palette
+        let _ = theme
         VStack(alignment: .leading, spacing: 10) {
             if !events.isEmpty {
                 HStack {
@@ -173,10 +179,25 @@ struct TodayPriorityPanel: View {
             Image(systemName: icon(event.kind)).font(.system(size: event.kind == .alcohol ? 25 : 20, weight: .light))
                 .frame(width: 28).padding(.top, 4)
             VStack(alignment: .leading, spacing: 5) {
-                Text(event.title).font(event.kind == .alcohol ? .title3.weight(.semibold) : .subheadline.weight(.semibold))
-                Text(TodayPriorityPolicy.status(event, now: now)).font(event.kind == .alcohol ? .title2.weight(.semibold) : .title3.weight(.semibold)).monospacedDigit()
+                if event.kind == .alcohol {
+                    HStack {
+                        Text(event.title).font(.headline)
+                        Spacer(minLength:4)
+                        Text(activeAlcohol ? "ACTIVE" : "UPCOMING").font(.system(size:8,weight:.bold)).tracking(0.8)
+                            .padding(.horizontal,7).padding(.vertical,4).background(color.opacity(0.10),in:Capsule())
+                    }
+                    HStack(alignment:.firstTextBaseline,spacing:7) {
+                        Text(TodayPriorityPolicy.countdown(to:activeAlcohol ? event.end : event.date,now:now))
+                            .font(.system(.title,design:.rounded).weight(.semibold)).monospacedDigit()
+                        Text(activeAlcohol ? "remaining" : "until precaution").font(.caption)
+                    }
+                } else {
+                    Text(event.title).font(.subheadline.weight(.semibold))
+                    Text(TodayPriorityPolicy.status(event, now: now)).font(.title3.weight(.semibold)).monospacedDigit()
+                }
                 Text(schedule(event)).font(.caption).foregroundStyle(.secondary)
                 if event.kind == .relocation { Text(event.detail).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+                if event.kind == .relocation && !event.notes.isEmpty { Text(event.notes).font(.caption).lineLimit(2) }
                 if !event.missing.isEmpty {
                     Label("Details to check", systemImage: "exclamationmark.circle").font(.caption.weight(.medium))
                 }
@@ -204,7 +225,7 @@ struct TodayPriorityPanel: View {
     private func schedule(_ event: TodayPriorityEvent) -> String {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_GB")
         formatter.timeZone = TodayPriorityPolicy.calendar(for:event).timeZone; formatter.dateFormat = "d MMM"
-        if event.kind == .alcohol { return "Until \(event.clock) · \(event.reference)" }
+        if event.kind == .alcohol { return (event.reference == "PU" ? "Pickup · " : "Report · ") + TodayPriorityPolicy.localDayLabel(event.end, event: event, now: now) + " · " + event.clock + " LT" }
         return formatter.string(from: event.date) + " · " + event.clock + (event.hasTime ? " LT" : "")
     }
 }
@@ -236,7 +257,7 @@ struct TodayPriorityStrip: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Label(alcohol.date <= now ? "Precaution active" : "Precaution upcoming", systemImage: "wineglass")
                                 .font(.caption.weight(.semibold))
-                            Text(alcohol.date <= now ? "Until " + alcohol.clock : "In " + TodayPriorityPolicy.countdown(to: alcohol.date, now: now))
+                            Text(alcohol.date <= now ? "Until " + TodayPriorityPolicy.localDayLabel(alcohol.end,event:alcohol,now:now) + " · " + alcohol.clock : "In " + TodayPriorityPolicy.countdown(to: alcohol.date, now: now))
                                 .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
                         }.frame(maxWidth: .infinity, alignment: .leading)
                     }.accessibilityIdentifier("today-alcohol-status")
@@ -249,49 +270,141 @@ struct TodayPriorityStrip: View {
     }
 }
 
+struct RosterRelocationSection: View {
+    let items: [RosterItem]
+    @EnvironmentObject private var store: RosterStore
+    @Environment(\.raidoPalette) private var palette
+    @Environment(\.raidoTheme) private var theme
+    @State private var selected: TodayPriorityEvent?
+    private var events: [TodayPriorityEvent] {
+        var seen = Set<String>()
+        return items.flatMap { item in
+            TodayPriorityAdapter.events(item:item,capturedAt:store.monthSnapshots[String((item.dateISO ?? "").prefix(7))]?.capturedAt ?? .distantPast)
+        }.filter { $0.kind == .relocation && seen.insert($0.id).inserted }.sorted { $0.date < $1.date }
+    }
+    var body: some View {
+        let _ = palette
+        let _ = theme
+        ForEach(events) { event in
+            Button { selected = event } label: {
+                HStack(alignment:.top,spacing:13) {
+                    Image(systemName:"building.2.crop.circle").font(.title2).foregroundStyle(MidnightTheme.accent)
+                    VStack(alignment:.leading,spacing:7) {
+                        Text("Hotel relocation").font(.headline)
+                        Text(event.hasTime ? event.clock + (event.endClock.isEmpty ? "" : "–" + event.endClock) + " LT" : "Time not provided")
+                            .font(.title3.weight(.semibold)).monospacedDigit().foregroundStyle(MidnightTheme.accent)
+                        if event.detail != "Hotel relocation" { Text(event.detail).font(.subheadline).foregroundStyle(.secondary) }
+                        if !event.notes.isEmpty { Text(event.notes).font(.subheadline).fixedSize(horizontal:false,vertical:true) }
+                    }.frame(maxWidth:.infinity,alignment:.leading)
+                    Image(systemName:"chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.top,5)
+                }.padding(17).midnightCard(radius:20)
+            }.buttonStyle(.plain).accessibilityIdentifier("roster-relocation-card")
+        }
+        .sheet(item:$selected) { event in TodayPriorityDetails(event:event,store:store) }
+    }
+}
+
 struct TodayPriorityDetails: View {
     let event: TodayPriorityEvent
     @ObservedObject var store: RosterStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.raidoPalette) private var palette
+    @Environment(\.raidoTheme) private var theme
     var body: some View {
+        let _ = palette
+        let _ = theme
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    TimelineView(.everyMinute) { context in
-                        Text(TodayPriorityPolicy.status(event, now: context.date)).font(.title2.bold()).monospacedDigit()
-                    }
-                    Text(dateLabel)
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    LabeledContent(event.kind == .alcohol ? "Until " + event.reference : "Scheduled time", value: event.clock)
-                    Text(event.detail).font(.body).textSelection(.enabled)
-                    ForEach(event.missing, id: \.self) { text in
-                        Label(text, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(MidnightTheme.warningInk)
-                    }
-                    if event.kind == .alcohol {
-                        Text("Pre-duty reminder: 12 hours before rostered pickup, or report when no pickup is supplied. Duty restrictions and company policy still apply.")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
-                    if !event.hotelQuery.isEmpty {
-                        Button("Find hotel in Maps", systemImage: "map") { openHotel() }
-                            .frame(minHeight: 44)
-                    }
-                    if let item = store.priorityItem(id: event.itemID) {
-                        NavigationLink("Crew Control") { CrewControlSheet(item:item) }
-                        NavigationLink("Full briefing & notes") { RosterDetailView(item:item) }
-                    }
-                    Text("Saved " + event.capturedAt.formatted(date:.abbreviated,time:.shortened))
-                        .font(.caption).foregroundStyle(.secondary)
-                }.padding(20)
-            }.midnightCanvas().navigationTitle(event.title).navigationBarTitleDisplayMode(.inline)
+            TimelineView(.everyMinute) { context in
+                ScrollView {
+                    VStack(alignment:.leading,spacing:16) {
+                        if event.kind == .alcohol { precaution(now:context.date) }
+                        else { logistics(now:context.date) }
+                        if event.capturedAt != .distantPast {
+                            Label("Roster updated " + event.capturedAt.formatted(date:.abbreviated,time:.shortened),systemImage:"checkmark.icloud")
+                                .font(.caption2).foregroundStyle(.secondary).padding(.horizontal,3)
+                        }
+                    }.padding(20)
+                }.midnightCanvas()
+            }.navigationTitle(event.title).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement:.confirmationAction) { Button("Done") { dismiss() } } }
         }
+        .presentationDetents(event.kind == .alcohol ? [.medium,.large] : [.large])
+        .presentationDragIndicator(.visible)
     }
-    private var dateLabel: String {
-        let formatter = DateFormatter(); formatter.locale = .current
-        formatter.timeZone = TodayPriorityPolicy.calendar(for: event).timeZone
-        formatter.dateStyle = .long; formatter.timeStyle = .none
-        return formatter.string(from: event.date)
+    private func precaution(now: Date) -> some View {
+        let active = now >= event.date && now < event.end
+        let finished = now >= event.end
+        let color: Color = colorScheme == .dark ? Color(red:1,green:0.74,blue:0.71) : Color(red:0.58,green:0.16,blue:0.20)
+        return VStack(alignment:.leading,spacing:16) {
+            VStack(alignment:.leading,spacing:9) {
+                Label(finished ? "Pre-duty window ended" : active ? "Precaution active" : "Precaution begins in",systemImage:"wineglass")
+                    .font(.subheadline.weight(.semibold))
+                if !finished {
+                    Text(TodayPriorityPolicy.countdown(to:active ? event.end : event.date,now:now))
+                        .font(.system(size:34,weight:.semibold,design:.rounded)).monospacedDigit()
+                    Text(active ? "Remaining until " + (event.reference == "PU" ? "pickup" : "report") : "Until the pre-duty precaution starts")
+                        .font(.subheadline)
+                }
+            }.foregroundStyle(color).padding(20).frame(maxWidth:.infinity,alignment:.leading)
+                .background(colorScheme == .dark ? Color(red:0.21,green:0.13,blue:0.15) : Color(red:0.99,green:0.95,blue:0.93),in:RoundedRectangle(cornerRadius:22))
+            VStack(spacing:14) {
+                timeRow("Precaution begins",date:event.date,now:now)
+                Divider()
+                timeRow(event.reference == "PU" ? "Crew pickup" : "Report",date:event.end,now:now)
+            }.padding(17).midnightCard(radius:20)
+            Text("Based on 12 hours before rostered pickup, or report when no pickup is provided. Duty restrictions and company policy still apply.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true).padding(.horizontal,3)
+        }
+    }
+    private func timeRow(_ title: String, date: Date, now: Date) -> some View {
+        HStack(alignment:.firstTextBaseline,spacing:12) {
+            VStack(alignment:.leading,spacing:5) {
+                Text(title).font(.subheadline.weight(.medium))
+                Text(TodayPriorityPolicy.localDayLabel(date,event:event,now:now)).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength:6)
+            Text(TodayPriorityAdapter.clock(date,zone:TimeZone(identifier:event.zoneID)) + " LT")
+                .font(.headline).monospacedDigit()
+        }
+    }
+    private func logistics(now: Date) -> some View {
+        VStack(alignment:.leading,spacing:16) {
+            VStack(alignment:.leading,spacing:10) {
+                Label(TodayPriorityPolicy.status(event,now:now),systemImage:event.kind == .relocation ? "building.2" : "car.side")
+                    .font(.headline).foregroundStyle(MidnightTheme.accent)
+                Text(TodayPriorityPolicy.localDayLabel(event.date,event:event,now:now)).font(.subheadline).foregroundStyle(.secondary)
+                Text(event.clock + (event.endClock.isEmpty ? "" : "–" + event.endClock) + (event.hasTime ? " LT" : ""))
+                    .font(.title2.weight(.semibold)).monospacedDigit()
+                if event.detail != event.title { Text(event.detail).font(.subheadline) }
+            }.padding(20).frame(maxWidth:.infinity,alignment:.leading).midnightCard(radius:22)
+            if !event.notes.isEmpty {
+                VStack(alignment:.leading,spacing:9) {
+                    Label("Instructions",systemImage:"text.bubble").font(.subheadline.weight(.semibold))
+                    Text(event.notes).font(.subheadline).textSelection(.enabled)
+                }.padding(17).frame(maxWidth:.infinity,alignment:.leading).midnightCard(radius:20)
+            }
+            if !event.missing.isEmpty {
+                VStack(alignment:.leading,spacing:9) {
+                    ForEach(event.missing,id:\.self) { text in Label(text,systemImage:"exclamationmark.circle").font(.caption) }
+                }.foregroundStyle(MidnightTheme.warningInk).padding(16).frame(maxWidth:.infinity,alignment:.leading).midnightCard(radius:18)
+            }
+            if !event.hotelQuery.isEmpty {
+                Button(action:openHotel) { detailAction("Find hotel in Maps",symbol:"map") }.buttonStyle(.plain)
+            }
+            if let item = store.priorityItem(id:event.itemID) {
+                NavigationLink { CrewControlSheet(item:item) } label: { detailAction("Crew Control",symbol:"headphones") }
+                NavigationLink { RosterDetailView(item:item) } label: { detailAction("Full briefing & notes",symbol:"doc.text") }
+            }
+        }
+    }
+    private func detailAction(_ title: String, symbol: String) -> some View {
+        HStack(spacing:12) {
+            Label(title,systemImage:symbol).font(.subheadline.weight(.medium))
+            Spacer()
+            Image(systemName:"chevron.right").font(.caption.weight(.semibold))
+        }.foregroundStyle(MidnightTheme.accent).padding(16).frame(minHeight:48).midnightCard(radius:16).accessibilityLabel(title)
     }
     private func openHotel() {
         var url = URLComponents(string:"https://maps.apple.com/")!

@@ -45,6 +45,11 @@ import Foundation
                "Optional precaution reminder precedes cutoff")
         expect(TodayPriorityPolicy.reminderDates(pickup, now: pickup.date, pickupLead: 10, relocationEnabled: false, alcoholLead: 0).isEmpty,
                "Past reminders are not rescheduled")
+        let overnight = event(.alcohol,"2026-10-19T12:30:00Z","2026-10-20T00:30:00Z")
+        let afternoon = date("2026-10-19T12:55:00Z")
+        expect(TodayPriorityPolicy.localDayLabel(overnight.date,event:overnight,now:afternoon) == "Today · 19 Oct", "Precaution starts today")
+        expect(TodayPriorityPolicy.localDayLabel(overnight.end,event:overnight,now:afternoon) == "Tomorrow · 20 Oct", "Reference correctly names tomorrow")
+        expect(TodayPriorityPolicy.status(overnight,now:afternoon) == "Active · 11h 35m remaining", "Overnight remaining time matches report")
         print("Passed \(count) Today priority, countdown, DST and reminder checks")
     }
 }

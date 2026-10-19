@@ -64,11 +64,11 @@ final class TodayPriorityTests: XCTestCase {
          "hotelName":category == "RELOCATION" ? "Fixture Hotel" : "", "pickup":pickup,"transferNote":notes,
          "rawText":"Sanitized activity"]
     }
-    private func ingest(_ store: RosterStore, day: String, category: String, activities: [[String:Any]]) {
+    private func ingest(_ store: RosterStore, day: String, category: String, activities: [[String:Any]], activeHotels: [[String:Any]] = []) {
         let month = String(day.prefix(7))
         let value: [String:Any] = ["schemaVersion":1,"sourceURL":"https://gjt.noc.vmc.navblue.cloud/RaidoMobile/HumanResourceRoster.aspx",
             "validation":["isValid":true,"parser":"raido-duty-envelope-test","month":month,"datedRows":1],
-            "rows":[["id":"day-"+day,"dateISO":day,"category":category,"title":category,"rawText":"Sanitized day","activities":activities]]]
+            "rows":[["id":"day-"+day,"dateISO":day,"category":category,"title":category,"rawText":"Sanitized day","activities":activities,"activeHotels":activeHotels]]]
         XCTAssertTrue(store.ingest(messageBody:value,archiveOnly:true,expectedMonth:month))
     }
     private func store(_ body: (RosterStore) throws -> Void) throws {
@@ -143,5 +143,30 @@ final class TodayPriorityTests: XCTestCase {
         XCTAssertEqual(router.pendingID,"move")
         router.receive(identifier:"RAIDO-ROSTER-REPORT-item",userInfo:[:])
         XCTAssertEqual(router.pendingID,"today")
+    }
+    func testLegacyRelocationInHotelMetadataSurvivesWithoutReimport() throws {
+        try store { store in
+            var move = activity(id:"old-move",category:"HOTEL",day:"2026-10-23")
+            move["code"]="RLCN";move["hotelName"]="relocation"
+            move["activityNote"]="Please use Bolt for the relocation"
+            move["startLT"]="2026-10-23 12:00";move["startUTC"]="2026-10-23 09:00"
+            let standby = activity(id:"standby",category:"STANDBY",day:"2026-10-23")
+            ingest(store,day:"2026-10-23",category:"STANDBY",activities:[standby],activeHotels:[move])
+            let item = try XCTUnwrap(store.priorityRosterItems.first)
+            XCTAssertEqual(item.relocationActivities.count,1)
+            XCTAssertTrue(item.hotelAssignments.isEmpty)
+            XCTAssertEqual(item.operationalActivities.count,1)
+            let event = try XCTUnwrap(store.priorityEvents(at:date("2026-10-19T12:55:00Z")).first { $0.kind == .relocation })
+            XCTAssertEqual(event.clock,"12:00");XCTAssertEqual(event.endClock,"13:00")
+            XCTAssertTrue(event.notes.contains("Bolt"))
+            XCTAssertFalse(event.missing.contains("Transport details not provided"))
+        }
+    }
+    func testPrecautionLabelsItsStartAndNextDayReferenceSeparately() {
+        let event = event(.alcohol,start:"2026-10-19T12:30:00Z",end:"2026-10-20T00:30:00Z")
+        let now = date("2026-10-19T12:55:00Z")
+        XCTAssertEqual(TodayPriorityPolicy.localDayLabel(event.date,event:event,now:now),"Today · 19 Oct")
+        XCTAssertEqual(TodayPriorityPolicy.localDayLabel(event.end,event:event,now:now),"Tomorrow · 20 Oct")
+        XCTAssertEqual(TodayPriorityPolicy.status(event,now:now),"Active · 11h 35m remaining")
     }
 }

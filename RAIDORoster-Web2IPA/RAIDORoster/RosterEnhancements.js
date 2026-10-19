@@ -276,9 +276,9 @@
     if (/^(POS|DH)$/.test(c) || /\b(AIR POSITIONING|POSITIONING|DEADHEAD)\b/.test(d)) return 'POSITIONING';
     if (/^STB/.test(c) || /\bSTB\b|\bSTANDBY\b/.test(d)) return 'STANDBY';
     if (c === 'RES' || /\bRESERVE\b/.test(d)) return 'RESERVE';
+    if (c === 'RLCN' || /\bHOTEL RELOCATION\b/.test(d)) return 'RELOCATION';
     if (c === 'HTL' || /\bHOTEL\b/.test(d)) return 'HOTEL';
     if (c === 'AEP' || /\bADD EXPENSES\b/.test(d)) return 'EXPENSE';
-    if (c === 'RLCN' || /\bHOTEL RELOCATION\b/.test(d)) return 'RELOCATION';
     if (/^[A-Z0-9]{2,3}\d{2,4}[A-Z]?$/.test(c) || /\bDeparture\s+[A-Z]{3}\s+-/.test(segment)) return 'FLIGHT';
     return 'OTHER';
   }
@@ -559,7 +559,9 @@
     });
 
     const core = sorted.filter(isDutyCore);
-    const passive = sorted.filter(a => !isDutyCore(a) && !isAuxiliary(a.category));
+    // Keep moves alongside standby/flight duties. They are auxiliary for duty
+    // timing, but must still reach the native logistics and priority views.
+    const passive = sorted.filter(a => !isDutyCore(a) && (!isAuxiliary(a.category) || a.category === 'RELOCATION'));
 
     // OFF/REST/etc. dates naturally remain one day record.
     if (!core.length) return [sorted];
@@ -630,9 +632,9 @@
       const groups = dutyGroupsForDate(dayItems);
 
       groups.forEach((items, dutyIndex) => {
-        const primary = [...items].sort((a, b) => priority(b.category) - priority(a.category))[0];
         const meaningful = items.filter(i => !isAuxiliary(i.category));
         const displayItems = meaningful.length ? meaningful : items;
+        const primary = [...displayItems].sort((a, b) => priority(b.category) - priority(a.category))[0];
         const names = Array.from(new Set(displayItems.map(i => i.title).filter(Boolean)));
 
         const first = displayItems[0] || items[0];

@@ -3,6 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../RAIDORoster-Web2IPA" && pwd)"
 CHECKS="$ROOT/build/validation"
 mkdir -p "$CHECKS"
+python3 "$ROOT/../tools/check_relocation_selection.py"
 swiftc "$ROOT/RAIDORoster/AppearanceModels.swift" "$ROOT/../tests/AppearanceChecks.swift" -o "$CHECKS/appearance"
 "$CHECKS/appearance"
 python3 "$ROOT/../tests/offline_land_checks.py" "$ROOT/RAIDORoster/OfflineLand.json"

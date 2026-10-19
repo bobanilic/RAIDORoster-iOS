@@ -145,10 +145,22 @@ final class RosterBridgeTests: XCTestCase {
         var html = try String(contentsOf:url,encoding:.utf8)
         let tableStart = try XCTUnwrap(html.range(of:"<table"))
         let tableEnd = try XCTUnwrap(html.range(of:"</table>",range:tableStart.lowerBound..<html.endIndex))
-        let first = html[tableStart.lowerBound..<tableEnd.upperBound]
-            .replacingOccurrences(of:"Activity 6H501",with:"Activity RLCN")
-            .replacingOccurrences(of:"08OCT26",with:"23OCT26")
-            .replacingOccurrences(of:"08Oct",with:"23Oct")
+        // Real portal wording matters: HOTEL used to match before RLCN, and
+        // grouping then dropped relocation metadata on days with standby.
+        let first = """
+        <table class="activity-table"><tr><td>
+        Activity STA32,STB Afternoon320 ADHOC Station VNO - EYVI - VILNIUS
+        CheckIn 23OCT26 11:00 (LT) / 23OCT26 08:00 (UTC)
+        Start 23OCT26 11:00 (LT) / 23OCT26 08:00 (UTC)
+        End 23OCT26 21:00 (LT) / 23OCT26 18:00 (UTC)
+        CheckOut 23OCT26 21:00 (LT) / 23OCT26 18:00 (UTC)
+        </td></tr><tr><td>
+        Activity RLCN,Hotel relocation Station VNO - EYVI - VILNIUS
+        Start 23OCT26 12:00 (LT) / 23OCT26 09:00 (UTC)
+        End 23OCT26 13:00 (LT) / 23OCT26 10:00 (UTC)
+        Activity Note Please use Bolt for the relocation
+        </td></tr></table>
+        """
         html.replaceSubrange(tableStart.lowerBound..<tableEnd.upperBound,with:first)
         let payload = try await view.callAsyncJavaScript("return window.RAIDOPlus.extractHTML(html,url,month)",
             arguments:["html":html,"url":"https://gjt.noc.vmc.navblue.cloud/RaidoMobile/HumanResourceRoster.aspx","month":"2026-10"],in:nil,contentWorld:.page)
@@ -160,6 +172,12 @@ final class RosterBridgeTests: XCTestCase {
         let move = try XCTUnwrap(store.priorityEvents(at:now).first { $0.kind == .relocation })
         XCTAssertEqual(move.title,"Hotel relocation")
         XCTAssertEqual(TodayPriorityPolicy.status(move,now:now),"In 4 days")
+        XCTAssertEqual(move.clock,"12:00"); XCTAssertEqual(move.endClock,"13:00")
+        XCTAssertTrue(move.notes.contains("Please use Bolt"))
+        XCTAssertFalse(move.missing.contains("Transport details not provided"))
+        let day = try XCTUnwrap(store.priorityRosterItems.first { $0.dateISO == "2026-10-23" })
+        XCTAssertEqual(day.operationalActivities.map(\.category),["STANDBY"])
+        XCTAssertEqual(day.relocationActivities.count,1)
     }
     func testLoginPageDoesNotReportParserFailure() async throws {
         let expectation = expectation(description: "No roster error on login")
