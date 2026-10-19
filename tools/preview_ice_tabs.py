@@ -244,10 +244,14 @@ try:
         udid = run(['xcrun', 'simctl', 'create', 'RAIDO-startup-checks', device['deviceTypeIdentifier'], runtime],
                    capture_output=True, text=True, timeout=60).stdout.strip()
         ephemeral_simulator = udid
-    if ephemeral_simulator or device['state'] != 'Booted': run(['xcrun', 'simctl', 'boot', udid], timeout=60)
-    run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], timeout=240)
-    run(['xcrun', 'simctl', 'install', udid, str(product)], timeout=90)
-    run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '06:44', '--batteryState', 'charged', '--batteryLevel', '100'])
+    if '--startup-only' not in sys.argv:
+        if device['state'] != 'Booted': run(['xcrun', 'simctl', 'boot', udid], timeout=60)
+        run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], timeout=240)
+        run(['xcrun', 'simctl', 'install', udid, str(product)], timeout=90)
+        run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '06:44', '--batteryState', 'charged', '--batteryLevel', '100'])
+    # For startup checks XCTest installs/boots the app and runner together, as
+    # in the passing native suite. A separate simctl install was hanging before
+    # any UI test ran. The test command and job retain their existing limits.
     if '--startup-only' in sys.argv:
         with open('/tmp/raido-startup-ui-tests.log','w') as log:
             try:

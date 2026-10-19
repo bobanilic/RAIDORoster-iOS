@@ -41,7 +41,7 @@ final class LockScreenActivityController: ObservableObject {
         let plans = LockScreenPolicy.plans(events:events,now:Date(),pickup:defaults.bool(forKey:LockScreenPolicy.pickupKey),
                                            precaution:defaults.bool(forKey:LockScreenPolicy.precautionKey),
                                            leadHours:defaults.integer(forKey:LockScreenPolicy.leadHoursKey))
-        let appearance = defaults.string(forKey:LockScreenPolicy.appearanceKey) ?? "frosted"
+        let appearance = defaults.string(forKey:LockScreenPolicy.appearanceKey) ?? "glass"
         let layout = defaults.string(forKey:LockScreenPolicy.layoutKey) ?? "card"
         let previous = tail
         let revision = UUID(); refreshRevision = revision
@@ -98,7 +98,7 @@ final class LockScreenActivityController: ObservableObject {
             if let existing = Activity<DutyActivityAttributes>.activities.first(where: {
                 $0.attributes.eventID == plan.id && $0.activityState != .ended && $0.activityState != .dismissed
             }) {
-                await existing.update(content);count += 1
+                if existing.content.state != state { await existing.update(content) };count += 1
                 continue
             }
             do {
@@ -136,7 +136,7 @@ final class LockScreenActivityController: ObservableObject {
             let now = Date(),end = now.addingTimeInterval(5 * 60)
             let state = DutyActivityAttributes.ContentState(pickupAt:end,referenceAt:end,
                 precautionBegins:now.addingTimeInterval(-10 * 3600),referenceLabel:"Pickup",clock:end.formatted(date:.omitted,time:.shortened),
-                zoneID:TimeZone.current.identifier,savedAt:now,detail:"Sample times",appearance:UserDefaults.standard.string(forKey:LockScreenPolicy.appearanceKey) ?? "frosted",
+                zoneID:TimeZone.current.identifier,savedAt:now,detail:"Sample times",appearance:UserDefaults.standard.string(forKey:LockScreenPolicy.appearanceKey) ?? "glass",
                 layout:UserDefaults.standard.string(forKey:LockScreenPolicy.layoutKey) ?? "card",preview:true,countdownStartsAt:now)
             do {
                 _ = try Activity.request(attributes:DutyActivityAttributes(eventID:"lock-screen-preview",scheduledStart:now),

@@ -132,5 +132,5 @@ with tempfile.TemporaryDirectory(prefix='roster-timing-') as directory:
     source = Path(directory) / 'Checks.swift'
     source.write_text(fixture)
     executable = Path(directory) / 'checks'
-    subprocess.run(['swiftc', '-parse-as-library', str(source), '-o', str(executable)], check=True)
+    subprocess.run(['swiftc', '-parse-as-library', str(root / 'RAIDORoster-Web2IPA/RAIDORoster/RosterTimestamp.swift'), str(source), '-o', str(executable)], check=True)
     subprocess.run([str(executable)], check=True)

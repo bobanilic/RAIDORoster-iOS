@@ -47,10 +47,12 @@ private struct DutyLockScreenView: View {
     let state:DutyActivityAttributes.ContentState
     let stale:Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    private var solid:Bool { state.appearance == "solid" || reduceTransparency }
+    @Environment(\.isLuminanceReduced) private var dimmed
+    private var solid:Bool { state.appearance == "solid" || reduceTransparency || dimmed }
+    private var customBackdrop:Bool { state.appearance == "glass" }
     var body:some View {
         DutyActivityCard(state:state,stale:stale,systemBackground:true)
-            .activityBackgroundTint(solid ? Color(red:0.065,green:0.10,blue:0.14) : nil)
+            .activityBackgroundTint(solid ? Color(red:0.065,green:0.10,blue:0.14) : customBackdrop ? Color.clear : nil)
             .activitySystemActionForegroundColor(solid ? .white : .primary)
     }
 }

@@ -27,6 +27,24 @@ final class RosterMonthCacheTests: XCTestCase {
         XCTAssertTrue(state.rosterStore.hasCache)
         XCTAssertGreaterThan(changes, beforeImport, "First login/import must replace the welcome screen")
     }
+    func testRootIgnoresLeafStatusAndCalendarSelectionChanges() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let store = RosterStore(storageFolderURL: folder, automaticSideEffects: false)
+        let state = AppState(store: store)
+        XCTAssertTrue(store.ingest(messageBody: payload("2026-10")))
+        XCTAssertTrue(state.availability.hasCache)
+        var changes = 0
+        let observation = state.objectWillChange.sink { changes += 1 }
+        defer { observation.cancel() }
+        store.selectedRosterMonthKey = "2026-09"
+        store.calendarSyncStatus = "Fixture calendar status"
+        store.reminderSyncStatus = "Fixture reminder status"
+        XCTAssertEqual(changes, 0, "Leaf status must not invalidate every tab")
+        store.clearCache()
+        XCTAssertFalse(state.availability.hasCache)
+        XCTAssertGreaterThan(changes, 0, "Clearing the cache must still restore the welcome screen")
+    }
     func testDeferredRestorationPreservesArchiveBytes() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:folder) }

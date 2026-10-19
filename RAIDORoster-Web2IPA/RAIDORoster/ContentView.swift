@@ -1017,24 +1017,6 @@ final class CalendarExporter: ObservableObject {
 }
 
 
-@MainActor
-final class AppState: ObservableObject {
-    let rosterStore: RosterStore
-    let browser: RosterBrowserModel
-    private var rosterObservation: AnyCancellable?
-
-    init(store: RosterStore? = nil) {
-        let store = store ?? RosterStore(deferLoading:true)
-        rosterStore = store
-        browser = RosterBrowserModel(store: store)
-        // Root decisions (welcome/loading versus saved Today, and snapshot
-        // side effects) must observe the nested store as well as AppState.
-        rosterObservation = store.objectWillChange.sink { [weak self] _ in
-            self?.objectWillChange.send()
-        }
-    }
-}
-
 enum MainTab: Hashable { case today, roster, fleet, more }
 
 struct ContentView: View {
@@ -1053,8 +1035,8 @@ struct ContentView: View {
 
         TabView(selection: $selectedTab) {
             Group {
-                if !appState.rosterStore.hasCache {
-                    RaidoWelcomeView(isRestoring: appState.rosterStore.isRestoring) { showPortal = true }
+                if !appState.availability.hasCache {
+                    RaidoWelcomeView(isRestoring: appState.availability.isRestoring) { showPortal = true }
                 } else {
                     TodayView(store: appState.rosterStore, tabActive: selectedTab == .today) { showPortal = true }
                 }
@@ -1090,10 +1072,11 @@ struct ContentView: View {
             appState.browser.resumeOfflineMonths()
             appState.rosterStore.refreshDutyReminders()
         }
-        .onChange(of: appState.rosterStore.snapshot) { _, _ in
-            guard !appState.rosterStore.isRestoring,
-                  appState.rosterStore.hasCache || flightServicesConfigured else { return }
-            TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
+        .onReceive(appState.rosterStore.$snapshot.dropFirst()) { snapshot in
+            guard raidoScenePhase == .active, !appState.rosterStore.isRestoring,
+                  !(snapshot?.items.isEmpty ?? true) || flightServicesConfigured else { return }
+            // @Published emits before assignment; use the incoming payload.
+            TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: snapshot?.items ?? [])
             flightServicesConfigured = true
         }
         .onOpenURL { url in
@@ -1551,11 +1534,6 @@ struct RosterMonthCalendarView: View {
         }
     }
 
-    private var selectedItem: RosterItem? {
-        guard let selectedDateISO else { return nil }
-        return itemsByDate[selectedDateISO]
-    }
-
     private var relocationDates: Set<String> {
         Set(items.filter(\.hasHotelRelocationOnRosterDate).compactMap(\.dateISO))
     }
@@ -1587,6 +1565,12 @@ struct RosterMonthCalendarView: View {
         let _ = raidoColorPalette
 
         let _ = raidoVisualTheme
+
+        let byDate = itemsByDate
+        let moves = relocationDates
+        let days = slots
+        let today = rosterCalendarTodayISO()
+        let selection = selectedDateISO.flatMap { byDate[$0] }
 
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -1636,8 +1620,8 @@ struct RosterMonthCalendarView: View {
             }
 
             LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(Array(slots.enumerated()), id: \.offset) { _, iso in
-                    if let iso, let item = itemsByDate[iso] {
+                ForEach(Array(days.enumerated()), id: \.offset) { _, iso in
+                    if let iso, let item = byDate[iso] {
                         Button {
                             withAnimation(.snappy(duration: 0.18)) {
                                 selectedDateISO = iso
@@ -1646,19 +1630,19 @@ struct RosterMonthCalendarView: View {
                             RosterCalendarDayCell(
                                 item: item,
                                 day: Int(iso.suffix(2)) ?? 0,
-                                isToday: iso == rosterCalendarTodayISO(),
+                                isToday: iso == today,
                                 isChanged: changedDates.contains(iso),
                                 isSelected: selectedDateISO == iso,
-                                hasHotelRelocation: relocationDates.contains(iso)
+                                hasHotelRelocation: moves.contains(iso)
                             )
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("\(item.dateText), \(item.category.uppercased() == "STANDBY" ? item.standbyCalendarLabel : item.displayTitle)\(relocationDates.contains(iso) ? ", hotel relocation" : "")")
+                        .accessibilityLabel("\(item.dateText), \(item.category.uppercased() == "STANDBY" ? item.standbyCalendarLabel : item.displayTitle)\(moves.contains(iso) ? ", hotel relocation" : "")")
                     } else if let iso {
                         RosterCalendarDayCell(
                             item: nil,
                             day: Int(iso.suffix(2)) ?? 0,
-                            isToday: iso == rosterCalendarTodayISO(),
+                            isToday: iso == today,
                             isChanged: false,
                             isSelected: false
                         )
@@ -1669,7 +1653,7 @@ struct RosterMonthCalendarView: View {
                 }
             }
             .overlay {
-                if MidnightTheme.isGetJet { GetJetCalendarDividers(rows: slots.count / 7) }
+                if MidnightTheme.isGetJet { GetJetCalendarDividers(rows: days.count / 7) }
             }
 
             ViewThatFits(in: .horizontal) {
@@ -1677,7 +1661,7 @@ struct RosterMonthCalendarView: View {
                 VStack(alignment: .leading, spacing: 8) { calendarLegend }
             }.padding(.vertical, 6)
 
-            if let selectedItem {
+            if let selectedItem = selection {
                 IceSelectedRosterDay(item: selectedItem, isChanged: selectedItem.dateISO.map(changedDates.contains) ?? false,
                     dayItems: items.filter { $0.dateISO == selectedItem.dateISO })
                     .transition(.opacity)
@@ -1693,12 +1677,12 @@ struct RosterMonthCalendarView: View {
         .onAppear {
             guard selectedDateISO == nil else { return }
             let today = rosterCalendarTodayISO()
-            selectedDateISO = itemsByDate[today] != nil ? today : items.compactMap(\.dateISO).first
+            selectedDateISO = byDate[today] != nil ? today : items.compactMap(\.dateISO).first
         }
         .onChange(of: items.map(\.dateISO)) { _, _ in
-            if let selectedDateISO, itemsByDate[selectedDateISO] != nil { return }
+            if let selectedDateISO, byDate[selectedDateISO] != nil { return }
             let today = rosterCalendarTodayISO()
-            selectedDateISO = itemsByDate[today] != nil ? today : items.compactMap(\.dateISO).first
+            selectedDateISO = byDate[today] != nil ? today : items.compactMap(\.dateISO).first
         }
         .sensoryFeedback(.selection, trigger: selectedDateISO)
     }
@@ -8856,13 +8840,7 @@ func pickupUTCDate(for activity: RosterActivity) -> Date? {
 }
 
 func parseUTCStamp(_ value: String) -> Date? {
-    guard !value.isEmpty else { return nil }
-    let formatter = DateFormatter()
-    formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.timeZone = TimeZone(secondsFromGMT: 0)
-    formatter.dateFormat = "yyyy-MM-dd HH:mm"
-    return formatter.date(from: value)
+    RosterTimestamp.parse(value)
 }
 
 func durationText(_ interval: TimeInterval) -> String {
@@ -9053,9 +9031,20 @@ enum MidnightTheme {
             ice: defaults.string(forKey: RaidoAppearancePreferences.icePaletteKey) ?? "iceBlue",
             getJet: defaults.string(forKey: RaidoAppearancePreferences.getJetPaletteKey) ?? "forestGreen")
     }
+    private static let toneCache: NSCache<NSString, UIColor> = {
+        let cache = NSCache<NSString, UIColor>(); cache.countLimit = 256; return cache
+    }()
     private static func tone(_ role: KeyPath<RaidoPaletteColors, UInt32>) -> UIColor {
         let palette = colorPalette
-        return adaptive(palette.colors(dark: true)[keyPath: role], palette.colors(dark: false)[keyPath: role])
+        let dark = palette.colors(dark: true)[keyPath: role]
+        let light = palette.colors(dark: false)[keyPath: role]
+        // Actual colour pairs form the key, so changing either theme's palette
+        // creates the right dynamic colour without recreating it for every row.
+        let key = "\(dark):\(light)" as NSString
+        if let cached = toneCache.object(forKey: key) { return cached }
+        let value = adaptive(dark, light)
+        toneCache.setObject(value, forKey: key)
+        return value
     }
     // V2.29.2 map polish: retain readable filled actions separately from links.
     static var actionFill: Color { Color(uiColor: tone(\.actionFill)) }

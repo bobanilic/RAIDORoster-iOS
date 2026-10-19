@@ -8,7 +8,8 @@ struct DutyActivityCard: View {
     var systemBackground = false
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    private var solid: Bool { state.appearance == "solid" || reduceTransparency }
+    @Environment(\.isLuminanceReduced) private var dimmed
+    private var solid: Bool { state.appearance == "solid" || reduceTransparency || dimmed }
     private var ink: Color { solid ? .white : .primary }
     private var coral: Color { solid || scheme == .dark ? Color(red:1,green:0.64,blue:0.60) : Color(red:0.63,green:0.17,blue:0.20) }
     private var blue: Color { solid || scheme == .dark ? Color(red:0.58,green:0.82,blue:0.94) : Color(red:0.13,green:0.37,blue:0.51) }
@@ -147,22 +148,37 @@ struct DutyActivityCard: View {
     }
 }
 
-/// WidgetKit owns the real Lock Screen backdrop. This material is only for the
-/// in-app sample. No glassEffect captures or alters the foreground on locking.
+/// Apply glass only to an empty background sibling. The foreground is never
+/// inside glassEffect or an offscreen snapshot. Dimmed displays use a quiet,
+/// opaque backdrop so a WidgetKit glass transition cannot blank the briefing.
 private struct DutyActivitySurface: ViewModifier {
-    let appearance:String
-    let systemBackground:Bool
+    let appearance: String
+    let systemBackground: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    private var shape:RoundedRectangle { RoundedRectangle(cornerRadius:24,style:.continuous) }
-    func body(content:Content) -> some View {
+    @Environment(\.isLuminanceReduced) private var dimmed
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 24, style: .continuous) }
+    private var mode: DutyActivityBackdrop {
+        let supported: Bool
+        if #available(iOS 26.0, *) { supported = true } else { supported = false }
+        return DutyActivityAppearancePolicy.backdrop(appearance: appearance, supportsGlass: supported,
+            reduceTransparency: reduceTransparency, dimmed: dimmed, systemBackground: systemBackground)
+    }
+    func body(content: Content) -> some View {
         content.background {
-            if !systemBackground {
-                if appearance == "solid" || reduceTransparency {
-                    shape.fill(Color(red:0.065,green:0.10,blue:0.14))
-                } else {
+            Group {
+                switch mode {
+                case .opaque:
+                    shape.fill(Color(red: 0.065, green: 0.10, blue: 0.14))
+                case .glass:
+                    if #available(iOS 26.0, *) {
+                        shape.fill(Color.clear).glassEffect(.regular, in: shape)
+                    }
+                case .material:
                     shape.fill(.regularMaterial)
+                case .system:
+                    Color.clear
                 }
-            }
+            }.allowsHitTesting(false).accessibilityHidden(true)
         }
     }
 }

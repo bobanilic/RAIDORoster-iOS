@@ -5,13 +5,14 @@ struct LockScreenSettings: View {
     @ObservedObject private var controller = LockScreenActivityController.shared
     @AppStorage(LockScreenPolicy.pickupKey) private var pickup = false
     @AppStorage(LockScreenPolicy.precautionKey) private var precaution = false
-    @AppStorage(LockScreenPolicy.appearanceKey) private var appearance = "frosted"
+    @AppStorage(LockScreenPolicy.appearanceKey) private var appearance = "glass"
     @AppStorage("RAIDORoster.Notifications.Appearance") private var notificationAppearance = "glass"
     @AppStorage(LockScreenPolicy.layoutKey) private var layout = "card"
     @AppStorage(LockScreenPolicy.leadHoursKey) private var leadHours = 2
     @StateObject private var reminders = DutyReminderScheduler()
     @State private var sampleNotice = RaidoToastNotice.precautionSample
     @State private var showSampleNotice = false
+    @State private var previewReference = Date().addingTimeInterval(105 * 60)
 
     var body: some View {
         Form {
@@ -28,6 +29,7 @@ struct LockScreenSettings: View {
             }
             Section("Appearance") {
                 Picker("Lock Screen background",selection:$appearance) {
+                    Text("Glass").tag("glass")
                     Text("Frosted").tag("frosted")
                     Text("Solid").tag("solid")
                 }.pickerStyle(.segmented)
@@ -39,7 +41,7 @@ struct LockScreenSettings: View {
                 DutyActivityCard(state:previewState)
                     .listRowInsets(EdgeInsets(top:12,leading:0,bottom:12,trailing:0))
                     .listRowBackground(Color.clear)
-                Text("Frosted uses the iPhone’s Live Activity background. Its appearance depends on iOS, wallpaper and accessibility settings. Orbit shows hours and minutes on iOS 18 or later.")
+                Text("Glass uses native glass on iOS 26 or later. Always-On dimming and Reduce Transparency use a solid backdrop to keep information readable. Frosted leaves the background to iOS. Orbit shows hours and minutes on iOS 18 or later.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Sample in-app notification") {
@@ -93,7 +95,7 @@ struct LockScreenSettings: View {
     }
     private func apply() { store.refreshDutyReminders(forceLockScreen:true) }
     private var previewState: DutyActivityAttributes.ContentState {
-        let end = Date().addingTimeInterval(105 * 60)
+        let end = previewReference
         return .init(pickupAt:end,referenceAt:end,precautionBegins:Date().addingTimeInterval(-10 * 3600),
             referenceLabel:"Pickup",clock:TodayPriorityAdapter.clock(end,zone:.current),zoneID:TimeZone.current.identifier,
             savedAt:Date(),detail:"Sample times",appearance:appearance,layout:layout,preview:true,
