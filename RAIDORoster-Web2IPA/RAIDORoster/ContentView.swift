@@ -9875,10 +9875,19 @@ struct TodayView: View {
             if let selected = activePriority { activePriority = store.priorityEvents(at: Date()).first { $0.id == selected.id } }
         }
         .onReceive(TodayNotificationRouter.shared.$pendingID) { id in
-            guard let id else { return }
-            activePriority = store.priorityEvents(at: Date()).first { $0.id == id }
-            // Let the root TabView receive the same event before consuming it.
-            DispatchQueue.main.async { TodayNotificationRouter.shared.pendingID = nil }
+            guard !store.isRestoring else { return }
+            openPendingPriority(id)
+        }
+        .onChange(of:store.isRestoring) { _,restoring in
+            if !restoring { openPendingPriority(TodayNotificationRouter.shared.pendingID) }
+        }
+    }
+    private func openPendingPriority(_ id:String?) {
+        guard let id else { return }
+        activePriority = store.priorityEvents(at:Date()).first { $0.id == id }
+        // A notification tapped during launch waits for cache restoration.
+        DispatchQueue.main.async {
+            if TodayNotificationRouter.shared.pendingID == id { TodayNotificationRouter.shared.pendingID = nil }
         }
     }
     private func panelEvents(_ events: [TodayPriorityEvent]) -> [TodayPriorityEvent] {

@@ -285,10 +285,10 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
     }
     private func message(_ failure: Failure) -> String {
         switch failure {
-        case .auth: return "Sign in to Live RAIDO, then return here to resume saving history."
-        case .rateLimit: return "RAIDO asked us to wait. History will resume after its retry delay."
+        case .auth: return "Sign in to Live RAIDO, then return here to refresh your roster."
+        case .rateLimit: return "RAIDO asked us to wait. Roster refresh will resume after its retry delay."
         case .storage: return "A month could not be saved on this device. Saved months are safe."
-        default: return "History download paused. Connect and retry; saved months are safe."
+        default: return "Roster refresh paused. Connect and retry; saved months are safe."
         }
     }
     private func reportCompletion() {
