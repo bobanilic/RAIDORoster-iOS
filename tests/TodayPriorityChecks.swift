@@ -74,6 +74,14 @@ import Foundation
         expect(!LockScreenPolicy.showFutureRelocations(todayCategories:[]), "Unknown day does not invent an off day")
         expect(LockScreenPolicy.cleanLogisticsNote("Please use Bolt for the relocation HTL 1455 VNO VNO 26OCT BKD") == "Please use Bolt for the relocation", "Cached note loses collapsed hotel suffix")
         expect(LockScreenPolicy.cleanLogisticsNote("HTL will confirm the address.") == "HTL will confirm the address.", "Legitimate hotel prose is preserved")
+        // Characterize the actual Foundation style used by the native Orbit
+        // TimeDataSource, especially the last minute and hour rollover.
+        let orbitFormat = Duration.TimeFormatStyle(pattern:.hourMinute(padHourToLength:2,roundSeconds:.awayFromZero),locale:Locale(identifier:"en_US_POSIX"))
+        for (seconds,expected) in [(0,"00:00"),(1,"00:01"),(59,"00:01"),(60,"00:01"),(61,"00:02"),
+                                   (3599,"01:00"),(3600,"01:00"),(3601,"01:01"),(28800,"08:00")] {
+            let nativeOffset = orbitFormat.format(.seconds(-seconds))
+            expect(String(nativeOffset.suffix(5)) == expected,"Orbit minute precision and padded hours at \(seconds) seconds")
+        }
         print("Passed \(count) Today priority, countdown, DST and reminder checks")
     }
 }

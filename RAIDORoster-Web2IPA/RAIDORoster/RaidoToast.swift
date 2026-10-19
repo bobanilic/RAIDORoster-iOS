@@ -39,7 +39,7 @@ enum RaidoToastPresentation {
 struct RaidoToastHost: ViewModifier {
     @ObservedObject private var center = RaidoToastCenter.shared
     @AppStorage(LockScreenPolicy.layoutKey) private var layout = "card"
-    @AppStorage(LockScreenPolicy.appearanceKey) private var appearance = "frosted"
+    @AppStorage("RAIDORoster.Notifications.Appearance") private var appearance = "glass"
     @State private var presented = false
     func body(content:Content) -> some View {
         content.toast(isPresenting:$presented,duration:5,offsetY:layout == "focus" ? -64 : 0,

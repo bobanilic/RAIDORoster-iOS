@@ -20,6 +20,7 @@ struct DutyActivityCard: View {
             HStack {
                 Text(state.preview ? "RAIDO · PREVIEW" : "RAIDO").font(.system(size:9,weight:.semibold)).tracking(2)
                 Spacer()
+                if state.layout == "circles" { Text(dayLabel).font(.system(size:9)) }
                 if Date().timeIntervalSince(state.savedAt) >= 86400 {
                     Label("Saved roster",systemImage:"clock").font(.system(size:9))
                 }
@@ -73,10 +74,9 @@ struct DutyActivityCard: View {
             }
             ring(color:blue) {
                 Image(systemName:referenceIcon).font(.title3.weight(.light))
-                timer.font(.system(.title3,design:.rounded).weight(.semibold))
-                    .multilineTextAlignment(.center).frame(maxWidth:.infinity)
+                orbitTimer
                 label(state.referenceLabel.uppercased() + " IN")
-                Text(state.clock + " · " + dayLabel).font(.caption2)
+                Text(state.clock).font(.caption2).lineLimit(1)
             }
         }
     }
@@ -104,6 +104,30 @@ struct DutyActivityCard: View {
     private var timer: some View {
         Text(timerInterval:(state.countdownStartsAt ?? state.referenceAt.addingTimeInterval(-2 * 3600))...state.referenceAt,countsDown:true,showsHours:true)
             .monospacedDigit().minimumScaleFactor(0.7).lineLimit(1)
+    }
+    @ViewBuilder private var orbitTimer: some View {
+        if #available(iOS 18.0, *) {
+            // Use a system-known formatter: custom DiscreteFormatStyle types
+            // cannot reliably decode in the Live Activity renderer. This native
+            // duration source updates at minute boundaries without waking RAIDO.
+            // A future anchor produces a negative offset. Reserve exactly the
+            // five HH:MM glyphs, align the live text to their trailing edge and
+            // clip only the leading sign. The stale-date view handles expiry.
+            Text("00:00").hidden().fixedSize()
+                .overlay(alignment:.trailing) {
+                    Text(TimeDataSource<Date>.durationOffset(to:state.referenceAt),
+                         format:Duration.TimeFormatStyle(pattern:.hourMinute(padHourToLength:2,roundSeconds:.awayFromZero),locale:Locale(identifier:"en_US_POSIX")))
+                        .multilineTextAlignment(.trailing)
+                        .frame(width:96,height:26,alignment:.trailing)
+                }
+                .clipped()
+                .font(.system(size:20,weight:.semibold,design:.rounded)).monospacedDigit()
+                .frame(width:80,height:26)
+        } else {
+            // The older system timer remains supported, with explicit bounds.
+            timer.font(.system(size:20,weight:.semibold,design:.rounded))
+                .multilineTextAlignment(.center).frame(width:80,height:26)
+        }
     }
     private func ring<Content:View>(color:Color,@ViewBuilder content:() -> Content) -> some View {
         VStack(spacing:2,content:content).padding(5).frame(width:96,height:96)

@@ -32,6 +32,29 @@ References:
 
 AlertToast 1.3.9 is now vendored under `RAIDORoster/ThirdParty`, with its MIT
 notice bundled as `ThirdPartyNotices.txt`. It handles in-app messages only.
-The sole source adjustment permits narrow-screen wrapping in HUD/banner text.
+The initial source adjustment permits narrow-screen wrapping in HUD/banner text.
 ActivityKit continues to render native countdowns and background notifications.
 Compact, Orbit and Focus share their foreground layout with the Settings sample.
+
+## 2.29.25 findings and scoped adoption
+
+AlertToast PR #112 remains open and unmerged. Its BackgroundModifier adds
+glassEffect(in: .rect(cornerRadius: 16)) on iOS/macOS 26. The RAIDO adaptation
+keeps Solid opaque, handles Reduce Transparency, and matches the capsule/rounded
+rectangle effect to the existing toast shape. This is actual in-app glass; it
+does not establish support in the Live Activity renderer.
+
+Apple's glassEffect documentation and "Applying Liquid Glass to custom views"
+describe the public SwiftUI API. WidgetKit's supported-views documentation excludes
+UIViewRepresentable, so AlertToast's UIKit blur is not a Lock Screen solution.
+Apple forum thread 789384 reports disappearing foreground with glassEffect, while
+thread 797298 explains system-controlled widget rendering modes. Home Screen
+clear/tinted widget appearance is not proof of the same capability in an
+ActivityKit Lock Screen card. The UI now labels that fallback Frosted.
+
+Apple's TimeDataSource/Text formatter APIs support native updating without an app
+timer. Foundation's hourMinute(padHourToLength:roundSeconds:) supplies the HH:MM
+pattern. Orbit explicitly reserves its digit width rather than relying on the
+renderer to relayout archived timer text; the native future offset's sign is
+excluded from the visible digit slot. Custom DiscreteFormatStyle types are avoided
+because developers report failed decoding in Live Activity system renderers.

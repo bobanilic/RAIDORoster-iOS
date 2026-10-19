@@ -1,5 +1,26 @@
 # Lock Screen duty countdowns — 2.29.20
 
+## 2.29.25 Orbit bounds and in-app Liquid Glass
+
+Orbit uses the system TimeDataSource duration offset with Foundation's padded
+hour/minute pattern on iOS 18+. It rounds remaining partial minutes up and keeps
+the five HH:MM glyphs in a measured, fixed-width slot. The future anchor's leading
+minus sign is outside that slot; the digit area is clipped at its measured bounds.
+The card's existing stale date/view handles expiry. No custom formatter type,
+background timer or periodic ActivityKit update is introduced. The iOS 17 fallback
+retains the original system timer with explicit width limits. Today/Tomorrow moves
+to the Orbit header, keeping the clock inside the ring's curved lower edge.
+
+The Lock Screen background control now says Frosted rather than Glass: it selects
+the system Live Activity material and does not claim to force Liquid Glass there.
+In-app notifications have an independent Glass/Solid setting. AlertToast's
+background modifier uses SwiftUI glassEffect on iOS 26+, following the approach
+in upstream PR #112, with the effect shape matching the HUD capsule or banner.
+Solid stays opaque; Reduce Transparency uses an opaque fallback, and older iOS
+versions retain material blur. This code runs in the app only, not WidgetKit.
+Native Lock Screen Liquid Glass remains unresolved. Both in-app glass appearance
+and the minute-only timer's locked/Always-On rendering require device validation.
+
 ## 2.29.24 compact styles and system background
 
 Settings offers Compact (the default), Orbit and Focus. Existing card/circles

@@ -1,4 +1,5 @@
-// Vendored from elai950/AlertToast tag 1.3.9. Local change: permit text wrapping on narrow screens.
+// Vendored from elai950/AlertToast tag 1.3.9. Local changes: narrow-screen wrapping
+// and native iOS 26 in-app glass, following upstream PR #112 (with solid/accessibility fallback).
 //MIT License
 //
 //Copyright (c) 2021 Elai Zuberman
@@ -321,11 +322,10 @@ public struct AlertToast: View{
             .padding(.horizontal, 24)
             .padding(.vertical, 8)
             .frame(minHeight: 50)
-            .alertBackground(style?.backgroundColor ?? nil)
+            .alertBackground(style?.backgroundColor ?? nil, capsule: true)
             .clipShape(Capsule())
             .overlay(Capsule().stroke(Color.gray.opacity(0.2), lineWidth: 1))
             .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 6)
-            .compositingGroup()
         }
         .padding(.top)
     }
@@ -623,15 +623,27 @@ fileprivate struct WithFrameModifier: ViewModifier{
 fileprivate struct BackgroundModifier: ViewModifier{
     
     var color: Color?
+    var capsule = false
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     
     @ViewBuilder
     func body(content: Content) -> some View {
-        if color != nil{
-            content
-                .background(color)
-        }else{
-            content
-                .background(BlurView())
+        if let color {
+            content.background(color)
+        } else if reduceTransparency {
+            #if os(macOS)
+            content.background(Color(NSColor.windowBackgroundColor))
+            #else
+            content.background(Color(.secondarySystemBackground))
+            #endif
+        } else if #available(iOS 26.0, macOS 26.0, *) {
+            if capsule {
+                content.glassEffect(.regular,in:Capsule())
+            } else {
+                content.glassEffect(.regular,in:RoundedRectangle(cornerRadius:10))
+            }
+        } else {
+            content.background(BlurView())
         }
     }
 }
@@ -688,8 +700,8 @@ public extension View{
     /// Choose the alert background
     /// - Parameter color: Some Color, if `nil` return `VisualEffectBlur`
     /// - Returns: some View
-    fileprivate func alertBackground(_ color: Color? = nil) -> some View{
-        modifier(BackgroundModifier(color: color))
+    fileprivate func alertBackground(_ color: Color? = nil, capsule: Bool = false) -> some View{
+        modifier(BackgroundModifier(color: color, capsule: capsule))
     }
     
     /// Choose the alert background

@@ -6,6 +6,7 @@ struct LockScreenSettings: View {
     @AppStorage(LockScreenPolicy.pickupKey) private var pickup = false
     @AppStorage(LockScreenPolicy.precautionKey) private var precaution = false
     @AppStorage(LockScreenPolicy.appearanceKey) private var appearance = "frosted"
+    @AppStorage("RAIDORoster.Notifications.Appearance") private var notificationAppearance = "glass"
     @AppStorage(LockScreenPolicy.layoutKey) private var layout = "card"
     @AppStorage(LockScreenPolicy.leadHoursKey) private var leadHours = 2
     @StateObject private var reminders = DutyReminderScheduler()
@@ -26,8 +27,8 @@ struct LockScreenSettings: View {
                 Text("Cards begin within your selected window before saved pickup/report. The default is two hours. Precaution notifications still cover the earlier 12-hour period. iOS limits a Live Activity to eight active hours, so this card cannot stay permanently. No GPS or continuous background scanning is used.")
             }
             Section("Appearance") {
-                Picker("Background",selection:$appearance) {
-                    Text("Glass").tag("frosted")
+                Picker("Lock Screen background",selection:$appearance) {
+                    Text("Frosted").tag("frosted")
                     Text("Solid").tag("solid")
                 }.pickerStyle(.segmented)
                 Picker("Layout",selection:$layout) {
@@ -38,14 +39,18 @@ struct LockScreenSettings: View {
                 DutyActivityCard(state:previewState)
                     .listRowInsets(EdgeInsets(top:12,leading:0,bottom:12,trailing:0))
                     .listRowBackground(Color.clear)
-                Text("Glass uses the system Lock Screen background with independent text and icons. Wallpaper and accessibility settings affect its appearance; Reduce Transparency uses a solid background.")
+                Text("Frosted uses the iPhone’s Live Activity background. Its appearance depends on iOS, wallpaper and accessibility settings. Orbit shows hours and minutes on iOS 18 or later.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Sample in-app notification") {
+                Picker("Notification background",selection:$notificationAppearance) {
+                    Text("Glass").tag("glass")
+                    Text("Solid").tag("solid")
+                }.pickerStyle(.segmented)
                 Button("Pickup reminder") { sampleNotice = .pickupSample;showSampleNotice = true }
                 Button("Precaution active") { sampleNotice = .precautionSample;showSampleNotice = true }
                 Button("Roster updated") { sampleNotice = .rosterSample;showSampleNotice = true }
-                Text("Sample messages only. Lock Screen notifications use the iPhone’s notification appearance.")
+                Text("Glass applies to messages inside RAIDO on iOS 26 or later. Older iOS versions use blur; Reduce Transparency uses an opaque background. Lock Screen notifications use the iPhone’s notification appearance.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Status") {
@@ -66,7 +71,7 @@ struct LockScreenSettings: View {
         .navigationTitle("Lock Screen").navigationBarTitleDisplayMode(.inline)
         .scrollContentBackground(.hidden).midnightCanvas()
         .toast(isPresenting:$showSampleNotice,duration:4,offsetY:layout == "focus" ? -20 : 0) {
-            RaidoToastPresentation.make(sampleNotice,layout:layout,appearance:appearance)
+            RaidoToastPresentation.make(sampleNotice,layout:layout,appearance:notificationAppearance)
         }
         .onChange(of:pickup) { _,_ in apply() }
         .onChange(of:precaution) { _,enabled in
