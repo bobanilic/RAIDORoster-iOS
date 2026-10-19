@@ -11,7 +11,30 @@ final class LockScreenActivityController: ObservableObject {
     private var tail: Task<Void,Never>?
     private var lastPlans: [DutyLockScreenPlan]?
     private var lastStyle = ""
+    private var refreshRevision = UUID()
     private let log = Logger(subsystem:"com.bobanilic.raidoroster",category:"LockScreen")
+
+    var extensionAvailable: Bool {
+        guard let plugins = Bundle.main.builtInPlugInsURL,
+              let bundle = Bundle(url:plugins.appendingPathComponent("RAIDODutyWidget.appex")),
+              let executable = bundle.executableURL else { return false }
+        return FileManager.default.fileExists(atPath:executable.path) &&
+            (bundle.infoDictionary?["NSExtension"] as? [String:Any])?["NSExtensionPointIdentifier"] as? String == "com.apple.widgetkit-extension"
+    }
+
+    var installationStatus: String {
+        extensionAvailable ? "Widget extension is present in this installation." :
+            "Widget extension is missing. Import the original IPA into SideStore again and keep app extensions."
+    }
+
+    private func canRequestActivity() -> Bool {
+        guard extensionAvailable else { status = installationStatus; return false }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            status = "Live Activities are disabled. Enable them in iPhone Settings → Apps → RAIDO → Live Activities."
+            return false
+        }
+        return true
+    }
 
     func refresh(events:[TodayPriorityEvent],force:Bool = false) {
         let defaults = UserDefaults.standard
@@ -20,9 +43,12 @@ final class LockScreenActivityController: ObservableObject {
         let appearance = defaults.string(forKey:LockScreenPolicy.appearanceKey) ?? "frosted"
         let layout = defaults.string(forKey:LockScreenPolicy.layoutKey) ?? "card"
         let previous = tail
+        let revision = UUID(); refreshRevision = revision
         tail = Task { @MainActor in
             if let previous { await previous.value }
+            guard self.refreshRevision == revision else { return }
             await self.reconcile(plans,appearance:appearance,layout:layout,force:force)
+            if self.refreshRevision == revision { self.tail = nil }
         }
     }
 
@@ -44,10 +70,7 @@ final class LockScreenActivityController: ObservableObject {
             status = "No upcoming pickup or report is available for the selected options."
             return
         }
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            status = "Live Activities are unavailable or disabled. Check iPhone Settings → RAIDO → Live Activities."
-            return
-        }
+        guard canRequestActivity() else { return }
         // Do not recreate a card the user dismissed when unchanged data returns.
         if !force && lastPlans == plans && lastStyle == style { return }
         var count = 0
@@ -87,6 +110,7 @@ final class LockScreenActivityController: ObservableObject {
 
     func preview() {
         Task { @MainActor in
+            guard canRequestActivity() else { return }
             await stopPreview()
             let now = Date(),end = now.addingTimeInterval(5 * 60)
             let state = DutyActivityAttributes.ContentState(pickupAt:end,referenceAt:end,
@@ -96,10 +120,11 @@ final class LockScreenActivityController: ObservableObject {
             do {
                 _ = try Activity.request(attributes:DutyActivityAttributes(eventID:"lock-screen-preview",scheduledStart:now),
                     content:ActivityContent(state:state,staleDate:end),pushType:nil)
-                status = "Preview started with sample times. Lock your phone to view it; use Stop preview when finished."
+                status = "Preview requested for five minutes. Lock your phone to check the card. If nothing appears, verify that SideStore kept and registered the widget extension."
             } catch {
                 log.error("Live Activity preview failed: \(String(describing:error),privacy:.public)")
-                status = "Preview unavailable: " + error.localizedDescription
+                let detail = error as NSError
+                status = "Preview unavailable: " + detail.localizedDescription + " (\(detail.domain) \(detail.code))"
             }
         }
     }

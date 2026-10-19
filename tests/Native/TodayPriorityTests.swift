@@ -115,6 +115,17 @@ final class TodayPriorityTests: XCTestCase {
             XCTAssertFalse(store.priorityEvents(at:date("2026-10-19T09:00:00Z")).contains { $0.kind == .relocation || $0.kind == .pickup })
         }
     }
+    func testPriorityWindowAdvancesAndCachedEventsStillExpire() throws {
+        try store { store in
+            ingest(store,day:"2026-10-30",category:"OFF",activities:[activity(id:"move",category:"RELOCATION",day:"2026-10-30")])
+            XCTAssertFalse(store.priorityEvents(at:date("2026-10-19T09:00:00Z")).contains { $0.kind == .relocation })
+            XCTAssertTrue(store.priorityEvents(at:date("2026-10-20T09:00:00Z")).contains { $0.kind == .relocation })
+            XCTAssertTrue(store.priorityEvents(at:date("2026-10-30T07:00:00Z")).contains { $0.kind == .relocation })
+            XCTAssertFalse(store.priorityEvents(at:date("2026-10-30T12:00:00Z")).contains { $0.kind == .relocation })
+            store.clearCache()
+            XCTAssertTrue(store.priorityEvents(at:date("2026-10-20T09:00:00Z")).isEmpty)
+        }
+    }
     func testAllDayUTCSpanDoesNotBecomeMidnightRelocationCountdown() throws {
         try store { store in
             var move = activity(id:"move",category:"RELOCATION",day:"2026-10-23")

@@ -6,26 +6,44 @@ extension RosterStore {
     /// Choose one authoritative snapshot per month, independently of the month
     /// selected in Roster. A superseded snapshot must not restore a deleted move.
     var priorityRosterSources: [(item: RosterItem, capturedAt: Date)] {
+        prioritySources(from:nil,through:nil)
+    }
+
+    func prioritySources(from lower: String?, through upper: String?) -> [(item: RosterItem, capturedAt: Date)] {
         let snapshots = (Array(monthSnapshots.values) + (snapshot.map { [$0] } ?? []))
             .filter { $0.validation?.isValid == true }.sorted { $0.capturedAt > $1.capturedAt }
         var months = Set<String>()
         var result: [(RosterItem, Date)] = []
         for snapshot in snapshots {
             guard let month = snapshot.validation?.month, months.insert(month).inserted else { continue }
-            result += snapshot.items.filter { $0.dateISO?.hasPrefix(month + "-") == true }.map { ($0, snapshot.capturedAt) }
+            if let lower, month < String(lower.prefix(7)) { continue }
+            if let upper, month > String(upper.prefix(7)) { continue }
+            result += snapshot.items.filter {
+                guard let day = $0.dateISO, day.hasPrefix(month + "-") else { return false }
+                return (lower.map { day >= $0 } ?? true) && (upper.map { day <= $0 } ?? true)
+            }.map { ($0, snapshot.capturedAt) }
         }
         return result
     }
 
     var priorityRosterItems: [RosterItem] { priorityRosterSources.map(\.item) }
 
-    func priorityEvents(at now: Date) -> [TodayPriorityEvent] {
-        var events: [TodayPriorityEvent] = []
+    func priorityEventCandidates(at now: Date) -> [TodayPriorityEvent] {
         let lower = EarningsMath.day(now.addingTimeInterval(-2 * 24 * 3600))
         let upper = EarningsMath.day(now.addingTimeInterval(10 * 24 * 3600))
-        for source in priorityRosterSources where (source.item.dateISO ?? "") >= lower && (source.item.dateISO ?? "") <= upper {
-            events += TodayPriorityAdapter.events(item: source.item, capturedAt: source.capturedAt)
+        let zone = TimeZone.current.identifier
+        if let cache = priorityEventCache, cache.lower == lower, cache.upper == upper, cache.zone == zone {
+            return cache.events
         }
+        let events = prioritySources(from:lower,through:upper).flatMap {
+            TodayPriorityAdapter.events(item:$0.item,capturedAt:$0.capturedAt)
+        }
+        priorityEventCache = (lower,upper,zone,events)
+        return events
+    }
+
+    func priorityEvents(at now: Date) -> [TodayPriorityEvent] {
+        var events = priorityEventCandidates(at:now)
         // Show the next pre-duty precaution, rather than stacking every shift.
         let nextAlcohol = events.filter { $0.kind == .alcohol && $0.end > now }.min { $0.end < $1.end }?.id
         events.removeAll { $0.kind == .alcohol && $0.id != nextAlcohol }
@@ -33,7 +51,9 @@ extension RosterStore {
     }
 
     func todayPriorityEvents(at now: Date) -> [TodayPriorityEvent] {
-        let rows = priorityRosterItems.filter { item in
+        let lower = EarningsMath.day(now.addingTimeInterval(-2 * 24 * 3600))
+        let upper = EarningsMath.day(now.addingTimeInterval(2 * 24 * 3600))
+        let rows = prioritySources(from:lower,through:upper).map(\.item).filter { item in
             let zone = TodayPriorityAdapter.zone(activity:nil,item:item) ?? .current
             var calendar = Calendar(identifier:.gregorian);calendar.timeZone = zone
             if let day = TodayPriorityAdapter.day(item.dateISO,zone:zone), calendar.isDate(day,inSameDayAs:now) { return true }
@@ -137,7 +157,7 @@ enum TodayPriorityAdapter {
             if hotels.isEmpty { missing.append("Hotel details not provided") }
             let noteValues = [activity.transferNote,activity.activityNote,activity.dayNote].map(LockScreenPolicy.cleanLogisticsNote).filter { !$0.isEmpty }
             let notes = (NSOrderedSet(array: noteValues).array as? [String] ?? []).joined(separator: "\n\n")
-            let transportProvided = !activity.pickup.isEmpty || !activity.transferNote.isEmpty || notes.range(of: #"\b(bolt|uber|taxi|transfer|transport|shuttle|pickup|pick.up)\b"#, options: .caseInsensitive) != nil
+            let transportProvided = !activity.pickup.isEmpty || !activity.transferNote.isEmpty || notes.range(of: #"\b(bolt|uber|taxi|transfer|transport|shuttle|pickup|pick.up)\b"#, options: [.regularExpression,.caseInsensitive]) != nil
             if !transportProvided { missing.append("Transport details not provided") }
             events.append(.init(id: "relocation-" + activity.id, kind: .relocation, itemID: item.id,
                 title: "Hotel relocation", detail: detail, date: date, end: end, hasTime: timed,
@@ -147,8 +167,8 @@ enum TodayPriorityAdapter {
                 notes: notes, endClock: timed ? finish.map { clock($0, zone: moveZone) } ?? "" : ""))
         }
         let transportText = (item.transferNotes + item.activityList.map(\.pickup)).joined(separator: " ")
-        let explicitTransport = item.activityList.contains { !$0.pickup.isEmpty } || transportText.range(of: #"\b(pickup|pick.up|PU\s+at|transport arranged|transfer arranged|shuttle)\b"#, options: .caseInsensitive) != nil
-        let ownTransport = transportText.range(of: #"\b(no (pickup|transport|transfer)|own transport|self.transfer)\b"#, options: .caseInsensitive) != nil
+        let explicitTransport = item.activityList.contains { !$0.pickup.isEmpty } || transportText.range(of: #"\b(pickup|pick.up|PU\s+at|transport arranged|transfer arranged|shuttle)\b"#, options: [.regularExpression,.caseInsensitive]) != nil
+        let ownTransport = transportText.range(of: #"\b(no (pickup|transport|transfer)|own transport|self.transfer)\b"#, options: [.regularExpression,.caseInsensitive]) != nil
         if item.isOperationalDuty, !item.operationalActivities.isEmpty, pickupDates.isEmpty,
            explicitTransport, !ownTransport, let date = item.dutyStartUTCDate {
             events.append(.init(id: "transport-" + item.id, kind: .transport, itemID: item.id,

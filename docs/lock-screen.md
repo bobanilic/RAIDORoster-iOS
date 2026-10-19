@@ -1,5 +1,21 @@
 # Lock Screen duty countdowns — 2.29.20
 
+## 2.29.21 installation and responsiveness fixes
+
+The Status section checks whether the installed app still contains its widget
+extension. If SideStore removed it, import the original IPA over the existing app
+and keep app extensions. The extension must also be signed and registered; merely
+finding the bundled file cannot establish that iOS accepted its registration.
+Use Preview on Lock Screen for an immediate five-minute test, independent of any
+roster pickup. These cards are Live Activities and do not appear in Add Widgets.
+
+Lock Screen refresh skips roster parsing when both options are off. Enabled
+cards use only upcoming rows instead of parsing every archived month. Parsed
+priority events are reused until the roster, local day window or device time
+zone changes; visibility and countdown state are still evaluated against the
+current time. Duplicate Settings refreshes are removed. These changes reduce
+work, but device responsiveness and power consumption still require measurement.
+
 Settings → Lock Screen → Countdowns & precaution provides independent opt-in
 pickup countdown and precaution controls. Both are off until enabled. Compact
 and circular layouts use the same saved roster times. Frosted leaves the Live

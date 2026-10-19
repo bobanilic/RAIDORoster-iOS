@@ -34,6 +34,7 @@ struct LockScreenSettings: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Status") {
+                Text(controller.installationStatus).font(.footnote).foregroundStyle(.secondary)
                 Text(controller.status).font(.footnote).foregroundStyle(.secondary)
                 if let message = reminders.message { Text(message).font(.footnote).foregroundStyle(.secondary) }
                 Button("Refresh Lock Screen cards") { store.refreshLockScreenActivities(force:true) }
@@ -41,6 +42,8 @@ struct LockScreenSettings: View {
                 Button("Stop preview") { Task { await controller.stopPreview() } }
             }
             Section {
+                Text("These are Live Activities, so RAIDO does not appear in the Lock Screen Add Widgets list. Enable an option above, or use Preview on Lock Screen to test immediately.")
+                    .font(.footnote).foregroundStyle(.secondary)
                 Text("Automatic scheduled starts require iOS 26. Live Activities must be allowed in iPhone Settings, and your installation must support the bundled widget extension. Opening RAIDO refreshes cards after roster changes. Countdown times remain based on the last saved roster while offline.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
@@ -60,7 +63,7 @@ struct LockScreenSettings: View {
         .onChange(of:layout) { _,_ in apply() }
         .onAppear { store.refreshLockScreenActivities(force:true) }
     }
-    private func apply() { store.refreshDutyReminders();store.refreshLockScreenActivities(force:true) }
+    private func apply() { store.refreshDutyReminders(forceLockScreen:true) }
     private var previewState: DutyActivityAttributes.ContentState {
         let end = Date().addingTimeInterval(105 * 60)
         return .init(pickupAt:end,referenceAt:end,precautionBegins:Date().addingTimeInterval(-10 * 3600),

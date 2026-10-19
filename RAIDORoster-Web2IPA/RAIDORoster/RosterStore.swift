@@ -6,8 +6,14 @@ import os
 
 @MainActor
 final class RosterStore: ObservableObject {
-    @Published private(set) var snapshot: RosterSnapshot?
-    @Published private(set) var monthSnapshots: [String: RosterSnapshot] = [:]
+    @Published private(set) var snapshot: RosterSnapshot? {
+        didSet { priorityEventCache = nil }
+    }
+    @Published private(set) var monthSnapshots: [String: RosterSnapshot] = [:] {
+        didSet { priorityEventCache = nil }
+    }
+    // Derived dates are reused across view updates, never across roster changes.
+    var priorityEventCache: (lower: String, upper: String, zone: String, events: [TodayPriorityEvent])?
     @Published var selectedRosterMonthKey: String?
     @Published var changeNotice: String?
     @Published private(set) var portalFormatWarning: String?
@@ -465,9 +471,9 @@ final class RosterStore: ObservableObject {
         return true
     }
 
-    func refreshDutyReminders() {
+    func refreshDutyReminders(forceLockScreen: Bool = false) {
         guard automaticSideEffects else { return }
-        refreshLockScreenActivities()
+        refreshLockScreenActivities(force: forceLockScreen)
         let pickupLead = UserDefaults.standard.integer(forKey: "RAIDORoster.PickupReminderLead")
         let reportLead = UserDefaults.standard.integer(forKey: "RAIDORoster.ReportReminderLead")
         automaticReminderScheduler.syncIfAuthorized(priorityRosterItems, pickupLead: pickupLead, reportLead: reportLead) { [weak self] status in
@@ -477,7 +483,10 @@ final class RosterStore: ObservableObject {
 
     func refreshLockScreenActivities(force: Bool = false) {
         guard automaticSideEffects else { return }
-        let events = priorityRosterSources.flatMap { TodayPriorityAdapter.events(item:$0.item,capturedAt:$0.capturedAt) }
+        let defaults = UserDefaults.standard
+        let enabled = defaults.bool(forKey:LockScreenPolicy.pickupKey) || defaults.bool(forKey:LockScreenPolicy.precautionKey)
+        // Disabled options still reconcile existing cards, without parsing history.
+        let events = enabled ? priorityEventCandidates(at:Date()) : []
         LockScreenActivityController.shared.refresh(events:events,force:force)
     }
 
