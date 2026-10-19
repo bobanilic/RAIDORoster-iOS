@@ -1,6 +1,29 @@
 import XCTest
 
 @MainActor final class MapGestureUITests: XCTestCase {
+    func testFourSectorsAcrossTwoDutyGroups() {
+        continueAfterFailure = false
+        let app = XCUIApplication(bundleIdentifier: "com.bobanilic.raidoroster")
+        app.launchArguments = ["--startup", "--split-duty", "--theme=ice", "--mode=dark"]
+        app.launch()
+        let tabs = app.tabBars.firstMatch
+        XCTAssertTrue(tabs.waitForExistence(timeout: 15))
+        for tab in ["Roster", "Today"] {
+            tabs.buttons[tab].tap()
+            if tab == "Roster" {
+                let count = app.staticTexts["roster-day-sector-count"]
+                XCTAssertTrue(count.waitForExistence(timeout: 5))
+                XCTAssertEqual(count.label, "4 sectors")
+            }
+            for code in ["DI9003", "DI6656", "DI6657", "DI9004"] {
+                let card = app.staticTexts["duty-sector-code-" + code].firstMatch
+                for _ in 0..<12 where !card.isHittable { app.scrollViews.firstMatch.swipeUp() }
+                XCTAssertTrue(card.isHittable, "Duty card missing for " + code + " in " + tab)
+            }
+            XCTAssertTrue(app.staticTexts["Duty 2 of 2"].exists)
+        }
+        app.terminate()
+    }
     func testCleanInstallMobileLoginAndReturnToTabs() {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier: "com.bobanilic.raidoroster")

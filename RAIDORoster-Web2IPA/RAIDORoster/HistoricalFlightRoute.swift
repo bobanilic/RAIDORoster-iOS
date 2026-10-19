@@ -25,13 +25,16 @@ struct HistoricalFlightRouteCard: View {
     @State private var showRecorded = true
 
     private var sectors: [RosterActivity] {
-        var ids = Set<String>()
-        return (dayItems.isEmpty ? [item] : dayItems).flatMap(\.operationalActivities).filter {
-            ($0.isFlight || $0.category.uppercased() == "POSITIONING") && TodayGlobalAirportIndex.routeCodes($0.route).count >= 2
-        }.filter { ids.insert($0.id).inserted }.sorted { $0.startUTC == $1.startUTC ? $0.id < $1.id : $0.startUTC < $1.startUTC }
+        RosterDayPresentation.sectors(in: dayItems.isEmpty ? [item] : dayItems)
     }
     private var selected: [RosterActivity] { selectedID.map { id in sectors.filter { $0.id == id } } ?? sectors }
-    private var segments: [[CLLocationCoordinate2D]] {
+
+    var body: some View {
+        let _ = palette
+        let _ = theme
+        let sectors = self.sectors
+        let selected = selectedID.map { id in sectors.filter { $0.id == id } } ?? sectors
+        let segments: [[CLLocationCoordinate2D]] = {
         selected.compactMap { activity in
             let codes = TodayGlobalAirportIndex.routeCodes(activity.route)
             let points = codes.compactMap { TodayGlobalAirportIndex.point(for:$0) }
@@ -39,18 +42,14 @@ struct HistoricalFlightRouteCard: View {
             // a fabricated flight segment.
             return points.count == codes.count && points.count >= 2 ? points.map(\.coordinate) : nil
         }
-    }
-    private var points: [TodayAirportMapPoint] {
+        }()
+        let points: [TodayAirportMapPoint] = {
         var seen = Set<String>()
         return selected.flatMap { TodayGlobalAirportIndex.routeCodes($0.route) }.compactMap { code in
             guard seen.insert(code).inserted else { return nil }
             return TodayGlobalAirportIndex.point(for:code)
         }
-    }
-
-    var body: some View {
-        let _ = palette
-        let _ = theme
+        }()
         if !sectors.isEmpty {
             VStack(alignment:.leading,spacing:12) {
                 HStack {
@@ -92,7 +91,7 @@ struct HistoricalFlightRouteCard: View {
                 }
                 if recorded.count >= 2 { Text("Saved GPS may cover part of the flight.").font(.caption2).foregroundStyle(.secondary) }
             }.padding(15).midnightCard(radius:MidnightTheme.isGetJet ? 22 : 18)
-                .task(id:selectionIdentity) { loadRecorded() }
+                .task(id:selectionIdentity) { await loadRecorded() }
                 .sheet(isPresented:$expanded) {
                     HistoricalExpandedRoute(points:points,segments:segments,trail:showRecorded ? recorded : [],title:selected.map(\.route).joined(separator:" · "))
                 }
@@ -108,20 +107,28 @@ struct HistoricalFlightRouteCard: View {
                 .background(selectedID == id ? MidnightTheme.accent.opacity(0.13) : MidnightTheme.surface,in:Capsule())
         }.buttonStyle(.plain).accessibilityAddTraits(selectedID == id ? [.isSelected] : [])
     }
-    private struct Point: Codable { let latitude: Double; let longitude: Double }
-    private func loadRecorded() {
+    private struct Point: Codable, Sendable { let latitude: Double; let longitude: Double }
+    private func loadRecorded() async {
         recorded = []
         guard selected.count == 1, let sector = selected.first,
               let start = parseUTCStamp(sector.startUTC), start < Date() else { return }
-        for key in HistoricalRoutePolicy.sessionKeys(for:sector,defaultRegistration:item.aircraft.first?.aircraftReg ?? "") {
+        let keys = HistoricalRoutePolicy.sessionKeys(for: sector, defaultRegistration: item.aircraft.first?.aircraftReg ?? "")
+        // A sector tap must not decode a saved trail on the UI thread.
+        let worker = Task.detached(priority: .utility) { Self.readRecorded(keys: keys) }
+        let points = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+        guard !Task.isCancelled else { return }
+        recorded = points.map { .init(latitude: $0.latitude, longitude: $0.longitude) }
+    }
+    nonisolated private static func readRecorded(keys: [String]) -> [Point] {
+        for key in keys {
+            guard !Task.isCancelled else { return [] }
             do {
-                let file: ProtectedJSONFile<[Point]> = try DeviceCacheStorage.file(DeviceCacheStorage.trailName(key),folder:"Trails")
-                guard let points = try file.load(), points.count >= 2 else { continue }
-                recorded = points.filter { $0.latitude.isFinite && $0.longitude.isFinite && (-90...90).contains($0.latitude) && (-180...180).contains($0.longitude) }
-                    .suffix(1500).map { .init(latitude:$0.latitude,longitude:$0.longitude) }
-                return
-            } catch { DeviceCacheStorage.report("Read historical GPS points",error:error) }
+                let file: ProtectedJSONFile<[Point]> = try DeviceCacheStorage.file(DeviceCacheStorage.trailName(key), folder: "Trails")
+                guard let points = try file.load(migrateLegacy: false), points.count >= 2 else { continue }
+                return Array(points.filter { $0.latitude.isFinite && $0.longitude.isFinite && (-90...90).contains($0.latitude) && (-180...180).contains($0.longitude) }.suffix(1500))
+            } catch { DeviceCacheStorage.report("Read historical GPS points", error: error) }
         }
+        return []
     }
 }
 

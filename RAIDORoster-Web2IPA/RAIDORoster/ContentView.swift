@@ -80,6 +80,31 @@ struct RosterActivity: Codable, Equatable, Identifiable {
     }
 }
 
+// A calendar day may contain several duty envelopes. Keep their timing separate,
+// but never silently discard the later envelopes from a day briefing.
+enum RosterDayPresentation {
+    static func duties(for item: RosterItem, among items: [RosterItem]) -> [RosterItem] {
+        guard let day = item.dateISO else { return [item] }
+        var ids = Set<String>()
+        let rows = (items + [item]).filter { $0.dateISO == day && ids.insert($0.id).inserted }
+            .sorted {
+                let lhs = $0.operationalActivities.first?.startUTC ?? ""
+                let rhs = $1.operationalActivities.first?.startUTC ?? ""
+                return lhs == rhs ? $0.index < $1.index : lhs < rhs
+            }
+        let operational = rows.filter { $0.isOperationalDuty && !$0.operationalActivities.isEmpty }
+        return operational.isEmpty ? [item] : operational
+    }
+
+    static func sectors(in items: [RosterItem]) -> [RosterActivity] {
+        var ids = Set<String>()
+        return items.flatMap(\.operationalActivities).filter {
+            ($0.isFlight || $0.category.uppercased() == "POSITIONING") &&
+            TodayGlobalAirportIndex.routeCodes($0.route).count >= 2 && ids.insert($0.id).inserted
+        }.sorted { $0.startUTC == $1.startUTC ? $0.id < $1.id : $0.startUTC < $1.startUTC }
+    }
+}
+
 struct RosterItem: Identifiable, Codable, Equatable {
     let id: String
     let index: Int
@@ -9222,6 +9247,7 @@ private struct GetJetSectorCard: View {
         VStack(spacing: 17) {
             HStack {
                 Text(sector.code).font(.caption.weight(.semibold)).tracking(0.5).foregroundStyle(MidnightTheme.accent)
+                    .accessibilityIdentifier("duty-sector-code-" + sector.code)
                 Spacer(minLength: 5)
                 Text([sector.aircraftReg, sector.aircraftType].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.caption2).foregroundStyle(.secondary)
@@ -9247,7 +9273,7 @@ private struct GetJetSectorCard: View {
             }
             Rectangle().fill(MidnightTheme.border.opacity(0.45)).frame(height: 0.5)
             HStack {
-                Text("Flight sector").font(.caption2).foregroundStyle(.secondary)
+                Text(sector.category.uppercased() == "POSITIONING" ? "Positioning sector" : "Flight sector").font(.caption2).foregroundStyle(.secondary)
                 Spacer()
                 if !sector.crew.isEmpty {
                     Button(action: crewAction) { Label("Crew", systemImage: "person.2").font(.caption) }
@@ -9281,8 +9307,11 @@ private struct MidnightCard: ViewModifier {
         let _ = raidoVisualTheme
 
         return content
-            .background(MidnightTheme.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .shadow(color: .black.opacity(0.025), radius: 12, x: 0, y: 4)
+            .background {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(MidnightTheme.surface)
+                    .shadow(color: .black.opacity(0.025), radius: 12, x: 0, y: 4)
+            }
     }
 }
 
@@ -9765,15 +9794,17 @@ private struct IceDutyAgenda: View {
     let item: RosterItem
     var onCalendarExport: (() -> Void)? = nil
     var canExport = true
+    var heading = "Your duty"
     @State private var crewSector: RosterActivity?
     var body: some View {
         let _ = raidoColorPalette
 
         let _ = raidoVisualTheme
 
+        let activities = item.operationalActivities
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Your duty").font(.headline)
+                Text(heading).font(.headline)
                 Spacer()
                 Text(item.aircraft.first?.aircraftType ?? prettyCategory(item.category))
                     .font(.caption).foregroundStyle(.secondary)
@@ -9785,12 +9816,12 @@ private struct IceDutyAgenda: View {
                         .accessibilityLabel("Duty options")
                 }
             }
-            if let first = item.operationalActivities.first, !first.localCheckInTime.isEmpty {
+            if let first = activities.first, !first.localCheckInTime.isEmpty {
                 agendaRow(time: first.localCheckInTime, title: "Report", detail: first.station, arrival: "", sector: nil)
             }
-            ForEach(item.operationalActivities) { activity in
+            ForEach(activities) { activity in
                 let codes = TodayGlobalAirportIndex.routeCodes(activity.route)
-                if MidnightTheme.isGetJet && activity.isFlight && codes.count >= 2 {
+                if MidnightTheme.isGetJet && (activity.isFlight || activity.category.uppercased() == "POSITIONING") && codes.count >= 2 {
                     GetJetSectorCard(sector: activity) { crewSector = activity }
                 } else {
                 agendaRow(time: activity.localStartTime,
@@ -9799,10 +9830,10 @@ private struct IceDutyAgenda: View {
                           arrival: activity.localEndTime, sector: activity.isFlight ? activity : nil)
                 }
             }
-            if let last = item.operationalActivities.last, !last.localCheckOutTime.isEmpty {
+            if let last = activities.last, !last.localCheckOutTime.isEmpty {
                 agendaRow(time: last.localCheckOutTime, title: "Release", detail: "Duty complete", arrival: "", sector: nil)
             }
-            if item.operationalActivities.isEmpty {
+            if activities.isEmpty {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(item.displayTitle).font(.subheadline.weight(.semibold))
                     if !item.timeText.isEmpty { Text(item.timeText).font(.caption).foregroundStyle(.secondary) }
@@ -9854,6 +9885,8 @@ private struct IceSelectedRosterDay: View {
 
         let _ = raidoVisualTheme
 
+        let duties = RosterDayPresentation.duties(for: item, among: dayItems)
+        let sectors = RosterDayPresentation.sectors(in: duties)
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -9862,15 +9895,19 @@ private struct IceSelectedRosterDay: View {
                     Text("Local times" + (isChanged ? " · Roster changed" : "")).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 4)
-                if item.sectorCount > 0 { Text("\(item.sectorCount) sectors").font(.caption).foregroundStyle(.secondary) }
+                if !sectors.isEmpty { Text("\(sectors.count) sectors").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("roster-day-sector-count") }
             }
             HistoricalFlightRouteCard(item: item, dayItems: dayItems).id(item.dateISO)
             RosterRelocationSection(items: dayItems.isEmpty ? [item] : dayItems)
-            IcePickupCard(item: item)
-            IceDutyAgenda(item: item)
-            NavigationLink { RosterDetailView(item: item) } label: {
-                Label("Full briefing & notes", systemImage: "doc.text").font(.caption.weight(.medium))
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            ForEach(Array(duties.enumerated()), id: \.element.id) { index, duty in
+                VStack(alignment: .leading, spacing: 14) {
+                    IcePickupCard(item: duty)
+                    IceDutyAgenda(item: duty, heading: duties.count > 1 ? "Duty \(index + 1) of \(duties.count)" : "Your duty")
+                    NavigationLink { RosterDetailView(item: duty) } label: {
+                        Label("Full briefing & notes", systemImage: "doc.text").font(.caption.weight(.medium))
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                }
             }
         }.padding(.top, 12)
     }
@@ -9917,8 +9954,15 @@ struct TodayView: View {
                             if item.isOperationalDuty, !item.operationalActivities.isEmpty {
                                 IceReadinessView(item: item, store: store, showsAlcohol: false)
                             }
-                            IceDutyAgenda(item: item, onCalendarExport: { calendarExporter.export(item) }, canExport: !calendarExporter.isWorking)
-                            TodayPersonalNoteDisclosure(item: item)
+                            let duties = RosterDayPresentation.duties(for: item, among: store.todayItems)
+                            ForEach(Array(duties.enumerated()), id: \.element.id) { index, duty in
+                                VStack(alignment: .leading, spacing: 12) {
+                                    IceDutyAgenda(item: duty, onCalendarExport: { calendarExporter.export(duty) },
+                                                  canExport: !calendarExporter.isWorking,
+                                                  heading: duties.count > 1 ? "Duty \(index + 1) of \(duties.count)" : "Your duty")
+                                    TodayPersonalNoteDisclosure(item: duty)
+                                }
+                            }
                             if let sector = crewCompanionSector(item, at: now) {
                                 HStack { Text("My position").font(.caption).foregroundStyle(.secondary); Spacer()
                                     CrewCompanionRolePicker(dutyID: item.id, sectorID: sector.id).id(sector.id) }

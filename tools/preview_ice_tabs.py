@@ -98,6 +98,23 @@ extension RosterStore {
                 rawText:"Sample relocation",cells:[],activities:[move],activeHotels:nil))
             items.sort {($0.dateISO ?? "") < ($1.dateISO ?? "")}
         }
+        if ProcessInfo.processInfo.arguments.contains("--split-duty") {
+            let iso = EarningsMath.day(today), model = items.flatMap(\.flightActivities).first!
+            func flight(_ code: String, _ route: String, _ start: String, _ end: String) -> RosterActivity {
+                var raw = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(model)) as! [String: Any]
+                for (key, value) in ["id":code,"code":code,"route":route,"startLT":iso+" "+start,"startUTC":iso+" "+start,
+                    "endLT":iso+" "+end,"endUTC":iso+" "+end,"checkInLT":"","checkInUTC":"","checkOutLT":"","checkOutUTC":"","pickup":""] { raw[key]=value }
+                return try! JSONDecoder().decode(RosterActivity.self, from: JSONSerialization.data(withJSONObject: raw))
+            }
+            let flights = [flight("DI9003","VNO-LEJ","06:00","07:10"),flight("DI6656","LEJ-RHO","08:00","12:05"),
+                flight("DI6657","RHO-LEJ","12:55","15:05"),flight("DI9004","LEJ-VNO","19:10","22:05")]
+            items.removeAll { $0.dateISO == iso }
+            for (index, activities) in [Array(flights.prefix(3)), [flights[3]]].enumerated() {
+                items.append(RosterItem(id:iso+"-duty-\(index)",index:currentDay*10+index,dateISO:iso,dateText:iso,
+                    category:"FLIGHT",title:"Flight duty",route:activities.map(\.route).joined(separator:" · "),timeText:"",
+                    rawText:"Synthetic split duty",cells:[],activities:activities,activeHotels:nil))
+            }
+        }
         let monthKey = String(format: "%04d-%02d", year, month)
         let value = RosterSnapshot(capturedAt: today, sourceURL: "https://example.invalid/preview", pageTitle: "Sample roster", items: items,
             validation: RosterValidation(isValid: true, parser: "preview", month: monthKey, datedRows: items.count, message: "Sample data"), monthlyBLH: "40:00")
@@ -259,6 +276,7 @@ try:
                     '-destination','platform=iOS Simulator,id='+udid,'-derivedDataPath','/tmp/raido-ice-preview',
                     '-parallel-testing-enabled','NO','CODE_SIGNING_ALLOWED=YES','CODE_SIGNING_REQUIRED=NO',
                     'CODE_SIGN_STYLE=Manual','CODE_SIGN_IDENTITY=-','AD_HOC_CODE_SIGNING_ALLOWED=YES',
+                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testFourSectorsAcrossTwoDutyGroups',
                     '-only-testing:RAIDOMapChecks/MapGestureUITests/testCleanInstallMobileLoginAndReturnToTabs',
                     '-only-testing:RAIDOMapChecks/MapGestureUITests/testProductionLaunchAndTabResponsiveness',
                     '-only-testing:RAIDOMapChecks/MapGestureUITests/testTodayReturnWithAutomaticMapAndNotificationsDisabled',

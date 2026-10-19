@@ -59,6 +59,17 @@ const off=activity('OFF','Day off','00:00','23:59');
 const offRows=groupDays([off,move]);
 assert.equal(offRows[0].category,'OFF');
 assert.ok(offRows[0].activities.some(a=>a.category==='RELOCATION'));
+// The reported four-sector day intentionally contains a >4-hour ground gap.
+// It remains two duty envelopes; native day presentation must display both.
+const four = [activity('DI9003','Flight','06:00','07:10'),
+  activity('DI6656','Flight','08:00','12:05'), activity('DI6657','Flight','12:55','15:05'),
+  activity('DI9004','Flight','19:10','22:05')];
+four.forEach(a => a.category = 'FLIGHT');
+four[0].checkIn = {dateISO:'2026-10-23',localTime:'05:00'};
+four[3].checkOut = {dateISO:'2026-10-23',localTime:'22:30'};
+const split = dutyGroupsForDate(four);
+assert.deepEqual(split.map(g=>g.map(a=>a.code)),[['DI9003','DI6656','DI6657'],['DI9004']]);
+assert.equal(groupDays(four).flatMap(d=>d.activities).length,4);
 console.log('Passed standby period, relocation classification and standby-day retention checks');
 '''
 subprocess.run(['node', '-e', functions + '\n' + checks], check=True)
