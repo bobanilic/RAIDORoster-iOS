@@ -63,9 +63,11 @@ final class LockScreenActivityController: ObservableObject {
         for activity in activities {
             if activity.content.state.preview && activity.content.state.referenceAt > now { continue }
             let plan = plans.first { $0.id == activity.attributes.eventID }
+            var isPending = false
+            if #available(iOS 26.0, *) { isPending = activity.activityState == .pending }
             let changed = plan.map {
                 LockScreenPolicy.needsReschedule($0,scheduledStart:activity.attributes.scheduledStart,
-                    referenceAt:activity.content.state.referenceAt,isPending:activity.activityState == .pending,now:now)
+                    referenceAt:activity.content.state.referenceAt,isPending:isPending,now:now)
             } ?? false
             if plan == nil || changed {
                 await activity.end(nil,dismissalPolicy:.immediate)
