@@ -15,10 +15,10 @@ import XCTest
             let settings = app.buttons["more-settings"].firstMatch
             XCTAssertTrue(settings.waitForExistence(timeout:5));settings.tap()
             let lockScreen = app.buttons["settings-lock-screen"].firstMatch
-            for _ in 0..<6 where !lockScreen.isHittable { app.scrollViews.firstMatch.swipeUp() }
+            for _ in 0..<6 where !lockScreen.isHittable { app.swipeUp() }
             XCTAssertTrue(lockScreen.exists);lockScreen.tap()
             let sample = app.buttons["Pickup reminder"]
-            for _ in 0..<5 where !sample.isHittable { app.scrollViews.firstMatch.swipeUp() }
+            for _ in 0..<5 where !sample.isHittable { app.swipeUp() }
             XCTAssertTrue(sample.exists);sample.tap()
             let toast = app.descendants(matching:.any)["raido-toast"].firstMatch
             XCTAssertTrue(toast.waitForExistence(timeout:5))

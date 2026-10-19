@@ -51,7 +51,7 @@ final class RosterStore: ObservableObject {
         storageFolderOverride = storageFolderURL
         self.automaticSideEffects = automaticSideEffects
         isRestoring = deferLoading
-        if !deferLoading { applySavedRoster(RosterDiskState.read(from:storageFolderURL)) }
+        if !deferLoading { applySavedRoster(RosterDiskState.read(from:self.storageFolderURL)) }
     }
 
     /// Production launch restores on a worker; synchronous initialization remains
