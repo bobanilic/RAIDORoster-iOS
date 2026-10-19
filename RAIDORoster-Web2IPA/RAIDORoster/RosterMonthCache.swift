@@ -155,8 +155,10 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
         let planned = targetsOverride ?? RosterMonthCachePolicy.activeTargets(current:currentMonth,requested:requestedMonth,existing:progress?.targets ?? [])
         progress?.targets = planned
         let allowed = Set(planned)
-        progress?.failures = progress?.failures.filter { allowed.contains($0.key) } ?? [:]
-        progress?.empty = progress?.empty.filter { allowed.contains($0.key) } ?? [:]
+        let failures = progress?.failures.filter { allowed.contains($0.key) } ?? [:]
+        let empty = progress?.empty.filter { allowed.contains($0.key) } ?? [:]
+        progress?.failures = failures
+        progress?.empty = empty
         // A manual retry must still respect a server Retry-After response.
         if force {
             let rateLimits = progress?.failures.filter { $0.value.reason == "server-rate-limit" && $0.value.retryAt > Date() } ?? [:]
