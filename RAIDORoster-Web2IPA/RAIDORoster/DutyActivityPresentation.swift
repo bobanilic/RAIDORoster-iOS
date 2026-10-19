@@ -7,7 +7,8 @@ struct DutyActivityCard: View {
     var stale = false
     @Environment(\.colorScheme) private var scheme
     @Environment(\.isLuminanceReduced) private var dimmed
-    private var solid: Bool { state.appearance == "solid" }
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    private var solid: Bool { state.appearance == "solid" || reduceTransparency }
     private var ink: Color { solid ? .white : .primary }
     private var coral: Color { solid || scheme == .dark ? Color(red:1,green:0.64,blue:0.60) : Color(red:0.63,green:0.17,blue:0.20) }
     private var blue: Color { solid || scheme == .dark ? Color(red:0.58,green:0.82,blue:0.94) : Color(red:0.13,green:0.37,blue:0.51) }
@@ -35,8 +36,10 @@ struct DutyActivityCard: View {
                     column(color:blue) {
                         Image(systemName:state.pickupAt == nil ? "clock" : "car.side").font(.title3.weight(.light))
                         if state.layout != "circles" { label(state.referenceLabel.uppercased() + " IN") }
-                        Text(timerInterval:state.referenceAt.addingTimeInterval(-2 * 3600)...state.referenceAt,countsDown:true,showsHours:true)
+                        Text(timerInterval:(state.countdownStartsAt ?? state.referenceAt.addingTimeInterval(-2 * 3600))...state.referenceAt,countsDown:true,showsHours:true)
                             .font(.system(.title3,design:.rounded).weight(.semibold)).monospacedDigit()
+                            .multilineTextAlignment(state.layout == "circles" ? .center : .leading)
+                            .frame(maxWidth:.infinity,alignment:state.layout == "circles" ? .center : .leading)
                             .minimumScaleFactor(0.7).lineLimit(1)
                         if state.layout != "circles" { Text(state.clock + " · " + dayLabel).font(.caption2) }
                     }
@@ -44,6 +47,7 @@ struct DutyActivityCard: View {
             }
         }.foregroundStyle(ink).padding(.horizontal,18).padding(.vertical,13)
             .opacity(dimmed ? 0.85 : 1)
+            .modifier(DutyActivitySurface(appearance:state.appearance))
     }
     private var dayLabel: String {
         var calendar = Calendar(identifier:.gregorian)
@@ -65,6 +69,22 @@ struct DutyActivityCard: View {
             }.frame(maxWidth:.infinity).foregroundStyle(color)
         } else {
             VStack(alignment:.leading,spacing:4,content:content).frame(maxWidth:.infinity,alignment:.leading).foregroundStyle(color)
+        }
+    }
+}
+
+/// Share the actual surface with Settings; an opaque host tint would obscure it.
+private struct DutyActivitySurface: ViewModifier {
+    let appearance: String
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius:24,style:.continuous) }
+    func body(content:Content) -> some View {
+        if appearance == "solid" || reduceTransparency {
+            content.background(Color(red:0.065,green:0.10,blue:0.14),in:shape)
+        } else if #available(iOS 26.0, *) {
+            content.glassEffect(.regular,in:shape)
+        } else {
+            content.background(.ultraThinMaterial,in:shape)
         }
     }
 }

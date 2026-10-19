@@ -7,6 +7,7 @@ struct LockScreenSettings: View {
     @AppStorage(LockScreenPolicy.precautionKey) private var precaution = false
     @AppStorage(LockScreenPolicy.appearanceKey) private var appearance = "frosted"
     @AppStorage(LockScreenPolicy.layoutKey) private var layout = "card"
+    @AppStorage(LockScreenPolicy.leadHoursKey) private var leadHours = 2
     @StateObject private var reminders = DutyReminderScheduler()
 
     var body: some View {
@@ -14,12 +15,17 @@ struct LockScreenSettings: View {
             Section {
                 Toggle("Pickup countdown",isOn:$pickup)
                 Toggle("Precaution reminders & status",isOn:$precaution)
+                Picker("Show before pickup/report",selection:$leadHours) {
+                    ForEach(LockScreenPolicy.leadHourOptions,id:\.self) { hours in
+                        Text("\(hours) hours").tag(hours)
+                    }
+                }
             } header: { Text("Lock Screen") } footer: {
-                Text("Countdowns begin two hours before a saved pickup, or report when no pickup is supplied. Precaution reminders cover the earlier 12-hour period; its red status appears on the countdown card. No GPS or continuous background scanning is used.")
+                Text("Cards begin within your selected window before saved pickup/report. The default is two hours. Precaution notifications still cover the earlier 12-hour period. iOS limits a Live Activity to eight active hours, so this card cannot stay permanently. No GPS or continuous background scanning is used.")
             }
             Section("Appearance") {
                 Picker("Background",selection:$appearance) {
-                    Text("Frosted").tag("frosted")
+                    Text("Glass").tag("frosted")
                     Text("Solid").tag("solid")
                 }.pickerStyle(.segmented)
                 Picker("Layout",selection:$layout) {
@@ -27,10 +33,9 @@ struct LockScreenSettings: View {
                     Text("Circles").tag("circles")
                 }.pickerStyle(.segmented)
                 DutyActivityCard(state:previewState)
-                    .background(appearance == "solid" ? Color(red:0.065,green:0.10,blue:0.14) : MidnightTheme.surface,
-                                in:RoundedRectangle(cornerRadius:22))
                     .listRowInsets(EdgeInsets(top:12,leading:0,bottom:12,trailing:0))
-                Text("Frosted uses the system background. Its appearance follows iOS, your wallpaper and accessibility settings.")
+                    .listRowBackground(Color.clear)
+                Text("Glass uses a translucent material. Its appearance follows your wallpaper and iOS accessibility settings; Reduce Transparency uses a solid background.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Status") {
@@ -61,6 +66,7 @@ struct LockScreenSettings: View {
         }
         .onChange(of:appearance) { _,_ in apply() }
         .onChange(of:layout) { _,_ in apply() }
+        .onChange(of:leadHours) { _,_ in store.refreshLockScreenActivities(force:true) }
         .onAppear { store.refreshLockScreenActivities(force:true) }
     }
     private func apply() { store.refreshDutyReminders(forceLockScreen:true) }
@@ -68,6 +74,7 @@ struct LockScreenSettings: View {
         let end = Date().addingTimeInterval(105 * 60)
         return .init(pickupAt:end,referenceAt:end,precautionBegins:Date().addingTimeInterval(-10 * 3600),
             referenceLabel:"Pickup",clock:TodayPriorityAdapter.clock(end,zone:.current),zoneID:TimeZone.current.identifier,
-            savedAt:Date(),detail:"Sample times",appearance:appearance,layout:layout,preview:true)
+            savedAt:Date(),detail:"Sample times",appearance:appearance,layout:layout,preview:true,
+            countdownStartsAt:end.addingTimeInterval(-Double(LockScreenPolicy.normalizedLeadHours(leadHours)) * 3600))
     }
 }

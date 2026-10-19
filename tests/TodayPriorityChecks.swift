@@ -54,6 +54,17 @@ import Foundation
         expect(plans.count == 1, "Pickup and precaution share one Lock Screen card")
         expect(plans.first?.startsAt == pickup.date.addingTimeInterval(-7200), "Countdown starts two hours before pickup")
         expect(plans.first?.precautionBegins == alcohol.date, "Card retains precaution cutoff")
+        for hours in LockScreenPolicy.leadHourOptions {
+            let plan = LockScreenPolicy.plans(events:[pickup,alcohol],now:now,pickup:true,precaution:true,leadHours:hours).first!
+            expect(plan.startsAt == pickup.date.addingTimeInterval(-Double(hours) * 3600), "Selected lead time schedules the full window")
+        }
+        expect(LockScreenPolicy.plans(events:[pickup],now:now,pickup:true,precaution:false,leadHours:24).first?.leadHours == 2, "Unsupported saved lead uses safe default")
+        let twoHour = plans.first!
+        let earlier = now.addingTimeInterval(-10 * 3600)
+        expect(LockScreenPolicy.needsReschedule(twoHour,scheduledStart:pickup.date.addingTimeInterval(-8 * 3600),referenceAt:pickup.date,isPending:true,now:earlier), "Changing a pending start replaces its immutable schedule")
+        expect(!LockScreenPolicy.needsReschedule(twoHour,scheduledStart:twoHour.startsAt,referenceAt:pickup.date,isPending:true,now:earlier), "Unchanged pending schedule is retained")
+        expect(LockScreenPolicy.needsReschedule(twoHour,scheduledStart:pickup.date.addingTimeInterval(-8 * 3600),referenceAt:pickup.date,isPending:false,now:pickup.date.addingTimeInterval(-4 * 3600)), "Shortening an active eight-hour card hides it until two hours before duty")
+        expect(!LockScreenPolicy.needsReschedule(twoHour,scheduledStart:now,referenceAt:pickup.date,isPending:false,now:now), "Already active countdown is not restarted on every refresh")
         expect(LockScreenPolicy.plans(events:[pickup,alcohol],now:now,pickup:false,precaution:false).isEmpty, "Disabled Lock Screen creates no activities")
         expect(LockScreenPolicy.plans(events:[pickup,alcohol],now:pickup.end,pickup:true,precaution:true).isEmpty, "Expired plans are removed")
         expect(LockScreenPolicy.plans(events:[alcohol],now:now,pickup:false,precaution:true).first?.referenceLabel == "Report", "Missing pickup uses report only for precaution")

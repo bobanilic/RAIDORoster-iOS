@@ -7,7 +7,7 @@ struct RAIDODutyWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for:DutyActivityAttributes.self) { context in
             DutyActivityCard(state:context.state,stale:context.isStale)
-                .activityBackgroundTint(context.state.appearance == "solid" ? Color(red:0.065,green:0.10,blue:0.14) : nil)
+                .activityBackgroundTint(context.state.appearance == "solid" ? Color(red:0.065,green:0.10,blue:0.14) : .clear)
                 .activitySystemActionForegroundColor(context.state.appearance == "solid" ? .white : .primary)
                 .widgetURL(link(context.attributes.eventID))
         } dynamicIsland: { context in
@@ -35,8 +35,8 @@ struct RAIDODutyWidget: Widget {
         }
     }
     private func timer(_ state:DutyActivityAttributes.ContentState) -> some View {
-        Text(timerInterval:state.referenceAt.addingTimeInterval(-2 * 3600)...state.referenceAt,countsDown:true,showsHours:true)
-            .monospacedDigit().minimumScaleFactor(0.6).lineLimit(1)
+        Text(timerInterval:(state.countdownStartsAt ?? state.referenceAt.addingTimeInterval(-2 * 3600))...state.referenceAt,countsDown:true,showsHours:true)
+            .monospacedDigit().multilineTextAlignment(.trailing).minimumScaleFactor(0.6).lineLimit(1)
     }
     private func link(_ id:String) -> URL? {
         var value = URLComponents();value.scheme = "raidoroster";value.host = "priority"

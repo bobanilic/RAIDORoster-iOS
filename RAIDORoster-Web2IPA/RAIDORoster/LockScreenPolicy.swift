@@ -10,7 +10,8 @@ struct DutyLockScreenPlan: Equatable {
     let zoneID: String
     let savedAt: Date
     let detail: String
-    var startsAt: Date { referenceAt.addingTimeInterval(-2 * 3600) }
+    var leadHours: Int = 2
+    var startsAt: Date { referenceAt.addingTimeInterval(-Double(leadHours) * 3600) }
 }
 
 enum LockScreenPolicy {
@@ -18,9 +19,24 @@ enum LockScreenPolicy {
     static let precautionKey = "RAIDORoster.LockScreen.Precaution"
     static let appearanceKey = "RAIDORoster.LockScreen.Appearance"
     static let layoutKey = "RAIDORoster.LockScreen.Layout"
+    static let leadHoursKey = "RAIDORoster.LockScreen.LeadHours"
+    static let leadHourOptions = [2,4,6,8]
+
+    static func normalizedLeadHours(_ hours: Int) -> Int {
+        leadHourOptions.contains(hours) ? hours : 2
+    }
+
+    static func needsReschedule(_ plan: DutyLockScreenPlan, scheduledStart: Date, referenceAt: Date,
+                                isPending: Bool, now: Date) -> Bool {
+        if plan.referenceAt != referenceAt { return true }
+        // Pending start dates are immutable. A shorter lead must also hide an
+        // already active card until the newly selected start time.
+        return (isPending || plan.startsAt > now) && scheduledStart != plan.startsAt
+    }
 
     /// Only real roster dates qualify; no polling or synthetic pickup times.
-    static func plans(events: [TodayPriorityEvent], now: Date, pickup: Bool, precaution: Bool) -> [DutyLockScreenPlan] {
+    static func plans(events: [TodayPriorityEvent], now: Date, pickup: Bool, precaution: Bool, leadHours: Int = 2) -> [DutyLockScreenPlan] {
+        let hours = normalizedLeadHours(leadHours)
         let future = events.filter { $0.end > now }
         var plans: [DutyLockScreenPlan] = []
         if pickup {
@@ -28,7 +44,7 @@ enum LockScreenPolicy {
                 let alcohol = precaution ? future.first { $0.kind == .alcohol && $0.itemID == event.itemID } : nil
                 plans.append(.init(id:event.id,pickupAt:event.date,referenceAt:event.date,
                     precautionBegins:alcohol?.date,referenceLabel:"Pickup",clock:event.clock,zoneID:event.zoneID,
-                    savedAt:event.capturedAt,detail:event.detail))
+                    savedAt:event.capturedAt,detail:event.detail,leadHours:hours))
             }
         }
         if precaution {
@@ -36,7 +52,7 @@ enum LockScreenPolicy {
                 if plans.contains(where: { $0.referenceAt == event.end }) { continue }
                 plans.append(.init(id:event.id,pickupAt:nil,referenceAt:event.end,precautionBegins:event.date,
                     referenceLabel:event.reference == "PU" ? "Pickup" : "Report",clock:event.clock,zoneID:event.zoneID,
-                    savedAt:event.capturedAt,detail:"Pre-duty precaution"))
+                    savedAt:event.capturedAt,detail:"Pre-duty precaution",leadHours:hours))
             }
         }
         var seen = Set<String>()

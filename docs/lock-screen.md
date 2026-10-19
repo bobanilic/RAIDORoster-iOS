@@ -1,5 +1,21 @@
 # Lock Screen duty countdowns — 2.29.20
 
+## 2.29.22 lead times and glass surface
+
+Show before pickup/report offers 2, 4, 6 or 8 hours; the default remains 2.
+Changing the setting replaces pending schedules, and shortening the window
+hides an early active card until its new scheduled start. iOS limits a Live
+Activity to eight active hours, so no permanent-card option is offered.
+Precaution reminders still cover the earlier period outside the card window.
+
+Glass uses SwiftUI's native glass effect on iOS 26, with an ultra-thin material
+fallback on older iOS and an opaque background when Reduce Transparency is on.
+The extension requests a clear host background so it does not cover the surface.
+The Settings sample shares the same card surface. The circular timer explicitly
+centers its text inside the ring. The optional countdown start field preserves
+decoding of cards created before this update. Device wallpaper, accessibility
+and Lock Screen rendering still require a preview check on the installed app.
+
 ## 2.29.21 installation and responsiveness fixes
 
 The Status section checks whether the installed app still contains its widget

@@ -14,6 +14,8 @@ struct DutyActivityAttributes: ActivityAttributes {
         var appearance: String
         var layout: String
         var preview: Bool = false
+        // Optional so cards created by earlier versions remain decodable.
+        var countdownStartsAt: Date? = nil
     }
     var eventID: String
     var scheduledStart: Date

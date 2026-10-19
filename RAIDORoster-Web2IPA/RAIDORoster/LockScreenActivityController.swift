@@ -39,7 +39,8 @@ final class LockScreenActivityController: ObservableObject {
     func refresh(events:[TodayPriorityEvent],force:Bool = false) {
         let defaults = UserDefaults.standard
         let plans = LockScreenPolicy.plans(events:events,now:Date(),pickup:defaults.bool(forKey:LockScreenPolicy.pickupKey),
-                                           precaution:defaults.bool(forKey:LockScreenPolicy.precautionKey))
+                                           precaution:defaults.bool(forKey:LockScreenPolicy.precautionKey),
+                                           leadHours:defaults.integer(forKey:LockScreenPolicy.leadHoursKey))
         let appearance = defaults.string(forKey:LockScreenPolicy.appearanceKey) ?? "frosted"
         let layout = defaults.string(forKey:LockScreenPolicy.layoutKey) ?? "card"
         let previous = tail
@@ -61,7 +62,12 @@ final class LockScreenActivityController: ObservableObject {
         // Ending a changed/deleted/disabled plan comes before any replacement.
         for activity in activities {
             if activity.content.state.preview && activity.content.state.referenceAt > now { continue }
-            if !plans.contains(where: { $0.id == activity.attributes.eventID }) {
+            let plan = plans.first { $0.id == activity.attributes.eventID }
+            let changed = plan.map {
+                LockScreenPolicy.needsReschedule($0,scheduledStart:activity.attributes.scheduledStart,
+                    referenceAt:activity.content.state.referenceAt,isPending:activity.activityState == .pending,now:now)
+            } ?? false
+            if plan == nil || changed {
                 await activity.end(nil,dismissalPolicy:.immediate)
             }
         }
@@ -77,9 +83,12 @@ final class LockScreenActivityController: ObservableObject {
         for plan in plans {
             let state = DutyActivityAttributes.ContentState(pickupAt:plan.pickupAt,referenceAt:plan.referenceAt,
                 precautionBegins:plan.precautionBegins,referenceLabel:plan.referenceLabel,clock:plan.clock,
-                zoneID:plan.zoneID,savedAt:plan.savedAt,detail:plan.detail,appearance:appearance,layout:layout)
+                zoneID:plan.zoneID,savedAt:plan.savedAt,detail:plan.detail,appearance:appearance,layout:layout,
+                countdownStartsAt:plan.startsAt)
             let content = ActivityContent(state:state,staleDate:plan.referenceAt)
-            if let existing = Activity<DutyActivityAttributes>.activities.first(where: { $0.attributes.eventID == plan.id }) {
+            if let existing = Activity<DutyActivityAttributes>.activities.first(where: {
+                $0.attributes.eventID == plan.id && $0.activityState != .ended && $0.activityState != .dismissed
+            }) {
                 await existing.update(content);count += 1
                 continue
             }
@@ -91,7 +100,7 @@ final class LockScreenActivityController: ObservableObject {
                             alertConfiguration:.init(title:"RAIDO duty countdown",body:LocalizedStringResource(stringLiteral:plan.referenceLabel + " · " + plan.clock + " LT"),sound:.default),
                             start:plan.startsAt)
                     } else {
-                        status = "Automatic starts require iOS 26. Open RAIDO within two hours of pickup/report on this iOS version."
+                        status = "Automatic starts require iOS 26. Open RAIDO within the selected countdown window on this iOS version."
                         continue
                     }
                 } else {
@@ -105,7 +114,10 @@ final class LockScreenActivityController: ObservableObject {
             }
         }
         lastPlans = plans;lastStyle = style
-        if count > 0 { status = "\(count) duty countdown\(count == 1 ? "" : "s") ready. Cards begin two hours before pickup/report." }
+        if count > 0 {
+            let hours = plans.first?.leadHours ?? 2
+            status = "\(count) duty countdown\(count == 1 ? "" : "s") ready. Cards begin \(hours) hours before pickup/report."
+        }
     }
 
     func preview() {
@@ -116,7 +128,7 @@ final class LockScreenActivityController: ObservableObject {
             let state = DutyActivityAttributes.ContentState(pickupAt:end,referenceAt:end,
                 precautionBegins:now.addingTimeInterval(-10 * 3600),referenceLabel:"Pickup",clock:end.formatted(date:.omitted,time:.shortened),
                 zoneID:TimeZone.current.identifier,savedAt:now,detail:"Sample times",appearance:UserDefaults.standard.string(forKey:LockScreenPolicy.appearanceKey) ?? "frosted",
-                layout:UserDefaults.standard.string(forKey:LockScreenPolicy.layoutKey) ?? "card",preview:true)
+                layout:UserDefaults.standard.string(forKey:LockScreenPolicy.layoutKey) ?? "card",preview:true,countdownStartsAt:now)
             do {
                 _ = try Activity.request(attributes:DutyActivityAttributes(eventID:"lock-screen-preview",scheduledStart:now),
                     content:ActivityContent(state:state,staleDate:end),pushType:nil)
