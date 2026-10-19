@@ -1038,6 +1038,7 @@ struct ContentView: View {
         .environmentObject(appState.rosterStore)
         .tint(MidnightTheme.accent)
         .foregroundStyle(MidnightTheme.ink)
+        .modifier(RaidoToastHost())
         .sheet(isPresented: $showPortal) {
             PortalView(model: appState.browser, store: appState.rosterStore) { showPortal = false; selectedTab = .roster }
                 .onAppear { appState.browser.setPortalVisible(true) }
@@ -8492,6 +8493,7 @@ struct RosterChangesView: View {
                 Button("Mark as reviewed") {
                     store.dismissChangeNotice()
                     dismiss()
+                    RaidoToastCenter.shared.present(.init(title:"Changes reviewed",message:"Your roster is up to date",symbol:"checkmark.circle"))
                 }
                 .font(.subheadline.weight(.semibold))
             }

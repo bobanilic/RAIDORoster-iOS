@@ -61,7 +61,14 @@ final class LockScreenActivityController: ObservableObject {
         let activities = Activity<DutyActivityAttributes>.activities
         // Ending a changed/deleted/disabled plan comes before any replacement.
         for activity in activities {
-            if activity.content.state.preview && activity.content.state.referenceAt > now { continue }
+            if activity.content.state.preview && activity.content.state.referenceAt > now {
+                var preview = activity.content.state
+                if preview.appearance != appearance || preview.layout != layout {
+                    preview.appearance = appearance;preview.layout = layout
+                    await activity.update(ActivityContent(state:preview,staleDate:preview.referenceAt))
+                }
+                continue
+            }
             let plan = plans.first { $0.id == activity.attributes.eventID }
             var isPending = false
             if #available(iOS 26.0, *) { isPending = activity.activityState == .pending }

@@ -6,9 +6,7 @@ import WidgetKit
 struct RAIDODutyWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for:DutyActivityAttributes.self) { context in
-            DutyActivityCard(state:context.state,stale:context.isStale)
-                .activityBackgroundTint(context.state.appearance == "solid" ? Color(red:0.065,green:0.10,blue:0.14) : .clear)
-                .activitySystemActionForegroundColor(context.state.appearance == "solid" ? .white : .primary)
+            DutyLockScreenView(state:context.state,stale:context.isStale)
                 .widgetURL(link(context.attributes.eventID))
         } dynamicIsland: { context in
             DynamicIsland {
@@ -42,5 +40,17 @@ struct RAIDODutyWidget: Widget {
         var value = URLComponents();value.scheme = "raidoroster";value.host = "priority"
         value.queryItems = [URLQueryItem(name:"id",value:id)]
         return value.url
+    }
+}
+
+private struct DutyLockScreenView: View {
+    let state:DutyActivityAttributes.ContentState
+    let stale:Bool
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    private var solid:Bool { state.appearance == "solid" || reduceTransparency }
+    var body:some View {
+        DutyActivityCard(state:state,stale:stale,systemBackground:true)
+            .activityBackgroundTint(solid ? Color(red:0.065,green:0.10,blue:0.14) : nil)
+            .activitySystemActionForegroundColor(solid ? .white : .primary)
     }
 }

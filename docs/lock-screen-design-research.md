@@ -28,3 +28,10 @@ References:
 - [Apple forum: glassEffect can hide widget text](https://developer.apple.com/forums/thread/789384)
 - [Apple: Emoji Rangers sample](https://developer.apple.com/documentation/widgetkit/emoji-rangers-supporting-live-activities-interactivity-and-animations)
 - [Apple: customizing notification appearance](https://developer.apple.com/documentation/usernotificationsui/customizing-the-appearance-of-notifications)
+# Implemented follow-up — 2.29.24
+
+AlertToast 1.3.9 is now vendored under `RAIDORoster/ThirdParty`, with its MIT
+notice bundled as `ThirdPartyNotices.txt`. It handles in-app messages only.
+The sole source adjustment permits narrow-screen wrapping in HUD/banner text.
+ActivityKit continues to render native countdowns and background notifications.
+Compact, Orbit and Focus share their foreground layout with the Settings sample.

@@ -9,6 +9,8 @@ struct LockScreenSettings: View {
     @AppStorage(LockScreenPolicy.layoutKey) private var layout = "card"
     @AppStorage(LockScreenPolicy.leadHoursKey) private var leadHours = 2
     @StateObject private var reminders = DutyReminderScheduler()
+    @State private var sampleNotice = RaidoToastNotice.precautionSample
+    @State private var showSampleNotice = false
 
     var body: some View {
         Form {
@@ -29,13 +31,21 @@ struct LockScreenSettings: View {
                     Text("Solid").tag("solid")
                 }.pickerStyle(.segmented)
                 Picker("Layout",selection:$layout) {
-                    Text("Compact card").tag("card")
-                    Text("Circles").tag("circles")
+                    Text("Compact").tag("card")
+                    Text("Orbit").tag("circles")
+                    Text("Focus").tag("focus")
                 }.pickerStyle(.segmented)
                 DutyActivityCard(state:previewState)
                     .listRowInsets(EdgeInsets(top:12,leading:0,bottom:12,trailing:0))
                     .listRowBackground(Color.clear)
-                Text("Glass uses a translucent material. Its appearance follows your wallpaper and iOS accessibility settings; Reduce Transparency uses a solid background.")
+                Text("Glass uses the system Lock Screen background with independent text and icons. Wallpaper and accessibility settings affect its appearance; Reduce Transparency uses a solid background.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Sample in-app notification") {
+                Button("Pickup reminder") { sampleNotice = .pickupSample;showSampleNotice = true }
+                Button("Precaution active") { sampleNotice = .precautionSample;showSampleNotice = true }
+                Button("Roster updated") { sampleNotice = .rosterSample;showSampleNotice = true }
+                Text("Sample messages only. Lock Screen notifications use the iPhone’s notification appearance.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Status") {
@@ -55,6 +65,9 @@ struct LockScreenSettings: View {
         }
         .navigationTitle("Lock Screen").navigationBarTitleDisplayMode(.inline)
         .scrollContentBackground(.hidden).midnightCanvas()
+        .toast(isPresenting:$showSampleNotice,duration:4,offsetY:layout == "focus" ? -20 : 0) {
+            RaidoToastPresentation.make(sampleNotice,layout:layout,appearance:appearance)
+        }
         .onChange(of:pickup) { _,_ in apply() }
         .onChange(of:precaution) { _,enabled in
             if enabled {

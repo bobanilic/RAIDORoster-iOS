@@ -436,6 +436,10 @@ final class RosterStore: ObservableObject {
                 let changed = changes.count
                 changeNotice = "Roster changed • \(changed) day\(changed == 1 ? "" : "s")"
                 saveChangeState()
+                if automaticSideEffects {
+                    RaidoToastCenter.shared.present(.init(title:"Roster updated",
+                        message:"\(changed) day\(changed == 1 ? "" : "s") changed · Review in Roster",symbol:"calendar.badge.clock"))
+                }
             }
         }
 

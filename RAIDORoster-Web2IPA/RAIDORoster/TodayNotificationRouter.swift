@@ -27,6 +27,16 @@ final class RaidoNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNo
     }
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        completionHandler(notification.request.identifier.hasPrefix("RAIDO-ROSTER-") ? [.banner,.list,.sound] : [])
+        let request = notification.request
+        guard request.identifier.hasPrefix("RAIDO-ROSTER-") else { completionHandler([]); return }
+        // Foreground reminders use a single in-app toast. Background delivery
+        // remains the existing iOS notification; no second request is created.
+        Task { @MainActor in
+            let id = request.content.userInfo["raidoPriorityID"] as? String
+            let precaution = request.content.title.localizedCaseInsensitiveContains("precaution")
+            RaidoToastCenter.shared.present(.init(title:request.content.title,message:request.content.body,
+                symbol:precaution ? "wineglass" : "clock",priorityID:id,precaution:precaution))
+            completionHandler([.list,.sound])
+        }
     }
 }

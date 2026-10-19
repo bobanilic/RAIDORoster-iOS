@@ -1,5 +1,31 @@
 # Lock Screen duty countdowns — 2.29.20
 
+## 2.29.24 compact styles and system background
+
+Settings offers Compact (the default), Orbit and Focus. Existing card/circles
+preferences retain their meaning. All three share the same minimum content
+height, with the original Compact type sizes, tight Orbit spacing and a larger
+Focus timer. Their common content, stale state and system Text countdown remain
+shared. Accessibility text can grow rather than being clipped to a fixed card.
+
+The extension no longer calls glassEffect or supplies a clear host background.
+Glass leaves the Live Activity backdrop to iOS using activityBackgroundTint(nil),
+while Solid and Reduce Transparency use an opaque midnight tint. Foreground
+text/icons are independent of that backdrop, and the whole card is no longer
+dimmed when isLuminanceReduced changes during locking. The Settings sample uses
+regularMaterial; iOS controls the actual Lock Screen material. This is a revised
+workaround for the reported disappearing foreground, still requiring device
+verification. Changing style also updates an already running sample activity.
+
+In-app messages use vendored AlertToast 1.3.9 (MIT), with its license included in
+the app. A small local change allows narrow-screen text wrapping. Compact and
+Orbit use the top HUD; Focus uses a bottom banner. Settings includes three sample
+messages. Foreground duty reminders use one toast plus the existing notification
+list/sound, without a duplicate system banner. Background reminders retain native
+iOS delivery. New roster changes show an in-app notice; Mark as reviewed gives
+an in-app confirmation. No Outlook connection or extra change notification is
+created. No new Live Activity timer, GPS or background loop is introduced.
+
 ## 2.29.23 foreground rendering fix
 
 Device feedback showed the glass surface rendering while all labels and timers
