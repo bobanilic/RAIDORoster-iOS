@@ -208,8 +208,11 @@ final class RosterBridgeTests: XCTestCase {
     func testLoginPageDoesNotReportParserFailure() async throws {
         let expectation = expectation(description: "No roster error on login")
         expectation.isInverted = true
+        let ready = self.expectation(description: "Login document loaded")
         try loadFixture("login", path: "Login.aspx", expectation: expectation)
-        await fulfillment(of: [expectation], timeout: 2)
+        recorder?.navigationFinished = ready
+        await fulfillment(of: [ready], timeout: 60)
+        await fulfillment(of: [expectation], timeout: 0.3)
         let view = try XCTUnwrap(webView)
         let auth = try await view.evaluateJavaScript("window.RAIDOPlus.history.inspect().kind")
         XCTAssertEqual(auth as? String, "auth", "History worker still detects sign-in pages")
@@ -260,8 +263,10 @@ final class RosterBridgeTests: XCTestCase {
 @MainActor private final class Recorder: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     let expectation: XCTestExpectation
     var body: [String: Any]?
+    var navigationFinished: XCTestExpectation?
     init(expectation: XCTestExpectation) { self.expectation = expectation }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        navigationFinished?.fulfill(); navigationFinished = nil
         // Trigger after document-end injection; do not depend on the startup timer.
         webView.evaluateJavaScript("window.RAIDOPlus?.extractNow()", completionHandler: nil)
     }
