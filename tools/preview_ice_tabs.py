@@ -192,22 +192,20 @@ try:
         try:
             run(['xcodebuild', '-project', str(root / 'RAIDORoster.xcodeproj'), '-scheme', 'RAIDOMapChecks', '-configuration', 'Debug',
                  '-sdk', 'iphonesimulator', '-destination', 'generic/platform=iOS Simulator', '-derivedDataPath', '/tmp/raido-ice-preview',
-                 'CODE_SIGNING_ALLOWED=NO', 'ONLY_ACTIVE_ARCH=YES', 'ARCHS=' + platform.machine(), 'build-for-testing'], stdout=log, stderr=subprocess.STDOUT)
+                 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGNING_REQUIRED=NO', 'CODE_SIGN_STYLE=Manual',
+                 'CODE_SIGN_IDENTITY=-', 'AD_HOC_CODE_SIGNING_ALLOWED=YES',
+                 'ONLY_ACTIVE_ARCH=YES', 'ARCHS=' + platform.machine(), 'build-for-testing'], stdout=log, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError:
             print('\n'.join(line for line in Path(log.name).read_text().splitlines() if 'error:' in line))
             raise
     product = Path('/tmp/raido-ice-preview/Build/Products/Debug-iphonesimulator/RAIDORoster.app')
     plist_path = product / 'Info.plist'
     info = plistlib.loads(plist_path.read_bytes())
-    # The release packaging script adds these keys after xcodebuild. Mirror the
-    # packaged configuration in the simulator too: CLLocationManager asserts
-    # when background updates are enabled without the location background mode.
-    with zipfile.ZipFile(ipa) as archive:
-        packaged = plistlib.loads(archive.read('Payload/RAIDORoster.app/Info.plist'))
+    # The real Info.plist now owns these keys. Verify parity without mutating
+    # the built bundle and invalidating its simulator code signature.
     for key, value in packaged.items():
         if key == 'UIBackgroundModes' or (key.startswith('NS') and key.endswith('UsageDescription')):
-            info[key] = value
-    plist_path.write_bytes(plistlib.dumps(info))
+            assert info.get(key) == value, f'Simulator privacy configuration differs: {key}'
     bundle = info['CFBundleIdentifier']
     devices = json.loads(run(['xcrun', 'simctl', 'list', 'devices', 'available', '-j'], capture_output=True, text=True).stdout)
     choices = [d for group in devices['devices'].values() for d in group if d['name'].startswith('iPhone')]
@@ -274,7 +272,9 @@ try:
         try:
             run(['xcodebuild', '-project', str(project), '-scheme', 'RAIDOMapChecks', '-configuration', 'Debug',
                  '-destination', 'platform=iOS Simulator,id=' + udid, '-derivedDataPath', '/tmp/raido-ice-preview',
-                 '-parallel-testing-enabled', 'NO', 'CODE_SIGNING_ALLOWED=NO', 'test-without-building'], stdout=log, stderr=subprocess.STDOUT)
+                 '-parallel-testing-enabled', 'NO', 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGNING_REQUIRED=NO',
+                 'CODE_SIGN_STYLE=Manual', 'CODE_SIGN_IDENTITY=-', 'AD_HOC_CODE_SIGNING_ALLOWED=YES',
+                 'test-without-building'], stdout=log, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError:
             print(Path(log.name).read_text()[-12000:])
             raise
