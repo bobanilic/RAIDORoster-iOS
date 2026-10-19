@@ -29,6 +29,30 @@ import XCTest
         XCTAssertTrue(tabs.waitForExistence(timeout: 5))
         app.terminate()
     }
+    func testTodayReturnWithAutomaticMapAndNotificationsDisabled() {
+        continueAfterFailure = false
+        let app = XCUIApplication(bundleIdentifier: "com.bobanilic.raidoroster")
+        app.launchArguments = ["--startup", "--today-return", "--theme=ice", "--mode=dark"]
+        app.launch()
+        let tabs = app.tabBars.firstMatch
+        let handle = app.buttons["today-map-handle"]
+        XCTAssertTrue(handle.waitForExistence(timeout: 15))
+        XCTAssertEqual(handle.value as? String, "Collapsed")
+        XCTAssertEqual(app.maps.count, 0, "A compact route must not construct Apple Maps, even with Auto selected")
+        for _ in 0..<3 {
+            tabs.buttons["Roster"].tap(); XCTAssertTrue(tabs.buttons["Roster"].isSelected)
+            tabs.buttons["Today"].tap(); XCTAssertTrue(tabs.buttons["Today"].isSelected)
+            XCTAssertTrue(handle.waitForExistence(timeout: 5))
+            let before = handle.frame.minY
+            app.scrollViews.firstMatch.swipeUp()
+            XCTAssertLessThan(handle.frame.minY, before - 20, "Today must scroll after returning from Roster")
+            XCTAssertEqual(app.maps.count, 0)
+            tabs.buttons["More"].tap(); XCTAssertTrue(tabs.buttons["More"].isSelected)
+            tabs.buttons["Today"].tap(); XCTAssertTrue(tabs.buttons["Today"].isSelected)
+            app.scrollViews.firstMatch.swipeDown()
+        }
+        app.terminate()
+    }
     func testProductionLaunchAndTabResponsiveness() {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier:"com.bobanilic.raidoroster")

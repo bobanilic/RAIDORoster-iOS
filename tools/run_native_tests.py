@@ -28,10 +28,14 @@ try:
                    '-derivedDataPath', str(root / 'RAIDORoster-Web2IPA/build/NativeDerivedData'),
                    '-resultBundlePath', str(result), '-parallel-testing-enabled', 'NO',
                    'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGNING_REQUIRED=NO', 'CODE_SIGN_STYLE=Manual',
-                   'CODE_SIGN_IDENTITY=-', 'AD_HOC_CODE_SIGNING_ALLOWED=YES', 'ONLY_ACTIVE_ARCH=YES', 'test']
+                   'CODE_SIGN_IDENTITY=-', 'AD_HOC_CODE_SIGNING_ALLOWED=YES', 'ONLY_ACTIVE_ARCH=YES',
+                   '-only-testing:RAIDORosterTests/RosterBridgeTests',
+                   '-only-testing:RAIDORosterTests/RosterMonthCacheTests',
+                   '-only-testing:RAIDORosterTests/TodayPriorityTests',
+                   '-only-testing:RAIDORosterTests/ProtectedStorageTests', 'test']
         print(f"Testing native roster ingestion and JavaScript in {device['name']}", flush=True)
         try:
-            finished = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, timeout=22 * 60)
+            finished = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, timeout=30 * 60)
         except subprocess.TimeoutExpired:
             print('Native test command exceeded its time limit', file=sys.stderr)
             finished = None

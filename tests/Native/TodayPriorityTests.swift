@@ -119,7 +119,7 @@ final class TodayPriorityTests: XCTestCase {
         try store { store in
             ingest(store,day:"2026-10-30",category:"OFF",activities:[activity(id:"move",category:"RELOCATION",day:"2026-10-30")])
             XCTAssertFalse(store.priorityEvents(at:date("2026-10-19T09:00:00Z")).contains { $0.kind == .relocation })
-            XCTAssertTrue(store.priorityEvents(at:date("2026-10-20T09:00:00Z")).contains { $0.kind == .relocation })
+            XCTAssertTrue(store.priorityEvents(at:date("2026-10-23T09:00:00Z")).contains { $0.kind == .relocation }, "A timed move becomes visible inside the existing eight-day window")
             XCTAssertTrue(store.priorityEvents(at:date("2026-10-30T07:00:00Z")).contains { $0.kind == .relocation })
             XCTAssertFalse(store.priorityEvents(at:date("2026-10-30T12:00:00Z")).contains { $0.kind == .relocation })
             store.clearCache()

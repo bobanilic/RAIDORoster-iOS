@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import WebKit
 import UIKit
 @testable import RAIDORoster
@@ -9,6 +10,22 @@ final class RosterMonthCacheTests: XCTestCase {
         ["schemaVersion": 1, "sourceURL": "https://gjt.noc.vmc.navblue.cloud/RaidoMobile/Dialogues/HumanResources/HumanResourceRoster.aspx?year=\(month.prefix(4))&month=\(month.suffix(2))&hrId=fixture",
          "monthlyBLH": "15:15", "validation": ["isValid": true, "parser": "raido-duty-envelope-test", "month": month, "datedRows": count],
          "rows": (1...count).map { ["id": "\(month)-\($0)", "dateISO": "\(month)-\(String(format: "%02d", $0))", "rawText": "Sanitized duty", "category": "OFF", "activities": []] as [String: Any] }]
+    }
+    func testRootObservesNestedEmptyRestoreAndLaterRosterImport() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let store = RosterStore(storageFolderURL: folder, automaticSideEffects: false, deferLoading: true)
+        let state = AppState(store: store)
+        var changes = 0
+        let observation = state.objectWillChange.sink { changes += 1 }
+        defer { observation.cancel() }
+        await state.rosterStore.restoreSavedRoster()
+        XCTAssertFalse(store.isRestoring); XCTAssertFalse(store.hasCache)
+        XCTAssertGreaterThan(changes, 0, "Empty restoration must refresh the root welcome/login decision")
+        let beforeImport = changes
+        XCTAssertTrue(store.ingest(messageBody: payload("2026-10")))
+        XCTAssertTrue(state.rosterStore.hasCache)
+        XCTAssertGreaterThan(changes, beforeImport, "First login/import must replace the welcome screen")
     }
     func testDeferredRestorationPreservesArchiveBytes() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

@@ -33,6 +33,8 @@ preview = r'''
 extension RosterStore {
     func installIceFixture() {
         let today = Date(), calendar = Calendar.current
+        let todayReturn = ProcessInfo.processInfo.arguments.contains("--today-return")
+        let origin = todayReturn ? "VNO" : "TLV", destination = todayReturn ? "LEJ" : "PFO"
         let year = calendar.component(.year, from: today), month = calendar.component(.month, from: today)
         let currentDay = calendar.component(.day, from: today)
         let start = calendar.date(from: DateComponents(year: year, month: month, day: 1))!
@@ -45,7 +47,7 @@ extension RosterStore {
             let category = fly ? "FLIGHT" : day % 4 == 0 ? "STANDBY" : "OFF"
             func sector(_ inbound: Bool) -> RosterActivity {
                 RosterActivity(id: iso + (inbound ? "-b" : "-a"), code: inbound ? "GJT102" : "GJT101", category: "FLIGHT", title: "Flight",
-                    description: "Sample flight", route: inbound ? "PFO-TLV" : "TLV-PFO", station: inbound ? "PFO" : "TLV",
+                    description: "Sample flight", route: inbound ? destination+"-"+origin : origin+"-"+destination, station: inbound ? destination : origin,
                     checkInLT: inbound ? "" : iso + " 11:30", checkInUTC: inbound ? "" : iso + " 08:30",
                     startLT: iso + (inbound ? " 14:10" : " 12:15"), startUTC: iso + (inbound ? " 11:10" : " 09:15"),
                     endLT: iso + (inbound ? " 15:10" : " 13:15"), endUTC: iso + (inbound ? " 12:10" : " 10:15"),
@@ -54,7 +56,7 @@ extension RosterStore {
                     aircraftReg: ProcessInfo.processInfo.arguments.contains("--airhub") ? "9HGTS" : "LYTEN", aircraftType: "A320", aircraftVersion: "", aircraftPhone: "", crew: members, rawText: "Sample duty")
             }
             return RosterItem(id: iso, index: day, dateISO: iso, dateText: iso, category: category,
-                title: fly ? "Flight duty" : category.capitalized, route: fly ? "TLV-PFO-TLV" : "", timeText: fly ? "11:30–15:40" : "",
+                title: fly ? "Flight duty" : category.capitalized, route: fly ? origin+"-"+destination+"-"+origin : "", timeText: fly ? "11:30–15:40" : "",
                 rawText: "Sample roster", cells: [], activities: fly ? [sector(false), sector(true)] : [], activeHotels: nil)
         }
         if ProcessInfo.processInfo.arguments.contains("--priorities") {
@@ -173,7 +175,8 @@ try:
     generated = original_content.replace('@State private var mapExpanded = false',
         '@State private var mapExpanded = ProcessInfo.processInfo.arguments.contains("--expanded")')
     # Force the local basemap in the disposable preview, independent of network.
-    generated = generated.replace('private var todayMapSource = "auto"', 'private var todayMapSource = "offline"')
+    if '--startup-only' not in sys.argv:
+        generated = generated.replace('private var todayMapSource = "auto"', 'private var todayMapSource = "offline"')
     # Display all Fleet definitions immediately, without polling or network data.
     generated = generated.replace('@State private var showOtherFleet = false', '@State private var showOtherFleet = true')
     fixture, preview_views = preview.split('struct IcePreviewRoot: View {', 1)
@@ -191,6 +194,13 @@ try:
             UserDefaults.standard.set(chosen, forKey: rawTheme == "getJet" ? RaidoAppearancePreferences.getJetPaletteKey : RaidoAppearancePreferences.icePaletteKey)
         }
         RaidoAppearancePreferences.migrate(.standard)
+        if args.contains("--today-return") {
+            UserDefaults.standard.set("auto", forKey: "RAIDORoster.TodayMapSource")
+            UserDefaults.standard.set(false, forKey: LockScreenPolicy.pickupKey)
+            UserDefaults.standard.set(false, forKey: LockScreenPolicy.precautionKey)
+            UserDefaults.standard.set(0, forKey: "RAIDORoster.PickupReminderLead")
+            UserDefaults.standard.set(0, forKey: "RAIDORoster.ReportReminderLead")
+        }
         if args.contains("--startup") {
             let fixture = RosterStore(automaticSideEffects:false)
             if args.contains("--clean-install") {
@@ -242,7 +252,8 @@ try:
                     'CODE_SIGN_STYLE=Manual','CODE_SIGN_IDENTITY=-','AD_HOC_CODE_SIGNING_ALLOWED=YES',
                     '-only-testing:RAIDOMapChecks/MapGestureUITests/testCleanInstallMobileLoginAndReturnToTabs',
                     '-only-testing:RAIDOMapChecks/MapGestureUITests/testProductionLaunchAndTabResponsiveness',
-                    'test-without-building'],stdout=log,stderr=subprocess.STDOUT,timeout=600)
+                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testTodayReturnWithAutomaticMapAndNotificationsDisabled',
+                    'test-without-building'],stdout=log,stderr=subprocess.STDOUT,timeout=900)
             except (subprocess.CalledProcessError,subprocess.TimeoutExpired):
                 print(Path(log.name).read_text()[-12000:]);raise
         print('Passed clean-install mobile login, production launch, tab taps, foreground return and toast dismissal',flush=True)

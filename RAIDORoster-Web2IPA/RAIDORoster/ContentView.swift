@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import CoreMotion
 import CoreLocation
 import MapKit
@@ -1020,11 +1021,17 @@ final class CalendarExporter: ObservableObject {
 final class AppState: ObservableObject {
     let rosterStore: RosterStore
     let browser: RosterBrowserModel
+    private var rosterObservation: AnyCancellable?
 
-    init() {
-        let store = RosterStore(deferLoading:true)
+    init(store: RosterStore? = nil) {
+        let store = store ?? RosterStore(deferLoading:true)
         rosterStore = store
         browser = RosterBrowserModel(store: store)
+        // Root decisions (welcome/loading versus saved Today, and snapshot
+        // side effects) must observe the nested store as well as AppState.
+        rosterObservation = store.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
     }
 }
 
@@ -1049,7 +1056,7 @@ struct ContentView: View {
                 if !appState.rosterStore.hasCache {
                     RaidoWelcomeView(isRestoring: appState.rosterStore.isRestoring) { showPortal = true }
                 } else {
-                    TodayView(store: appState.rosterStore) { showPortal = true }
+                    TodayView(store: appState.rosterStore, tabActive: selectedTab == .today) { showPortal = true }
                 }
             }
                 .tabItem { Label("Today", systemImage: "sun.max") }.tag(MainTab.today)
@@ -2259,24 +2266,32 @@ private enum OfflineAviationBasemap {
 }
 
 
+@MainActor
 private final class TodayMapConnectivityMonitor: ObservableObject {
     @Published private(set) var isConnected = false
-
-    private let monitor = NWPathMonitor()
+    private var monitor: NWPathMonitor?
     private let queue = DispatchQueue(label: "RAIDORoster.TodayMapConnectivity")
+    private var generation = UUID()
 
-    init() {
-        monitor.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async {
-                self?.isConnected = path.status == .satisfied
+    func setActive(_ active: Bool) {
+        guard active else {
+            generation = UUID(); monitor?.cancel(); monitor = nil
+            if isConnected { isConnected = false }
+            return
+        }
+        guard monitor == nil else { return }
+        let token = UUID(); generation = token
+        let value = NWPathMonitor()
+        value.pathUpdateHandler = { [weak self] path in
+            let connected = path.status == .satisfied
+            Task { @MainActor [weak self] in
+                guard let self, self.generation == token, self.isConnected != connected else { return }
+                self.isConnected = connected
             }
         }
-        monitor.start(queue: queue)
+        monitor = value; value.start(queue: queue)
     }
-
-    deinit {
-        monitor.cancel()
-    }
+    deinit { monitor?.cancel() }
 }
 
 private struct TodayOnlineRouteMap: View {
@@ -4078,6 +4093,7 @@ struct TodayRouteMapCard: View {
     @Environment(\.raidoTheme) private var raidoVisualTheme
     let item: RosterItem
     var iceHeader = false
+    var tabActive = true
     @AppStorage("RAIDORoster.Map.PlaceLabels") private var showsPlaceLabels = true
     @State private var mapExpanded = false
 
@@ -4097,7 +4113,7 @@ struct TodayRouteMapCard: View {
     }
 
     private var useOfflineMap: Bool {
-        todayMapSource == "offline" || !connectivity.isConnected
+        (iceHeader && (!mapExpanded || !tabActive)) || todayMapSource == "offline" || !connectivity.isConnected
     }
 
     private var trackedAircraftRegistration: String? {
@@ -4405,9 +4421,20 @@ struct TodayRouteMapCard: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Flight route map " + points.map(\.code).joined(separator: " to "))
         .onAppear {
+            connectivity.setActive(tabActive && (!iceHeader || mapExpanded) && todayMapSource != "offline")
             gps.configureAircraftTracking(registration: trackedAircraftRegistration)
             gps.configureFlightRoute(coordinates: points.map(\.coordinate))
             gps.configureTrailPersistence(sessionKey: trackingSessionKey)
+        }
+        .onDisappear { connectivity.setActive(false) }
+        .onChange(of: mapExpanded) { _, expanded in
+            connectivity.setActive(tabActive && (!iceHeader || expanded) && todayMapSource != "offline")
+        }
+        .onChange(of: tabActive) { _, active in
+            connectivity.setActive(active && (!iceHeader || mapExpanded) && todayMapSource != "offline")
+        }
+        .onChange(of: todayMapSource) { _, source in
+            connectivity.setActive(tabActive && (!iceHeader || mapExpanded) && source != "offline")
         }
         .onChange(of: trackedAircraftRegistration) { _, value in
             gps.configureAircraftTracking(registration: value)
@@ -4575,12 +4602,8 @@ struct TodayRouteMapCard: View {
     private var iceMapHeader: some View {
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
-                // Both layers share the same projection. The blurred layer is
-                // passive local geography, even when Apple Maps is selected.
-                OfflineAviationMapCanvas(points: points, trail: gps.fusedTrail,
-                    liveLocation: gps.fusedLocation, isTracking: gps.isTracking,
-                    zoom: committedZoom, pan: committedPan, colorScheme: colorScheme)
-                    .blur(radius: 12).allowsHitTesting(false).accessibilityHidden(true)
+                // The collapsed header is one local map, with no hidden Apple
+                // Map or duplicate blurred canvas. Online maps are on demand.
                 mapSurface
                     .mask(LinearGradient(stops: [
                         .init(color: .clear, location: 0),
@@ -4847,27 +4870,26 @@ struct OfflineAviationMapCanvas: View {
     let colorScheme: ColorScheme
     var routeSegments: [[CLLocationCoordinate2D]]? = nil
 
-    private var coordinates: [CLLocationCoordinate2D] {
-        points.map(\.coordinate)
-    }
-
-    private var viewport: OfflineAviationMapViewport {
-        .init(route: coordinates)
-    }
-
     var body: some View {
-        let _ = raidoColorPalette
+        // Capture one immutable render snapshot on the UI side. In particular,
+        // projection bounds must not be rebuilt for every coastline vertex.
+        let points = self.points, trail = self.trail, liveLocation = self.liveLocation
+        let isTracking = self.isTracking, zoom = self.zoom, pan = self.pan
+        let coordinates = points.map(\.coordinate)
+        let viewport = OfflineAviationMapViewport(route: coordinates)
+        let segments = routeSegments ?? [coordinates]
+        let showLabels = showsPlaceLabels
+        let outlines = OfflineAviationBasemap.outlines
+        let labels = showLabels ? OfflineMapPlaces.labels : []
+        let colors = raidoColorPalette.colors(dark: colorScheme == .dark)
+        let sea = Self.color(colors.mapSea), land = Self.color(colors.mapLand)
+        let border = Self.color(colors.mapBorder), labelInk = Self.color(colors.mapLabelInk)
+        let accent = Self.color(colors.accent), ink = Self.color(colors.ink)
 
-        let _ = raidoVisualTheme
-
-        Canvas(rendersAsynchronously: true) { context, size in
-            let sea = MidnightTheme.mapSea
-            let land = MidnightTheme.mapLand
-            let border = MidnightTheme.mapBorder
-
+        return Canvas(rendersAsynchronously: true) { context, size in
             context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(sea))
 
-            for outline in OfflineAviationBasemap.outlines
+            for outline in outlines
                 where outline.isVisible(viewport: viewport, size: size, zoom: zoom, pan: pan) {
                 let polygon = outline.coordinates
                 guard polygon.count >= 3 else { continue }
@@ -4888,12 +4910,12 @@ struct OfflineAviationMapCanvas: View {
                 context.stroke(path, with: .color(border), lineWidth: 0.8)
             }
 
-            if showsPlaceLabels {
-                OfflineMapPlaces.draw(in: &context, size: size, viewport: viewport, zoom: zoom, pan: pan,
+            if showLabels {
+                OfflineMapPlaces.draw(labels: labels, ink: labelInk, in: &context, size: size, viewport: viewport, zoom: zoom, pan: pan,
                     airports: coordinates, aircraft: isTracking ? liveLocation?.coordinate : nil)
             }
 
-            for segment in routeSegments ?? [coordinates] where segment.count >= 2 {
+            for segment in segments where segment.count >= 2 {
                 var route = Path()
                 route.move(to: viewport.point(for: segment[0], in: size, zoom: zoom, pan: pan))
                 for coordinate in segment.dropFirst() {
@@ -4908,7 +4930,7 @@ struct OfflineAviationMapCanvas: View {
                 }
                 context.stroke(
                     route,
-                    with: .color(Color.accentColor),
+                    with: .color(accent),
                     style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [4, 5])
                 )
             }
@@ -4938,7 +4960,7 @@ struct OfflineAviationMapCanvas: View {
 
                 context.fill(
                     Path(ellipseIn: CGRect(x: position.x - 5, y: position.y - 5, width: 10, height: 10)),
-                    with: .color(Color.accentColor)
+                    with: .color(accent)
                 )
                 context.stroke(
                     Path(ellipseIn: CGRect(x: position.x - 8, y: position.y - 8, width: 16, height: 16)),
@@ -4949,7 +4971,7 @@ struct OfflineAviationMapCanvas: View {
                 context.draw(
                     Text(point.code)
                         .font(.caption2.bold())
-                        .foregroundStyle(.primary),
+                        .foregroundStyle(ink),
                     at: CGPoint(x: position.x, y: position.y + 17),
                     anchor: .center
                 )
@@ -4974,6 +4996,11 @@ struct OfflineAviationMapCanvas: View {
             }
         }
         .background(Color.clear)
+    }
+    private static func color(_ value: UInt32) -> Color {
+        Color(red: Double((value >> 16) & 255) / 255,
+              green: Double((value >> 8) & 255) / 255,
+              blue: Double(value & 255) / 255)
     }
 }
 
@@ -9864,6 +9891,7 @@ struct TodayView: View {
     @Environment(\.raidoPalette) private var raidoColorPalette
     @Environment(\.raidoTheme) private var raidoVisualTheme
     @ObservedObject var store: RosterStore
+    var tabActive = true
     let openPortal: () -> Void
     @StateObject private var calendarExporter = CalendarExporter()
     private enum CompanionSheet: String, Identifiable {
@@ -9883,7 +9911,7 @@ struct TodayView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         if store.isCacheValidated, let item = store.todayPrimaryItem, TodayRouteMapCard.canDisplay(item) {
-                            TodayRouteMapCard(item: item, iceHeader: true)
+                            TodayRouteMapCard(item: item, iceHeader: true, tabActive: tabActive)
                         } else {
                             IcePageHeading(title: "Today", subtitle: now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
                                 .padding(.horizontal, 18).padding(.top, 10).padding(.bottom, 22)
@@ -10064,7 +10092,7 @@ private enum OfflineMapPlaces {
         return catalogue.labels
     }()
 
-    static func draw(in context: inout GraphicsContext, size: CGSize,
+    static func draw(labels: [OfflinePlaceLabel], ink: Color, in context: inout GraphicsContext, size: CGSize,
                      viewport: OfflineAviationMapViewport, zoom: CGFloat, pan: CGSize,
                      airports: [CLLocationCoordinate2D], aircraft: CLLocationCoordinate2D?) {
         let screenRoute = airports.map { viewport.point(for: $0, in: size, zoom: zoom, pan: pan) }
@@ -10089,7 +10117,7 @@ private enum OfflineMapPlaces {
             case .city: title = "· " + place.name; priority = 4; font = .system(size: 10)
             }
             let text = context.resolve(Text(title).font(font).tracking(place.kind == .country ? 0.7 : 0)
-                .foregroundStyle(MidnightTheme.mapLabelInk))
+                .foregroundStyle(ink))
             let measure = text.measure(in: CGSize(width: 180, height: 30))
             let rect = CGRect(x: point.x - measure.width / 2, y: point.y - measure.height / 2, width: measure.width, height: measure.height)
             resolved[place.id] = text
