@@ -129,6 +129,25 @@ struct RosterItem: Identifiable, Codable, Equatable {
         uniqueActivities(activityList + (activeHotels ?? [])).filter(\.isHotelRelocation)
     }
 
+    var standbyCalendarLabel: String {
+        let periods = Set(operationalActivities.filter { $0.category.uppercased() == "STANDBY" }
+            .compactMap { rosterStandbyPeriod(code: $0.code, details: $0.title + " " + $0.description) })
+        let ordered = ["M", "A", "N"].filter { periods.contains($0) }
+        if !ordered.isEmpty { return "STB " + ordered.joined(separator: "/") }
+        return rosterStandbyPeriod(code: "", details: displayTitle).map { "STB " + $0 } ?? "STB"
+    }
+
+    var hasHotelRelocationOnRosterDate: Bool {
+        relocationActivities.contains { activity in
+            let localDay = String(activity.startLT.prefix(10))
+            // Hotel metadata can also be attached to adjacent days.
+            if localDay.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil {
+                return localDay == dateISO
+            }
+            return true
+        }
+    }
+
     var reportLocal: String {
         if let value = operationalActivities.compactMap({ $0.localCheckInTime.nilIfEmpty }).first { return value }
         return operationalActivities.first?.localStartTime ?? ""
@@ -423,7 +442,10 @@ final class DutyReminderScheduler: ObservableObject {
     private let identifierPrefix = "RAIDO-ROSTER-"
     private var reminderGeneration = UUID()
     private var relocationReminders: Bool { UserDefaults.standard.object(forKey: "RAIDORoster.RelocationReminders") as? Bool ?? true }
-    private var alcoholLead: Int { UserDefaults.standard.integer(forKey: "RAIDORoster.AlcoholReminderLead") }
+    private var lockPrecaution: Bool { UserDefaults.standard.bool(forKey:LockScreenPolicy.precautionKey) }
+    private var alcoholLead: Int {
+        lockPrecaution ? 60 : UserDefaults.standard.integer(forKey: "RAIDORoster.AlcoholReminderLead")
+    }
     private func remindersOff(pickup: Int, report: Int) -> Bool {
         pickup <= 0 && report <= 0 && !relocationReminders && alcoholLead <= 0
     }
@@ -512,18 +534,34 @@ final class DutyReminderScheduler: ObservableObject {
             }
 
             for event in TodayPriorityAdapter.events(item: item, capturedAt: now) {
+                if lockPrecaution && event.kind == .alcohol && event.date > now {
+                    let content = UNMutableNotificationContent()
+                    content.title = "🔴 Alcohol precaution active"
+                    content.body = "Pre-duty precaution · " + (event.reference == "PU" ? "Pickup" : "Report") + " · " + TodayPriorityPolicy.localDayLabel(event.end,event:event,now:event.date) + " · " + event.clock + " LT. Open RAIDO for details."
+                    content.userInfo = ["raidoPriorityID":event.id]
+                    content.sound = .default
+                    let trigger = UNTimeIntervalNotificationTrigger(timeInterval:max(1,event.date.timeIntervalSinceNow),repeats:false)
+                    requests.append((event.date,UNNotificationRequest(identifier:identifierPrefix + "PRECAUTION-ACTIVE-" + event.id,content:content,trigger:trigger)))
+                }
                 for (id, fire) in TodayPriorityPolicy.reminderDates(event, now: now, pickupLead: pickupLead,
                     relocationEnabled: relocationReminders, alcoholLead: alcoholLead) {
                     let content = UNMutableNotificationContent()
                     switch event.kind {
                     case .pickup: content.title = "Pickup in \(pickupLead) min"
-                    case .alcohol: content.title = "Alcohol precaution begins in \(alcoholLead) min"
+                    case .alcohol: content.title = "🟡 Precaution starts in \(alcoholLead == 60 ? "1 hour" : "\(alcoholLead) min")"
                     default: content.title = "Upcoming hotel relocation"
                     }
                     let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_GB")
                     formatter.timeZone = TodayPriorityPolicy.calendar(for:event).timeZone; formatter.dateFormat = "d MMM"
-                    content.body = [formatter.string(from:event.date),event.clock,event.detail,event.notes,event.missing.joined(separator:" · ")]
-                        .filter { !$0.isEmpty }.joined(separator:" · ")
+                    if event.kind == .alcohol {
+                        formatter.dateFormat = "d MMM · HH:mm"
+                        content.body = "Begins " + formatter.string(from:event.date) + " LT · " +
+                            (event.reference == "PU" ? "Pickup" : "Report") + " · " +
+                            TodayPriorityPolicy.localDayLabel(event.end,event:event,now:fire) + " · " + event.clock + " LT"
+                    } else {
+                        content.body = [formatter.string(from:event.date),event.clock,event.detail,event.notes,event.missing.joined(separator:" · ")]
+                            .filter { !$0.isEmpty }.joined(separator:" · ")
+                    }
                     content.userInfo = ["raidoPriorityID":event.id]
                     content.sound = .default
                     let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, fire.timeIntervalSinceNow), repeats: false)
@@ -1007,6 +1045,8 @@ struct ContentView: View {
         }
         .onAppear { TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
             appState.browser.resumeOfflineMonths()
+            appState.browser.refreshCurrentRosterIfNeeded()
+            appState.rosterStore.refreshLockScreenActivities()
         }
         .onChange(of: appState.rosterStore.snapshot) { _, _ in
             TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
@@ -1015,9 +1055,17 @@ struct ContentView: View {
             if phase == .active {
                 TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
                 appState.browser.resumeOfflineMonths()
+                appState.browser.refreshCurrentRosterIfNeeded()
+                appState.rosterStore.refreshLockScreenActivities()
             } else {
                 appState.browser.pauseOfflineMonths()
             }
+        }
+        .onOpenURL { url in
+            guard url.scheme == "raidoroster",url.host == "priority" else { return }
+            let id = URLComponents(url:url,resolvingAgainstBaseURL:false)?.queryItems?.first { $0.name == "id" }?.value
+            selectedTab = .today
+            TodayNotificationRouter.shared.pendingID = id == "lock-screen-preview" ? "today" : id
         }
         .onReceive(TodayNotificationRouter.shared.$pendingID) { value in
             if value != nil { selectedTab = .today }
@@ -1433,6 +1481,10 @@ struct RosterMonthCalendarView: View {
         return itemsByDate[selectedDateISO]
     }
 
+    private var relocationDates: Set<String> {
+        Set(items.filter(\.hasHotelRelocationOnRosterDate).compactMap(\.dateISO))
+    }
+
     private var monthTitle: String { store.rosterMonthTitle }
 
     private var slots: [String?] {
@@ -1521,11 +1573,12 @@ struct RosterMonthCalendarView: View {
                                 day: Int(iso.suffix(2)) ?? 0,
                                 isToday: iso == rosterCalendarTodayISO(),
                                 isChanged: changedDates.contains(iso),
-                                isSelected: selectedDateISO == iso
+                                isSelected: selectedDateISO == iso,
+                                hasHotelRelocation: relocationDates.contains(iso)
                             )
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("\(item.dateText), \(item.displayTitle)")
+                        .accessibilityLabel("\(item.dateText), \(item.category.uppercased() == "STANDBY" ? item.standbyCalendarLabel : item.displayTitle)\(relocationDates.contains(iso) ? ", hotel relocation" : "")")
                     } else if let iso {
                         RosterCalendarDayCell(
                             item: nil,
@@ -1583,6 +1636,12 @@ struct RosterMonthCalendarView: View {
                     .font(.caption2).foregroundStyle(.secondary)
             }
         }
+        if !relocationDates.isEmpty {
+            HStack(spacing: 4) {
+                Circle().strokeBorder(MidnightTheme.accent, lineWidth: 1.2).frame(width: 6, height: 6)
+                Text("Hotel move").font(.caption2).foregroundStyle(.secondary)
+            }
+        }
     }
 
     private func navigateMonth(previous: Bool) {
@@ -1605,6 +1664,7 @@ struct RosterCalendarDayCell: View {
     let isToday: Bool
     let isChanged: Bool
     let isSelected: Bool
+    var hasHotelRelocation: Bool = false
     var body: some View {
         let _ = raidoColorPalette
 
@@ -1616,6 +1676,13 @@ struct RosterCalendarDayCell: View {
                 .frame(width: 32, height: 32)
                 .background(isSelected ? MidnightTheme.highlight : .clear, in: Circle())
                 .overlay { if isToday && !isSelected { Circle().strokeBorder(MidnightTheme.accent.opacity(0.6), lineWidth: 1) } }
+                .overlay(alignment: .topTrailing) {
+                    if hasHotelRelocation {
+                        Circle().strokeBorder(MidnightTheme.accent, lineWidth: 1.3)
+                            .frame(width: 6, height: 6).offset(x: 7, y: 9)
+                            .accessibilityHidden(true)
+                    }
+                }
             if let item {
                 HStack(spacing: 3) {
                     Circle().fill(categoryColor(item.category)).frame(width: 4, height: 4)
@@ -1630,7 +1697,7 @@ struct RosterCalendarDayCell: View {
             Spacer(minLength: 0)
         }.padding(.horizontal, MidnightTheme.isGetJet ? 3 : 0).frame(maxWidth: .infinity, minHeight: MidnightTheme.isGetJet ? 80 : 64, alignment: .top).contentShape(Rectangle())
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(day), \(item?.displayTitle ?? "No roster data")\(isToday ? ", today" : "")\(isChanged ? ", changed" : "")")
+            .accessibilityLabel("\(day), \(item.map { $0.category.uppercased() == "STANDBY" ? $0.standbyCalendarLabel : $0.displayTitle } ?? "No roster data")\(hasHotelRelocation ? ", hotel relocation" : "")\(isToday ? ", today" : "")\(isChanged ? ", changed" : "")")
             .accessibilityValue(isSelected ? "Selected" : "")
     }
 }
@@ -1721,17 +1788,22 @@ private func calendarPickupCountdown(from now: Date, to pickup: Date) -> String 
     return hours == 0 ? "in \(days)d" : "in \(days)d \(hours)h"
 }
 
+func rosterStandbyPeriod(code: String, details: String) -> String? {
+    let evidence = (code + " " + details).uppercased()
+    for (period, word) in [("M", "MORNING"), ("A", "AFTERNOON"), ("N", "NIGHT")] {
+        let pattern = "\\b" + word + "(?=\\b|[0-9])|\\bSTB[ _-]*" + period + "(?=\\b|[0-9])"
+        if evidence.range(of: pattern, options: .regularExpression) != nil { return period }
+    }
+    return nil
+}
+
 private func calendarPrimaryLabel(_ item: RosterItem) -> String {
     switch item.category.uppercased() {
     case "FLIGHT":
         let codes = item.flightActivities.map(\.code).filter { !$0.isEmpty }
         return compactCalendarFlightCodes(codes)
     case "POSITIONING": return "POS"
-    case "STANDBY":
-        let title = item.displayTitle.uppercased()
-        if title.contains("MORNING") { return "STB M" }
-        if title.contains("AFTERNOON") { return "STB A" }
-        return "STB"
+    case "STANDBY": return item.standbyCalendarLabel
     case "RESERVE": return "RES"
     case "OFF": return "OFF"
     case "REST": return "REST"
@@ -8019,6 +8091,11 @@ struct SettingsView: View {
                     Text("Configure basic salary, block-hour rates, duty-day supplements and daily-payment eligibility. Contract revisions keep historical months intact.")
                         .font(.caption).foregroundStyle(.secondary)
                 }.listRowBackground(MidnightTheme.surface)
+                Section("Lock Screen") {
+                    NavigationLink { LockScreenSettings(store:store) } label: {
+                        Label("Countdowns & precaution",systemImage:"lock.rectangle")
+                    }
+                }.listRowBackground(MidnightTheme.surface)
                 Section("Offline roster") {
                     LabeledContent("Cached days", value: "\(store.items.count)")
                     if let month = store.cachedMonth, !month.isEmpty {
@@ -8080,6 +8157,7 @@ struct SettingsView: View {
                         Text("Off").tag(0)
                         Text("15 min before it begins").tag(15)
                         Text("30 min before it begins").tag(30)
+                        Text("1 hour before it begins").tag(60)
                     }
                     Picker("Pickup reminder", selection: $pickupReminderLead) {
                         Text("Off").tag(0)
@@ -8113,17 +8191,8 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Button {
-                        Task {
-                            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
-                        }
-                    } label: {
-                        Label("Enable roster change alerts", systemImage: "bell.and.waves.left.and.right")
-                    }
-
-                    Text("Reminders and roster-change alerts are local to this iPhone. Change alerts are generated only after a validated RAIDO refresh; there is no background roster polling.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    Text("Reminders are local to this iPhone. Roster changes appear in the app after a validated refresh; Outlook remains your email alert.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }.listRowBackground(MidnightTheme.surface)
 
 
@@ -8397,6 +8466,7 @@ struct PersonalDutyNoteCard: View {
 
 
 struct RosterChangesView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.raidoPalette) private var raidoColorPalette
     @Environment(\.raidoTheme) private var raidoVisualTheme
     @EnvironmentObject private var store: RosterStore
@@ -8419,8 +8489,9 @@ struct RosterChangesView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Reviewed") {
+                Button("Mark as reviewed") {
                     store.dismissChangeNotice()
+                    dismiss()
                 }
                 .font(.subheadline.weight(.semibold))
             }
@@ -9703,7 +9774,7 @@ struct TodayView: View {
         let _ = raidoVisualTheme
         TimelineView(.everyMinute) { context in
             let now = max(context.date, foregroundDate)
-            let events = store.priorityEvents(at: now)
+            let events = store.todayPriorityEvents(at: now)
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
@@ -9720,6 +9791,7 @@ struct TodayView: View {
                                     .padding(12).midnightCard(radius: 12)
                                     .accessibilityIdentifier("portal-format-warning")
                             }
+                            RosterChangeSummaryCard(store:store)
                             TodayPriorityPanel(events: panelEvents(events), now: now) { activePriority = $0 }
                             if store.isCacheValidated, let item = store.todayPrimaryItem {
                                 if item.isOperationalDuty, !item.operationalActivities.isEmpty {

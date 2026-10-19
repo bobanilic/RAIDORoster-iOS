@@ -164,7 +164,7 @@
       .replace(/\s*\n\s*/g, '\n')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
-    return text;
+    return text.replace(/\s+HTL\s+(?:[0-2][0-9][0-5][0-9]|[0-3]?[0-9][A-Z]{3}(?:[0-9]{2})?)\s+[A-Z]{3}\s+[A-Z]{3}\s+(?:[0-2][0-9][0-5][0-9]|[0-3]?[0-9][A-Z]{3}(?:[0-9]{2})?)\s+(?:BKD|OPT|CNL)\s*$/i, '').trim();
   }
 
   function labelledText(segment, label, stops) {
@@ -283,11 +283,19 @@
     return 'OTHER';
   }
 
+  function standbyPeriod(code, desc) {
+    const evidence = upper(code + ' ' + (desc || ''));
+    for (const [period, word] of [['M','MORNING'], ['A','AFTERNOON'], ['N','NIGHT']]) {
+      if (new RegExp('\\b' + word + '(?=\\b|[0-9])|\\bSTB[ _-]*' + period + '(?=\\b|[0-9])').test(evidence)) return word;
+    }
+    return '';
+  }
+
   function titleFor(code, cat, desc, segment) {
     if (cat === 'FLIGHT') return upper(code);
     if (cat === 'POSITIONING') return 'POSITIONING';
     if (cat === 'RESERVE') return 'RESERVE';
-    if (cat === 'STANDBY') return upper(code).startsWith('STBM') ? 'STANDBY MORNING' : upper(code).startsWith('STBA') ? 'STANDBY AFTERNOON' : 'STANDBY';
+    if (cat === 'STANDBY') return ['STANDBY', standbyPeriod(code, desc)].filter(Boolean).join(' ');
     if (cat === 'OFF') return 'OFF';
     if (cat === 'DND') return 'DND';
     if (cat === 'REST') return 'REST';

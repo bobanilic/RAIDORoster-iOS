@@ -25,6 +25,12 @@ class ArtifactChecks(unittest.TestCase):
             prefix = 'Payload/RAIDORoster.app/'
             archive.writestr(prefix + 'Info.plist', plistlib.dumps(info))
             archive.writestr(prefix + 'RAIDORoster', b'\xcf\xfa\xed\xfe' + struct.pack('<I', cpu) + bytes(24))
+            widget = {'CFBundleShortVersionString':expected['version'],'CFBundleVersion':expected['build'],
+                      'CFBundleExecutable':'RAIDODutyWidget','CFBundleIdentifier':'com.bobanilic.raidoroster.DutyWidget',
+                      'NSExtension':{'NSExtensionPointIdentifier':'com.apple.widgetkit-extension'}}
+            widget_prefix = prefix + 'PlugIns/RAIDODutyWidget.appex/'
+            archive.writestr(widget_prefix+'Info.plist',plistlib.dumps(widget))
+            archive.writestr(widget_prefix+'RAIDODutyWidget',b'\xcf\xfa\xed\xfe'+struct.pack('<I',0x0100000c)+bytes(24))
             for name in ('RosterEnhancements.js', 'GetJetAnnouncements.json', 'OfflineLand.json',
                          'OfflinePlaceLabels.json', 'GlobalAirportIndex.json', 'AirportTimeZones.json'):
                 archive.write(ROOT / 'RAIDORoster-Web2IPA/RAIDORoster' / name, prefix + name)
@@ -55,6 +61,16 @@ class ArtifactChecks(unittest.TestCase):
             with zipfile.ZipFile(ipa, 'w') as archive:
                 for name, value in files.items(): archive.writestr(name, value)
             with self.assertRaisesRegex(ValueError, 'resource'): module.verify(root)
+
+    def test_rejects_missing_lock_screen_extension(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); self.make_ipa(root)
+            ipa = root / 'RAIDORoster-unsigned.ipa'
+            with zipfile.ZipFile(ipa) as archive:
+                files = {name:archive.read(name) for name in archive.namelist() if '.appex/' not in name}
+            with zipfile.ZipFile(ipa,'w') as archive:
+                for name,value in files.items(): archive.writestr(name,value)
+            with self.assertRaisesRegex(ValueError,'extension missing'): module.verify(root)
 
     def test_missing_artifact(self):
         with tempfile.TemporaryDirectory() as directory:

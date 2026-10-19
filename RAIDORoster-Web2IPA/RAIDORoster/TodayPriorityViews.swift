@@ -32,6 +32,27 @@ extension RosterStore {
         return TodayPriorityPolicy.ordered(events, now: now)
     }
 
+    func todayPriorityEvents(at now: Date) -> [TodayPriorityEvent] {
+        let rows = priorityRosterItems.filter { item in
+            let zone = TodayPriorityAdapter.zone(activity:nil,item:item) ?? .current
+            var calendar = Calendar(identifier:.gregorian);calendar.timeZone = zone
+            if let day = TodayPriorityAdapter.day(item.dateISO,zone:zone), calendar.isDate(day,inSameDayAs:now) { return true }
+            return item.operationalActivities.contains { activity in
+                guard ["FLIGHT","POSITIONING"].contains(activity.category.uppercased()),
+                      let start = parseUTCStamp(activity.startUTC),let end = parseUTCStamp(activity.endUTC) else { return false }
+                return start <= now && now < end
+            }
+        }
+        let categories = rows.flatMap { item in
+            let operational = item.operationalActivities.map(\.category)
+            return operational.isEmpty ? [item.category] : operational
+        }
+        let allowFuture = LockScreenPolicy.showFutureRelocations(todayCategories:categories)
+        return priorityEvents(at:now).filter { event in
+            event.kind != .relocation || allowFuture || TodayPriorityPolicy.calendar(for:event).isDate(event.date,inSameDayAs:now)
+        }
+    }
+
     func priorityItem(id: String) -> RosterItem? { priorityRosterItems.first { $0.id == id } }
 }
 
@@ -114,7 +135,7 @@ enum TodayPriorityAdapter {
             var missing = [String]()
             if !timed { missing.append("Relocation time not provided") }
             if hotels.isEmpty { missing.append("Hotel details not provided") }
-            let noteValues = [activity.transferNote,activity.activityNote,activity.dayNote].filter { !$0.isEmpty }
+            let noteValues = [activity.transferNote,activity.activityNote,activity.dayNote].map(LockScreenPolicy.cleanLogisticsNote).filter { !$0.isEmpty }
             let notes = (NSOrderedSet(array: noteValues).array as? [String] ?? []).joined(separator: "\n\n")
             let transportProvided = !activity.pickup.isEmpty || !activity.transferNote.isEmpty || notes.range(of: #"\b(bolt|uber|taxi|transfer|transport|shuttle|pickup|pick.up)\b"#, options: .caseInsensitive) != nil
             if !transportProvided { missing.append("Transport details not provided") }
@@ -234,38 +255,36 @@ struct TodayPriorityStrip: View {
     let events: [TodayPriorityEvent]
     let now: Date
     let select: (TodayPriorityEvent) -> Void
-    @Environment(\.raidoPalette) private var palette
-    @Environment(\.raidoTheme) private var theme
     var body: some View {
-        let pickup = events.first { $0.kind == .pickup }
-        let alcohol = events.first { $0.kind == .alcohol }
-        if pickup != nil || alcohol != nil {
-            HStack(spacing: 12) {
-                if let pickup {
-                    Button { select(pickup) } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Label(pickup.date <= now ? "PU due" : "PU in " + TodayPriorityPolicy.countdown(to: pickup.date, now: now), systemImage: "car.side")
-                                .font(.subheadline.weight(.semibold)).monospacedDigit()
-                            Text(pickup.clock + " LT").font(.caption2).foregroundStyle(.secondary)
-                        }.frame(maxWidth: .infinity, alignment: .leading)
-                            .foregroundStyle(pickup.date.timeIntervalSince(now) <= 15 * 60 ? MidnightTheme.warningInk : MidnightTheme.accent)
-                    }.accessibilityIdentifier("today-pickup-countdown")
-                }
-                if pickup != nil && alcohol != nil { Divider().frame(height: 32) }
-                if let alcohol {
-                    Button { select(alcohol) } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Label(alcohol.date <= now ? "Precaution active" : "Precaution upcoming", systemImage: "wineglass")
-                                .font(.caption.weight(.semibold))
-                            Text(alcohol.date <= now ? "Until " + TodayPriorityPolicy.localDayLabel(alcohol.end,event:alcohol,now:now) + " · " + alcohol.clock : "In " + TodayPriorityPolicy.countdown(to: alcohol.date, now: now))
-                                .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
-                        }.frame(maxWidth: .infinity, alignment: .leading)
-                    }.accessibilityIdentifier("today-alcohol-status")
-                }
-            }.buttonStyle(.plain).foregroundStyle(MidnightTheme.accent)
-                .padding(.horizontal, 18).padding(.vertical, 12)
-                .background(.regularMaterial)
-                .overlay(alignment: .top) { Rectangle().fill(MidnightTheme.accent.opacity(0.15)).frame(height: 0.5) }
+        if let pickup = events.first(where: { $0.kind == .pickup }) {
+            Button { select(pickup) } label: {
+                HStack {
+                    Label(pickup.date <= now ? "PU due" : "PU in " + TodayPriorityPolicy.countdown(to:pickup.date,now:now),systemImage:"car.side")
+                        .font(.subheadline.weight(.semibold)).monospacedDigit()
+                    Spacer()
+                    Text(pickup.clock + " LT").font(.caption)
+                }.foregroundStyle(MidnightTheme.accent).padding(.horizontal,18).padding(.vertical,12)
+                    .background(.regularMaterial)
+            }.buttonStyle(.plain).accessibilityIdentifier("today-pickup-countdown")
+        }
+    }
+}
+
+struct RosterChangeSummaryCard: View {
+    @ObservedObject var store: RosterStore
+    var body: some View {
+        if !store.latestChanges.isEmpty {
+            NavigationLink { RosterChangesView(changes:store.latestChanges) } label: {
+                HStack(spacing:12) {
+                    Image(systemName:"calendar.badge.exclamationmark").font(.title3)
+                    VStack(alignment:.leading,spacing:3) {
+                        Text("Roster updated").font(.headline)
+                        Text("\(store.latestChanges.count) changed day\(store.latestChanges.count == 1 ? "" : "s") · Review changes")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }.frame(maxWidth:.infinity,alignment:.leading)
+                    Image(systemName:"chevron.right").font(.caption.weight(.semibold))
+                }.foregroundStyle(MidnightTheme.accent).padding(15).midnightCard(radius:18)
+            }.buttonStyle(.plain).accessibilityIdentifier("today-roster-changes")
         }
     }
 }

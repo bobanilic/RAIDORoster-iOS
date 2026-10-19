@@ -169,4 +169,35 @@ final class TodayPriorityTests: XCTestCase {
         XCTAssertEqual(TodayPriorityPolicy.localDayLabel(event.end,event:event,now:now),"Tomorrow · 20 Oct")
         XCTAssertEqual(TodayPriorityPolicy.status(event,now:now),"Active · 11h 35m remaining")
     }
+
+    func testStandbyPeriodSurvivesGenericCachedDayTitle() throws {
+        try store { store in
+            for (code,description,label) in [
+                ("STM32","STB Morning320 ADHOC","STB M"),
+                ("STA32","STB Afternoon320 ADHOC","STB A"),
+                ("STN32","STB Night320 ADHOC","STB N"),
+                ("STBN","","STB N"),
+                ("STB","Standby","STB")
+            ] {
+                var row = activity(id:"standby",category:"STANDBY",day:"2026-10-20")
+                row["code"]=code;row["title"]="STANDBY";row["description"]=description
+                ingest(store,day:"2026-10-20",category:"STANDBY",activities:[row])
+                XCTAssertEqual(try XCTUnwrap(store.priorityRosterItems.first).standbyCalendarLabel,label)
+            }
+        }
+        XCTAssertNil(rosterStandbyPeriod(code:"STB",details:"STB NORMAL"))
+    }
+
+    func testHotelMoveMarkerUsesActualLocalMoveDateIncludingLegacyMetadata() throws {
+        try store { store in
+            var move = activity(id:"old-move",category:"HOTEL",day:"2026-10-23")
+            move["code"]="RLCN"
+            let standby = activity(id:"standby",category:"STANDBY",day:"2026-10-23")
+            ingest(store,day:"2026-10-23",category:"STANDBY",activities:[standby],activeHotels:[move])
+            XCTAssertTrue(try XCTUnwrap(store.priorityRosterItems.first).hasHotelRelocationOnRosterDate)
+            ingest(store,day:"2026-10-24",category:"STANDBY",activities:[standby],activeHotels:[move])
+            let adjacent = try XCTUnwrap(store.priorityRosterItems.first { $0.dateISO == "2026-10-24" })
+            XCTAssertFalse(adjacent.hasHotelRelocationOnRosterDate)
+        }
+    }
 }

@@ -42,6 +42,16 @@ final class RosterBrowserModel: ObservableObject {
         return Self.startURL
     }
 
+    private var lastForegroundRefresh = Date.distantPast
+    func refreshCurrentRosterIfNeeded() {
+        guard !portalVisible,Date().timeIntervalSince(lastForegroundRefresh) >= 5 * 60,
+              let source = store.rosterSourceURL else { return }
+        let formatter = DateFormatter();formatter.locale = Locale(identifier:"en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM"
+        lastForegroundRefresh = Date()
+        offlineCache.start(source:source,requestedMonth:formatter.string(from:Date()))
+    }
+
     func reload() {
         loadError = nil
         webView?.reload()

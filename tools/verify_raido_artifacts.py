@@ -53,6 +53,22 @@ def verify(root: Path, expected_version=None, expected_build=None) -> dict:
         for key, value in privacy.items():
             if info.get(key) != value:
                 raise ValueError(f'Packaged configuration differs from source: {key}')
+        widget_prefix = prefix + 'PlugIns/RAIDODutyWidget.appex/'
+        try:
+            widget = plistlib.loads(archive.read(widget_prefix + 'Info.plist'))
+            widget_executable = widget.get('CFBundleExecutable')
+            if not isinstance(widget_executable, str) or '/' in widget_executable or not widget_executable:
+                raise ValueError('Invalid Lock Screen extension executable')
+            if not arm64_device_binary(archive.read(widget_prefix + widget_executable)):
+                raise ValueError('Lock Screen extension is not ARM64')
+        except KeyError as error:
+            raise ValueError('Lock Screen extension missing from IPA') from error
+        if widget.get('CFBundleShortVersionString') != release or str(widget.get('CFBundleVersion')) != build:
+            raise ValueError('Lock Screen extension version mismatch')
+        if widget.get('NSExtension', {}).get('NSExtensionPointIdentifier') != 'com.apple.widgetkit-extension':
+            raise ValueError('Invalid Lock Screen extension point')
+        if widget.get('CFBundleIdentifier') != 'com.bobanilic.raidoroster.DutyWidget':
+            raise ValueError('Invalid Lock Screen extension identifier')
         for resource in ('RosterEnhancements.js', 'GetJetAnnouncements.json', 'OfflineLand.json',
                          'OfflinePlaceLabels.json', 'GlobalAirportIndex.json', 'AirportTimeZones.json'):
             if archive.read(prefix + resource) != (ROOT / 'RAIDORoster-Web2IPA/RAIDORoster' / resource).read_bytes():

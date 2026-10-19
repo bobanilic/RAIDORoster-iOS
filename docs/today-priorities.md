@@ -1,3 +1,17 @@
+# Calendar clarity — 2.29.20
+
+The calendar resolves morning, afternoon and night standby from activity codes
+and descriptions, including previously cached generic STANDBY day titles.
+Unknown periods remain STB. A small hollow accent marker beside the day number
+identifies hotel relocation dates; the existing orange roster-change dot retains
+its separate meaning. Markers include relocations stored in legacy hotel metadata
+and rows separate from the day's primary duty.
+
+Lock Screen options, the removal of the duplicate alcohol strip, contextual
+future-move cards, note cleanup and in-app change review are included in 2.29.20.
+See [Lock Screen duty countdowns](lock-screen.md) for scheduling and installation
+requirements.
+
 # Today priorities and historical route previews — 2.29.19
 
 The 2.29.19 follow-up recognizes RLCN before generic hotel descriptions and keeps

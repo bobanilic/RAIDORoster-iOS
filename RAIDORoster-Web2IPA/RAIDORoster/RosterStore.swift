@@ -430,7 +430,6 @@ final class RosterStore: ObservableObject {
                 let changed = changes.count
                 changeNotice = "Roster changed • \(changed) day\(changed == 1 ? "" : "s")"
                 saveChangeState()
-                if automaticSideEffects { notifyRosterChanges(changes) }
             }
         }
 
@@ -468,11 +467,18 @@ final class RosterStore: ObservableObject {
 
     func refreshDutyReminders() {
         guard automaticSideEffects else { return }
+        refreshLockScreenActivities()
         let pickupLead = UserDefaults.standard.integer(forKey: "RAIDORoster.PickupReminderLead")
         let reportLead = UserDefaults.standard.integer(forKey: "RAIDORoster.ReportReminderLead")
         automaticReminderScheduler.syncIfAuthorized(priorityRosterItems, pickupLead: pickupLead, reportLead: reportLead) { [weak self] status in
             self?.reminderSyncStatus = status
         }
+    }
+
+    func refreshLockScreenActivities(force: Bool = false) {
+        guard automaticSideEffects else { return }
+        let events = priorityRosterSources.flatMap { TodayPriorityAdapter.events(item:$0.item,capturedAt:$0.capturedAt) }
+        LockScreenActivityController.shared.refresh(events:events,force:force)
     }
 
     func rememberRosterSourceURL(_ url: URL) {
@@ -682,6 +688,7 @@ final class RosterStore: ObservableObject {
         calendarSyncStatus = nil
         reminderSyncStatus = nil
         automaticReminderScheduler.clearRosterReminders()
+        refreshLockScreenActivities(force:true)
         try? FileManager.default.removeItem(at: cacheURL)
         try? FileManager.default.removeItem(at: monthCacheURL)
         try? FileManager.default.removeItem(at: changeStateURL)
@@ -856,47 +863,6 @@ final class RosterStore: ObservableObject {
         guard !value.isEmpty else { return "" }
         if value.count <= 220 { return value }
         return String(value.prefix(217)) + "…"
-    }
-
-    private func notifyRosterChanges(_ changes: [RosterDayChange]) {
-        guard !changes.isEmpty else { return }
-        Task {
-            let center = UNUserNotificationCenter.current()
-            let settings = await center.notificationSettings()
-            guard settings.authorizationStatus == .authorized ||
-                    settings.authorizationStatus == .provisional ||
-                    settings.authorizationStatus == .ephemeral else { return }
-
-            let content = UNMutableNotificationContent()
-            content.title = changes.count == 1
-                ? "Roster changed • \(changes[0].dateText)"
-                : "Roster changed • \(changes.count) days"
-            content.body = rosterChangeNotificationBody(changes)
-            content.sound = .default
-            content.userInfo = ["raidoRosterChanges": true]
-            let request = UNNotificationRequest(
-                identifier: "RAIDO-CHANGE-" + UUID().uuidString,
-                content: content,
-                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-            )
-            try? await center.add(request)
-        }
-    }
-
-    private func rosterChangeNotificationBody(_ changes: [RosterDayChange]) -> String {
-        guard let first = changes.first else { return "Open RAIDO Roster to review the changes." }
-        let priority = ["Duty", "CI", "Pickup", "Aircraft", "Route", "Schedule", "Release", "Hotel", "Crew"]
-        let ordered = first.fields.sorted {
-            (priority.firstIndex(of: $0.label) ?? 99) < (priority.firstIndex(of: $1.label) ?? 99)
-        }
-        var pieces: [String] = []
-        for field in ordered.prefix(3) {
-            pieces.append("\(field.label): \(field.oldValue) → \(field.newValue)")
-        }
-        var body = pieces.joined(separator: " • ")
-        if changes.count > 1 { body += " • +\(changes.count - 1) more day\(changes.count == 2 ? "" : "s")" }
-        if body.count > 300 { body = String(body.prefix(297)) + "…" }
-        return body.isEmpty ? "Open RAIDO Roster to review the changes." : body
     }
 
     private func currentMonthKey() -> String {

@@ -18,5 +18,18 @@
 	<array>
 		<string>location</string>
 	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.bobanilic.raidoroster.priority</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>raidoroster</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
