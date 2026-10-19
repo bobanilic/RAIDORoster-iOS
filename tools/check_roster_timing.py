@@ -24,8 +24,7 @@ properties = '\n'.join(block(anchor) for anchor in [
     '    var preDutyPickupUTCDate: Date?',
     '    var preDutyPickupDisplay: String',
 ])
-helpers = '\n'.join(block(anchor) for anchor in [
-    'private func pickupUTCDate(for activity: RosterActivity)',
+helpers = 'private ' + block('func pickupUTCDate(for activity: RosterActivity)') + '\n' + '\n'.join(block(anchor) for anchor in [
     'private func parseNominalLocalStamp(_ value: String)',
     'func parseUTCStamp(_ value: String)',
     'private func activitySortKey(_ activity: RosterActivity)',
