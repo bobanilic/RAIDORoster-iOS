@@ -127,3 +127,14 @@ Unit checks cover optional/expired plans, shared pickup/precaution cards, elapse
 time scheduling, relocation-day filtering and legacy note cleanup. Actual power
 consumption, wallpaper appearance, Always-On display and system scheduling still
 require device validation. No percentage savings or zero-energy claim is made.
+
+
+### 2.29.26 startup and idle efficiency
+
+Production startup creates the tabs before restoring saved roster JSON. A shared detached task reads the cache; the main actor only installs the result. Restoration does not rewrite archives or migrate legacy JSON on disk. A clear/manual import wins over a pending read. Existing change-review entries remain available.
+
+AlertToast still supplies message cards and their native material. RAIDO now aligns the card in a separate overlay leaf, bypassing the library's global-screen geometry/state wrapper. No toast surface is instantiated while idle, and a visible message owns a cancellable one-shot dismissal. Settings samples use the same presentation.
+
+Automatic roster work is restricted to the current month, plus a month explicitly selected by the user. Persisted history queues, retry state for excluded months and discovered historical links cannot resume a bulk download. Existing saved months remain readable. Foreground entry has one maintenance path; unchanged reminder inputs are not rescheduled within five minutes. Roster/settings/timezone changes bypass that interval.
+
+A focused simulator check now launches production ContentView (rather than only the preview root), taps tabs and Settings, presents/dismisses a sample message and returns from the background. Device startup, glass appearance and energy use still require actual device validation. These changes remove identifiable work; they do not establish a measured battery percentage.

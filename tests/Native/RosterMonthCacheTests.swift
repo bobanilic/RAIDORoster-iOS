@@ -10,6 +10,46 @@ final class RosterMonthCacheTests: XCTestCase {
          "monthlyBLH": "15:15", "validation": ["isValid": true, "parser": "raido-duty-envelope-test", "month": month, "datedRows": count],
          "rows": (1...count).map { ["id": "\(month)-\($0)", "dateISO": "\(month)-\(String(format: "%02d", $0))", "rawText": "Sanitized duty", "category": "OFF", "activities": []] as [String: Any] }]
     }
+    func testDeferredRestorationPreservesArchiveBytes() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:folder) }
+        let original = RosterStore(storageFolderURL:folder,automaticSideEffects:false)
+        XCTAssertTrue(original.ingest(messageBody:payload("2026-10")))
+        let archive = folder.appendingPathComponent("roster-months.json")
+        let bytes = try Data(contentsOf:archive)
+        let modified = try archive.resourceValues(forKeys:[.contentModificationDateKey]).contentModificationDate
+        let deferred = RosterStore(storageFolderURL:folder,automaticSideEffects:false,deferLoading:true)
+        XCTAssertTrue(deferred.isRestoring);XCTAssertNil(deferred.snapshot)
+        async let first:Void = deferred.restoreSavedRoster()
+        async let second:Void = deferred.restoreSavedRoster()
+        _ = await (first,second)
+        XCTAssertFalse(deferred.isRestoring)
+        XCTAssertEqual(deferred.snapshot,original.snapshot)
+        XCTAssertEqual(deferred.monthSnapshots,original.monthSnapshots)
+        XCTAssertEqual(try Data(contentsOf:archive),bytes)
+        XCTAssertEqual(try archive.resourceValues(forKeys:[.contentModificationDateKey]).contentModificationDate,modified)
+    }
+    func testClearBeforeDeferredRestoreCannotResurrectSavedRoster() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:folder) }
+        let original = RosterStore(storageFolderURL:folder,automaticSideEffects:false)
+        XCTAssertTrue(original.ingest(messageBody:payload("2026-10")))
+        let deferred = RosterStore(storageFolderURL:folder,automaticSideEffects:false,deferLoading:true)
+        deferred.clearCache()
+        await deferred.restoreSavedRoster()
+        XCTAssertNil(deferred.snapshot);XCTAssertTrue(deferred.monthSnapshots.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath:folder.appendingPathComponent("roster-months.json").path))
+    }
+    func testNewManualImportWinsOverDeferredSavedState() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:folder) }
+        let original = RosterStore(storageFolderURL:folder,automaticSideEffects:false)
+        XCTAssertTrue(original.ingest(messageBody:payload("2026-10")))
+        let deferred = RosterStore(storageFolderURL:folder,automaticSideEffects:false,deferLoading:true)
+        XCTAssertTrue(deferred.ingest(messageBody:payload("2026-11")))
+        await deferred.restoreSavedRoster()
+        XCTAssertEqual(deferred.snapshot?.validation?.month,"2026-11")
+    }
     func testExactMonthURLAndYearRollover() throws {
         let url = try XCTUnwrap(URL(string: "https://gjt.noc.vmc.navblue.cloud/RaidoMobile/Dialogues/HumanResources/HumanResourceRoster.aspx?hrId=fixture&month=10&year=2026#day"))
         let target = try XCTUnwrap(RosterMonthCachePolicy.requestURL(source: url, month: "2025-12"))
@@ -136,13 +176,13 @@ final class RosterMonthCacheTests: XCTestCase {
         XCTAssertEqual(fixture.loads,2)
         XCTAssertFalse(fixture.worker.needsRetry)
     }
-    func testWorkerDiscoversOlderHistoryFromDownloadedPreviousControls() async throws {
+    func testAutomaticWorkerIgnoresDiscoveredHistoryWhilePostponed() async throws {
         let fixture = try HistoryFixture(mode:.continuous,automaticHistory:true)
         defer { fixture.close() }
         fixture.worker.start(source:fixture.source)
         try await fixture.finished()
-        XCTAssertEqual(fixture.store.monthSnapshots["2025-09"]?.items.count,5)
-        XCTAssertEqual(fixture.store.rosterMonthKeys.count,16)
+        XCTAssertNil(fixture.store.monthSnapshots["2025-09"])
+        XCTAssertEqual(fixture.store.rosterMonthKeys,["2026-10"])
         XCTAssertFalse(fixture.worker.needsRetry)
         XCTAssertEqual(fixture.loads,1)
     }

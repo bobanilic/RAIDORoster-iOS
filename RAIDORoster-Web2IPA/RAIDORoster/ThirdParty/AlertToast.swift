@@ -225,54 +225,56 @@ public struct AlertToast: View{
         self.title = title
     }
     
-    ///Banner from the bottom of the view
-    public var banner: some View{
-        VStack{
-            Spacer()
-            
-            //Banner view starts here
-            VStack(alignment: .leading, spacing: 10){
-                HStack{
-                    switch type{
-                    case .complete(let color):
-                        Image(systemName: "checkmark")
-                            .foregroundColor(color)
-                    case .error(let color):
-                        Image(systemName: "xmark")
-                            .foregroundColor(color)
-                    case .systemImage(let name, let color):
-                        Image(systemName: name)
-                            .foregroundColor(color)
-                    case .image(let name, let color):
-                        Image(name)
-                            .renderingMode(.template)
-                            .foregroundColor(color)
-                    case .loading:
-                        ActivityIndicator()
-                    case .regular:
-                        EmptyView()
-                    }
-                    
-                    Text(LocalizedStringKey(title ?? ""))
-                        .font(style?.titleFont ?? Font.headline.bold())
+    /// Banner card without the full-height positioning wrapper.
+    public var bannerCard: some View {
+        VStack(alignment: .leading, spacing: 10){
+            HStack{
+                switch type{
+                case .complete(let color):
+                    Image(systemName: "checkmark")
+                        .foregroundColor(color)
+                case .error(let color):
+                    Image(systemName: "xmark")
+                        .foregroundColor(color)
+                case .systemImage(let name, let color):
+                    Image(systemName: name)
+                        .foregroundColor(color)
+                case .image(let name, let color):
+                    Image(name)
+                        .renderingMode(.template)
+                        .foregroundColor(color)
+                case .loading:
+                    ActivityIndicator()
+                case .regular:
+                    EmptyView()
                 }
-                
-                if subTitle != nil{
-                    Text(LocalizedStringKey(subTitle!))
-                        .font(style?.subTitleFont ?? Font.subheadline)
-                }
+
+                Text(LocalizedStringKey(title ?? ""))
+                    .font(style?.titleFont ?? Font.headline.bold())
             }
-            .fixedSize(horizontal: false, vertical: true)
-            .multilineTextAlignment(.leading)
-            .textColor(style?.titleColor ?? nil)
-            .padding()
-            .frame(maxWidth: 400, alignment: .leading)
-            .alertBackground(style?.backgroundColor ?? nil)
-            .cornerRadius(10)
-            .padding([.horizontal, .bottom])
+
+            if subTitle != nil{
+                Text(LocalizedStringKey(subTitle!))
+                    .font(style?.subTitleFont ?? Font.subheadline)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .multilineTextAlignment(.leading)
+        .textColor(style?.titleColor ?? nil)
+        .padding()
+        .frame(maxWidth: 400, alignment: .leading)
+        .alertBackground(style?.backgroundColor ?? nil)
+        .cornerRadius(10)
+    }
+
+    ///Banner from the bottom of the view
+    public var banner: some View {
+        VStack {
+            Spacer()
+            bannerCard.padding([.horizontal,.bottom])
         }
     }
-    
+
     ///HUD View
     public var hud: some View{
         Group{

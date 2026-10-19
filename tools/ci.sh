@@ -11,6 +11,9 @@ case "${1:-all}" in
     bash RAIDORoster-Web2IPA/build-unsigned-ipa.sh
     python3 tools/verify_raido_artifacts.py
     ;;
+  startup)
+    python3 tools/preview_ice_tabs.py --startup-only
+    ;;
   native-tests)
     python3 tools/run_native_tests.py
     ;;
@@ -23,5 +26,5 @@ case "${1:-all}" in
     bash "$0" checks
     bash "$0" build
     ;;
-  *) echo "Usage: $0 [checks|build|native-tests|preview|all]" >&2; exit 2 ;;
+  *) echo "Usage: $0 [checks|build|startup|native-tests|preview|all]" >&2; exit 2 ;;
 esac

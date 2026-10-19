@@ -1,6 +1,35 @@
 import XCTest
 
 @MainActor final class MapGestureUITests: XCTestCase {
+    func testProductionLaunchAndTabResponsiveness() {
+        continueAfterFailure = false
+        let app = XCUIApplication(bundleIdentifier:"com.bobanilic.raidoroster")
+        app.launchArguments = ["--startup","--theme=ice","--mode=dark"]
+        for _ in 0..<2 {
+            app.launch()
+            let tabs = app.tabBars.firstMatch
+            XCTAssertTrue(tabs.waitForExistence(timeout:15))
+            tabs.buttons["Roster"].tap()
+            XCTAssertTrue(tabs.buttons["Roster"].isSelected)
+            tabs.buttons["More"].tap()
+            let settings = app.buttons["more-settings"].firstMatch
+            XCTAssertTrue(settings.waitForExistence(timeout:5));settings.tap()
+            let lockScreen = app.buttons["settings-lock-screen"].firstMatch
+            for _ in 0..<6 where !lockScreen.isHittable { app.scrollViews.firstMatch.swipeUp() }
+            XCTAssertTrue(lockScreen.exists);lockScreen.tap()
+            let sample = app.buttons["Pickup reminder"]
+            for _ in 0..<5 where !sample.isHittable { app.scrollViews.firstMatch.swipeUp() }
+            XCTAssertTrue(sample.exists);sample.tap()
+            let toast = app.descendants(matching:.any)["raido-toast"].firstMatch
+            XCTAssertTrue(toast.waitForExistence(timeout:5))
+            toast.tap()
+            XCTAssertTrue(app.buttons["Roster updated"].exists,"Toast dismissal leaves Settings responsive")
+            XCUIDevice.shared.press(.home)
+            app.activate()
+            XCTAssertTrue(app.buttons["Roster updated"].waitForExistence(timeout:5))
+            app.terminate()
+        }
+    }
     func testPriorityCountdownStripAndDetailsInBothThemes() {
         continueAfterFailure = false
         for theme in ["ice","getJet"] {

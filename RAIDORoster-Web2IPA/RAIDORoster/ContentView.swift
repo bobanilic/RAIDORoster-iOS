@@ -441,6 +441,18 @@ final class DutyReminderScheduler: ObservableObject {
     private let center = UNUserNotificationCenter.current()
     private let identifierPrefix = "RAIDO-ROSTER-"
     private var reminderGeneration = UUID()
+    private struct AutomaticInputs: Equatable {
+        var items:[RosterItem]
+        var pickup:Int
+        var report:Int
+        var relocation:Bool
+        var alcohol:Int
+        var precaution:Bool
+        var zone:String
+    }
+    private var lastAutomaticInputs:AutomaticInputs?
+    private var lastAutomaticSync = Date.distantPast
+
     private var relocationReminders: Bool { UserDefaults.standard.object(forKey: "RAIDORoster.RelocationReminders") as? Bool ?? true }
     private var lockPrecaution: Bool { UserDefaults.standard.bool(forKey:LockScreenPolicy.precautionKey) }
     private var alcoholLead: Int {
@@ -477,11 +489,15 @@ final class DutyReminderScheduler: ObservableObject {
     }
 
     func syncIfAuthorized(_ items: [RosterItem], pickupLead: Int, reportLead: Int, completion: @escaping (String) -> Void) {
+        let inputs = AutomaticInputs(items:items,pickup:pickupLead,report:reportLead,
+            relocation:relocationReminders,alcohol:alcoholLead,precaution:lockPrecaution,zone:TimeZone.current.identifier)
+        if inputs == lastAutomaticInputs,Date().timeIntervalSince(lastAutomaticSync) < 300 { return }
         let ticket = UUID(); reminderGeneration = ticket
         Task { @MainActor in
             guard reminderGeneration == ticket else { return }
             if remindersOff(pickup: pickupLead, report: reportLead) {
                 await clearPending()
+                lastAutomaticInputs = inputs;lastAutomaticSync = Date()
                 completion("Duty reminders off")
                 return
             }
@@ -497,6 +513,7 @@ final class DutyReminderScheduler: ObservableObject {
 
             do {
                 let count = try await schedule(items, pickupLead: pickupLead, reportLead: reportLead)
+                lastAutomaticInputs = inputs;lastAutomaticSync = Date()
                 completion("Reminders refreshed • \(count) upcoming")
             } catch {
                 completion("Reminder refresh failed: \(error.localizedDescription)")
@@ -505,6 +522,7 @@ final class DutyReminderScheduler: ObservableObject {
     }
 
     func clearRosterReminders() {
+        lastAutomaticInputs = nil;lastAutomaticSync = .distantPast
         reminderGeneration = UUID()
         Task { @MainActor in await clearPending() }
     }
@@ -1004,7 +1022,7 @@ final class AppState: ObservableObject {
     let browser: RosterBrowserModel
 
     init() {
-        let store = RosterStore()
+        let store = RosterStore(deferLoading:true)
         rosterStore = store
         browser = RosterBrowserModel(store: store)
     }
@@ -1038,29 +1056,27 @@ struct ContentView: View {
         .environmentObject(appState.rosterStore)
         .tint(MidnightTheme.accent)
         .foregroundStyle(MidnightTheme.ink)
-        .modifier(RaidoToastHost())
+        .overlay(alignment:.top) { RaidoToastHost() }
         .sheet(isPresented: $showPortal) {
             PortalView(model: appState.browser, store: appState.rosterStore) { showPortal = false; selectedTab = .roster }
                 .onAppear { appState.browser.setPortalVisible(true) }
                 .onDisappear { appState.browser.setPortalVisible(false) }
         }
-        .onAppear { TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
+        .task(id:raidoScenePhase) {
+            guard raidoScenePhase == .active else {
+                appState.browser.pauseOfflineMonths()
+                return
+            }
+            // The tab shell can draw while disk decoding runs off the UI thread.
+            await appState.rosterStore.restoreSavedRoster()
+            guard !Task.isCancelled else { return }
+            TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from:appState.rosterStore.items)
             appState.browser.resumeOfflineMonths()
-            appState.browser.refreshCurrentRosterIfNeeded()
-            appState.rosterStore.refreshLockScreenActivities()
+            appState.rosterStore.refreshDutyReminders()
         }
         .onChange(of: appState.rosterStore.snapshot) { _, _ in
+            guard !appState.rosterStore.isRestoring else { return }
             TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
-        }
-        .onChange(of: raidoScenePhase) { _, phase in
-            if phase == .active {
-                TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
-                appState.browser.resumeOfflineMonths()
-                appState.browser.refreshCurrentRosterIfNeeded()
-                appState.rosterStore.refreshLockScreenActivities()
-            } else {
-                appState.browser.pauseOfflineMonths()
-            }
         }
         .onOpenURL { url in
             guard url.scheme == "raidoroster",url.host == "priority" else { return }
@@ -8095,7 +8111,7 @@ struct SettingsView: View {
                 Section("Lock Screen") {
                     NavigationLink { LockScreenSettings(store:store) } label: {
                         Label("Countdowns & precaution",systemImage:"lock.rectangle")
-                    }
+                    }.accessibilityIdentifier("settings-lock-screen")
                 }.listRowBackground(MidnightTheme.surface)
                 Section("Offline roster") {
                     LabeledContent("Cached days", value: "\(store.items.count)")
@@ -9820,6 +9836,8 @@ struct TodayView: View {
                                 if item.isOperationalDuty, let next = store.nextOperationalDuty(after: item), let interval = store.restInterval(after: item, before: next) {
                                     RestToNextDutyCard(next: next, interval: interval)
                                 }
+                            } else if store.isRestoring {
+                                ProgressView("Loading saved roster…").frame(maxWidth:.infinity).padding(.vertical,24)
                             } else {
                                 ContentUnavailableView(store.hasCache ? "Roster needs a resync" : "Import your roster", systemImage: "calendar.badge.exclamationmark",
                                     description: Text("Open Live RAIDO while online to save your duty briefing."))
@@ -9851,7 +9869,7 @@ struct TodayView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            foregroundDate = Date(); store.refreshDutyReminders()
+            foregroundDate = Date()
         }
         .onChange(of: store.monthSnapshots) { _, _ in
             if let selected = activePriority { activePriority = store.priorityEvents(at: Date()).first { $0.id == selected.id } }
@@ -9904,7 +9922,7 @@ private struct IceMoreView: View {
                     tool("Manuals", "Access through the live company portal", "book.closed", .manuals)
                     tool("Crew Control", "Phone, WhatsApp & email", "headphones", .crew)
                     Text("Preferences").font(.headline).padding(.top, 15).padding(.bottom, 3)
-                    tool("Settings", "Appearance, reminders, units & diagnostics", "gearshape", .settings)
+                    tool("Settings", "Appearance, reminders, units & diagnostics", "gearshape", .settings).accessibilityIdentifier("more-settings")
                     SyncFreshnessStrip(store: store)
                 }.buttonStyle(.plain).padding(18)
             }.midnightCanvas().toolbar(.hidden, for: .navigationBar)

@@ -46,8 +46,8 @@ jobs:
         with:
           name: RAIDO-${{ needs.release.outputs.version }}-IPA
           path: RAIDORoster-Web2IPA
-      - name: Check approved themes and map gestures
-        run: bash tools/ci.sh preview
+      - name: Check production launch and tab responsiveness
+        run: bash tools/ci.sh startup
       - name: Shut down simulator before runner cleanup
         if: always()
         run: xcrun simctl shutdown all || true

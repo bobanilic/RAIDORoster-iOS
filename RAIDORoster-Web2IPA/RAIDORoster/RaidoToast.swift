@@ -18,6 +18,10 @@ struct RaidoToastNotice: Equatable {
 final class RaidoToastCenter: ObservableObject {
     static let shared = RaidoToastCenter()
     @Published private(set) var notice:RaidoToastNotice?
+    func dismiss(_ id:UUID) {
+        guard notice?.id == id else { return }
+        notice = nil
+    }
     func present(_ notice:RaidoToastNotice) {
         guard UIApplication.shared.applicationState == .active else { return }
         self.notice = notice
@@ -36,19 +40,52 @@ enum RaidoToastPresentation {
     }
 }
 
-struct RaidoToastHost: ViewModifier {
+// Keep observation and dismissal in an overlay leaf. A hidden message creates
+// no geometry reader, glass surface, full-screen hit target or tab invalidation.
+struct RaidoToastHost: View {
     @ObservedObject private var center = RaidoToastCenter.shared
     @AppStorage(LockScreenPolicy.layoutKey) private var layout = "card"
     @AppStorage("RAIDORoster.Notifications.Appearance") private var appearance = "glass"
-    @State private var presented = false
-    func body(content:Content) -> some View {
-        content.toast(isPresenting:$presented,duration:5,offsetY:layout == "focus" ? -64 : 0,
-            alert:{ RaidoToastPresentation.make(center.notice ?? .rosterSample,layout:layout,appearance:appearance) },
-            onTap:{
-                if let id = center.notice?.priorityID { TodayNotificationRouter.shared.pendingID = id }
-            })
-            .onChange(of:center.notice) { _,notice in
-                if notice != nil { presented = true }
+    var body: some View {
+        if let notice = center.notice {
+            RaidoToastCard(notice:notice,layout:layout,appearance:appearance,duration:5) {
+                center.dismiss(notice.id)
+            } onTap: {
+                if let id = notice.priorityID { TodayNotificationRouter.shared.pendingID = id }
             }
+        }
+    }
+}
+
+/// Retain AlertToast's card and material, using local alignment rather than its
+/// legacy screen/geometry presentation wrapper. Only the card receives taps.
+struct RaidoToastCard: View {
+    let notice:RaidoToastNotice
+    let layout:String
+    let appearance:String
+    let duration:Double
+    let dismiss:() -> Void
+    var onTap:() -> Void = {}
+    var body: some View {
+        let toast = RaidoToastPresentation.make(notice,layout:layout,appearance:appearance)
+        Group {
+            if layout == "focus" {
+                // The library's banner includes a full-height Spacer. Render
+                // only its card here, keeping the tab bar outside the overlay.
+                toast.bannerCard
+            } else {
+                toast.hud
+            }
+        }
+        .padding(.horizontal,16)
+        .accessibilityElement(children:.combine)
+        .accessibilityIdentifier("raido-toast")
+        .onTapGesture { onTap(); dismiss() }
+        .task(id:notice.id) {
+            do { try await Task.sleep(for:.seconds(duration)) }
+            catch { return }
+            guard !Task.isCancelled else { return }
+            dismiss()
+        }
     }
 }

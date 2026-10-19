@@ -107,6 +107,13 @@ extension RosterStore {
     }
 }
 
+extension RosterStore {
+    func persistStartupFixture() {
+        if let snapshot { save(snapshot) }
+        saveMonthSnapshots()
+    }
+}
+
 struct IcePreviewRoot: View {
     @Environment(\.raidoTheme) private var raidoVisualTheme
     @StateObject private var store: RosterStore
@@ -172,7 +179,7 @@ try:
     fixture, preview_views = preview.split('struct IcePreviewRoot: View {', 1)
     store_source.write_text(original_store + fixture)
     content.write_text(generated + 'struct IcePreviewRoot: View {' + preview_views)
-    host = original_app.replace('ContentView()', 'IcePreviewRoot()')
+    host = original_app.replace('ContentView()', 'Group { if ProcessInfo.processInfo.arguments.contains("--startup") { ContentView() } else { IcePreviewRoot() } }')
     host = host.replace('        RaidoAppearancePreferences.migrate(.standard)', '''
         let args = ProcessInfo.processInfo.arguments
         let rawTheme = args.first(where: { $0.hasPrefix("--theme=") }).map { String($0.dropFirst(8)) } ?? "ice"
@@ -183,7 +190,11 @@ try:
         if let chosen = args.first(where: { $0.hasPrefix("--palette=") }).map({ String($0.dropFirst(10)) }) {
             UserDefaults.standard.set(chosen, forKey: rawTheme == "getJet" ? RaidoAppearancePreferences.getJetPaletteKey : RaidoAppearancePreferences.icePaletteKey)
         }
-        RaidoAppearancePreferences.migrate(.standard)''')
+        RaidoAppearancePreferences.migrate(.standard)
+        if args.contains("--startup") {
+            let fixture = RosterStore(automaticSideEffects:false)
+            fixture.installIceFixture();fixture.persistStartupFixture()
+        }''')
     app.write_text(host)
     with zipfile.ZipFile(ipa) as archive:
         packaged = plistlib.loads(archive.read('Payload/RAIDORoster.app/Info.plist'))
@@ -211,10 +222,23 @@ try:
     choices = [d for group in devices['devices'].values() for d in group if d['name'].startswith('iPhone')]
     device = next((d for d in choices if d['name'] == 'iPhone 16 Pro'), choices[0])
     udid = device['udid']
-    if device['state'] != 'Booted': run(['xcrun', 'simctl', 'boot', udid])
-    run(['xcrun', 'simctl', 'bootstatus', udid, '-b'])
+    if device['state'] != 'Booted': run(['xcrun', 'simctl', 'boot', udid], timeout=60)
+    run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], timeout=240)
     run(['xcrun', 'simctl', 'install', udid, str(product)])
     run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '06:44', '--batteryState', 'charged', '--batteryLevel', '100'])
+    if '--startup-only' in sys.argv:
+        with open('/tmp/raido-startup-ui-tests.log','w') as log:
+            try:
+                run(['xcodebuild','-project',str(project),'-scheme','RAIDOMapChecks','-configuration','Debug',
+                    '-destination','platform=iOS Simulator,id='+udid,'-derivedDataPath','/tmp/raido-ice-preview',
+                    '-parallel-testing-enabled','NO','CODE_SIGNING_ALLOWED=YES','CODE_SIGNING_REQUIRED=NO',
+                    'CODE_SIGN_STYLE=Manual','CODE_SIGN_IDENTITY=-','AD_HOC_CODE_SIGNING_ALLOWED=YES',
+                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testProductionLaunchAndTabResponsiveness',
+                    'test-without-building'],stdout=log,stderr=subprocess.STDOUT,timeout=600)
+            except (subprocess.CalledProcessError,subprocess.TimeoutExpired):
+                print(Path(log.name).read_text()[-12000:]);raise
+        print('Passed production launch, tab taps, foreground return and toast dismissal',flush=True)
+        sys.exit(0)
     combinations = [(theme, palette, mode, tab)
         for theme in ['ice', 'getJet'] for palette in ['iceBlue', 'forestGreen', 'midnightChampagne', 'burgundyRose', 'espressoBronze']
         for mode in ['light', 'dark'] for tab in (['roster', 'settings'] if palette == 'forestGreen' else ['roster'])]

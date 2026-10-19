@@ -70,8 +70,12 @@ struct LockScreenSettings: View {
         }
         .navigationTitle("Lock Screen").navigationBarTitleDisplayMode(.inline)
         .scrollContentBackground(.hidden).midnightCanvas()
-        .toast(isPresenting:$showSampleNotice,duration:4,offsetY:layout == "focus" ? -20 : 0) {
-            RaidoToastPresentation.make(sampleNotice,layout:layout,appearance:notificationAppearance)
+        .overlay(alignment:.top) {
+            if showSampleNotice {
+                RaidoToastCard(notice:sampleNotice,layout:layout,appearance:notificationAppearance,duration:4) {
+                    showSampleNotice = false
+                }
+            }
         }
         .onChange(of:pickup) { _,_ in apply() }
         .onChange(of:precaution) { _,enabled in

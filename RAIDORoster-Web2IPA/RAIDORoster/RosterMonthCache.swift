@@ -33,6 +33,16 @@ enum RosterMonthCachePolicy {
             return abs(a - now) == abs(b - now) ? a < b : abs(a - now) < abs(b - now)
         }
     }
+    // Automatic history downloading remains postponed. Explicit month selection
+    // may add that month; discovered links and persisted old queues cannot expand it.
+    static func activeTargets(current:String,requested:String?,existing:[String]) -> [String] {
+        var result = Array(existing.filter { $0 == current }.prefix(1))
+        if index(current) != nil,!result.contains(current) { result.append(current) }
+        if let requested,index(requested) != nil {
+            result.removeAll { $0 == requested };result.insert(requested,at:0)
+        }
+        return result
+    }
     static func needsDownload(_ snapshot: RosterSnapshot?, month: String, current: String, now: Date) -> Bool {
         guard let snapshot, snapshot.validation?.isValid == true,
               snapshot.validation?.parser.hasPrefix("raido-duty-envelope") == true,
@@ -103,7 +113,7 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
     }
     private var currentMonth: String { monthOverride ?? String(EarningsMath.day(Date()).prefix(7)) }
     var diagnosticText: String {
-        let value: [String: Any] = ["version":"2.29.17-history-recovery", "running":isRunning,
+        let value: [String: Any] = ["version":"2.29.26-current-month-only", "running":isRunning,
             "plannedMonths":progress?.targets ?? [], "savedMonths":store?.rosterMonthKeys ?? [],
             "emptyMonths":Array(progress?.empty.keys ?? Dictionary<String,Date>().keys).sorted(),
             "failures":progress?.failures.mapValues { ["reason":$0.reason,"attempts":String($0.attempts)] } ?? [:]]
@@ -142,8 +152,11 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
                 progress = saved?.sourceIdentity == identity ? saved : RosterHistoryProgress(sourceIdentity: identity)
             } catch { DeviceCacheStorage.report("Read history progress", error: error); publish("History progress could not be opened. Saved months are safe.", retry: true); return }
         }
-        let planned = targetsOverride ?? RosterMonthCachePolicy.targets(current: currentMonth, offered: progress?.targets ?? [])
-        for key in planned where progress?.targets.contains(key) == false { progress?.targets.append(key) }
+        let planned = targetsOverride ?? RosterMonthCachePolicy.activeTargets(current:currentMonth,requested:requestedMonth,existing:progress?.targets ?? [])
+        progress?.targets = planned
+        let allowed = Set(planned)
+        progress?.failures = progress?.failures.filter { allowed.contains($0.key) } ?? [:]
+        progress?.empty = progress?.empty.filter { allowed.contains($0.key) } ?? [:]
         // A manual retry must still respect a server Retry-After response.
         if force {
             let rateLimits = progress?.failures.filter { $0.value.reason == "server-rate-limit" && $0.value.retryAt > Date() } ?? [:]
@@ -158,7 +171,7 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
         if pendingMonths.isEmpty { reportCompletion(); scheduleRetry(); return }
         retryTask?.cancel(); retryTask = nil
         let ticket = generation, cacheTicket = storeGeneration
-        isRunning = true; publish("Preparing offline roster history…")
+        isRunning = true; publish("Refreshing saved roster…")
         task = Task { [weak self] in
             guard let self else { return }
             do {
@@ -225,11 +238,6 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
         try check(ticket, cacheTicket)
         // Bootstrap need not have a valid roster yet (a JavaScript shell is common).
         _ = try await inspect(web)
-        let discovered = try await web.callAsyncJavaScript("return window.RAIDOPlus?.history.discover() || [];", arguments: [:], in: nil, contentWorld: .page) as? [String] ?? []
-        if targetsOverride == nil {
-            for key in RosterMonthCachePolicy.targets(current: currentMonth, offered: discovered) where progress?.targets.contains(key) == false { progress?.targets.append(key) }
-            try checkpoint()
-        }
         while let key = pendingMonths.first {
             try check(ticket, cacheTicket)
             publish("Saving \(key) · \(store.rosterMonthKeys.count) months available offline…")
@@ -247,7 +255,6 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
                     progress?.empty.removeValue(forKey: key)
                 }
                 progress?.failures.removeValue(forKey: key)
-                extendTargets(result["offered"] as? [String] ?? [])
                 try checkpoint()
             } catch is CancellationError { throw CancellationError() }
             catch {
@@ -258,18 +265,13 @@ final class RosterOfflineCache: NSObject, WKNavigationDelegate {
                 switch failure {
                 case .auth, .rateLimit, .network, .storage: publish(message(failure), retry: true); return
                 case .format, .navigation:
-                    // An unpublished hole must not hide older offered history.
-                    let offered = try await web.callAsyncJavaScript("return window.RAIDOPlus?.history.discover() || [];", arguments: [:], in: nil, contentWorld: .page) as? [String] ?? []
-                    extendTargets(offered); try checkpoint()
+                    // Keep only the bounded current/explicitly requested queue.
+                    try checkpoint()
                 }
             }
             try await sleep(timing.gap)
         }
         try check(ticket, cacheTicket); reportCompletion()
-    }
-    private func extendTargets(_ offered: [String]) {
-        guard targetsOverride == nil else { return }
-        for key in offered where RosterMonthCachePolicy.index(key) != nil && progress?.targets.contains(key) == false { progress?.targets.append(key) }
     }
     private func record(_ key: String, failure: Failure) {
         let count = (progress?.failures[key]?.attempts ?? 0) + 1

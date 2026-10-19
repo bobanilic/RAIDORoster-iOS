@@ -60,8 +60,7 @@ final class RosterBrowserModel: ObservableObject {
     func resumeOfflineMonths() {
         guard !portalVisible else { return }
         offlineCache.resume()
-        let source = store.rosterSourceURL ?? (RosterMonthCachePolicy.isRosterURL(preferredStartURL) ? preferredStartURL : nil)
-        if let source { offlineCache.start(source: source) }
+        refreshCurrentRosterIfNeeded()
     }
 
     func pauseOfflineMonths() { offlineCache.pause() }
