@@ -29,6 +29,7 @@ original_announcements = announcement_view.read_text()
 project = root / 'RAIDORoster.xcodeproj'
 original_project = (project / 'project.pbxproj').read_bytes()
 test_scheme = None
+ephemeral_simulator = None
 preview = r'''
 extension RosterStore {
     func installIceFixture() {
@@ -206,7 +207,7 @@ try:
             if args.contains("--clean-install") {
                 fixture.clearCache()
                 UserDefaults.standard.removeObject(forKey: "RAIDORoster.LastPortalURL")
-            } else {
+            } else if !args.contains("--reuse-startup-cache") {
                 fixture.installIceFixture();fixture.persistStartupFixture()
             }
         }''')
@@ -234,14 +235,18 @@ try:
             assert info.get(key) == value, f'Simulator privacy configuration differs: {key}'
     bundle = info['CFBundleIdentifier']
     devices = json.loads(run(['xcrun', 'simctl', 'list', 'devices', 'available', '-j'], capture_output=True, text=True).stdout)
-    choices = [d for group in devices['devices'].values() for d in group if d['name'].startswith('iPhone')]
-    device = next((d for d in choices if d['name'] == 'iPhone 16 Pro'), choices[0])
+    choices = [(runtime, d) for runtime, group in devices['devices'].items() for d in group if d['name'].startswith('iPhone')]
+    runtime, device = next(((r, d) for r, d in choices if d['name'] == 'iPhone 16 Pro'), choices[0])
     udid = device['udid']
-    if device['state'] != 'Booted': run(['xcrun', 'simctl', 'boot', udid], timeout=60)
-    run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], timeout=240)
     if '--startup-only' in sys.argv:
-        subprocess.run(['xcrun', 'simctl', 'uninstall', udid, bundle], check=False, timeout=30)
-    run(['xcrun', 'simctl', 'install', udid, str(product)])
+        # A fresh device has no app to uninstall. Avoid an unrelated stale
+        # simulator/uninstall blocking the clean-install tests before launch.
+        udid = run(['xcrun', 'simctl', 'create', 'RAIDO-startup-checks', device['deviceTypeIdentifier'], runtime],
+                   capture_output=True, text=True, timeout=60).stdout.strip()
+        ephemeral_simulator = udid
+    if ephemeral_simulator or device['state'] != 'Booted': run(['xcrun', 'simctl', 'boot', udid], timeout=60)
+    run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], timeout=240)
+    run(['xcrun', 'simctl', 'install', udid, str(product)], timeout=90)
     run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '06:44', '--batteryState', 'charged', '--batteryLevel', '100'])
     if '--startup-only' in sys.argv:
         with open('/tmp/raido-startup-ui-tests.log','w') as log:
@@ -332,6 +337,12 @@ try:
     Path('/tmp/raido-theme-size.json').write_text(json.dumps(report, indent=2) + '\n')
     print('Release size:', json.dumps(report), flush=True)
 finally:
+    if ephemeral_simulator:
+        for action in ['shutdown', 'delete']:
+            try:
+                subprocess.run(['xcrun', 'simctl', action, ephemeral_simulator], check=False, timeout=30)
+            except subprocess.TimeoutExpired:
+                print('Temporary simulator ' + action + ' timed out; runner cleanup will finish it', file=sys.stderr)
     for report in (Path.home() / 'Library/Logs/DiagnosticReports').glob('RAIDORoster*'):
         if report.is_file(): shutil.copy(report, Path('/tmp') / ('raido-ice-crash-' + report.name))
     stderr = Path('/tmp/raido-ice-app-stderr.log')

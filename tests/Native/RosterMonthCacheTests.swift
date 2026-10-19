@@ -49,6 +49,32 @@ final class RosterMonthCacheTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf:archive),bytes)
         XCTAssertEqual(try archive.resourceValues(forKeys:[.contentModificationDateKey]).contentModificationDate,modified)
     }
+    func testTodayUsesCurrentCachedMonthWithoutReloadingAfterMonthSwitch() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let now = Date(), calendar = Calendar.current
+        let formatter = DateFormatter(); formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM"
+        let month = formatter.string(from: now)
+        let previous = formatter.string(from: try XCTUnwrap(calendar.date(byAdding: .month, value: -1, to: now)))
+        let original = RosterStore(storageFolderURL: folder, automaticSideEffects: false)
+        XCTAssertTrue(original.ingest(messageBody: payload(month, count: try XCTUnwrap(calendar.range(of: .day, in: .month, for: now)).count)))
+        XCTAssertTrue(original.ingest(messageBody: payload(previous, count: 28), archiveOnly: true, expectedMonth: previous))
+        let loaded = RosterStore(storageFolderURL: folder, automaticSideEffects: false, deferLoading: true)
+        await loaded.restoreSavedRoster()
+        let today = try XCTUnwrap(loaded.todayPrimaryItem)
+        XCTAssertTrue(loaded.selectRosterMonthIfCached(previous))
+        XCTAssertEqual(loaded.todayPrimaryItem, today, "Today is independent of the month displayed in Roster")
+        let saved = loaded.monthSnapshots
+        // Once restored, repeated foreground/tab consumers keep the in-memory
+        // archive even if disk data is no longer readable or available.
+        try FileManager.default.removeItem(at: folder.appendingPathComponent("roster-cache.json"))
+        try FileManager.default.removeItem(at: folder.appendingPathComponent("roster-months.json"))
+        for _ in 0..<3 { await loaded.restoreSavedRoster() }
+        XCTAssertFalse(loaded.isRestoring)
+        XCTAssertEqual(loaded.monthSnapshots, saved)
+        XCTAssertEqual(loaded.todayPrimaryItem, today)
+    }
     func testClearBeforeDeferredRestoreCannotResurrectSavedRoster() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:folder) }

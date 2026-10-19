@@ -32,17 +32,21 @@ import XCTest
     func testTodayReturnWithAutomaticMapAndNotificationsDisabled() {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier: "com.bobanilic.raidoroster")
-        app.launchArguments = ["--startup", "--today-return", "--theme=ice", "--mode=dark"]
+        app.launchArguments = ["--startup", "--today-return", "--priorities", "--theme=ice", "--mode=dark"]
         app.launch()
         let tabs = app.tabBars.firstMatch
         let handle = app.buttons["today-map-handle"]
         XCTAssertTrue(handle.waitForExistence(timeout: 15))
         XCTAssertEqual(handle.value as? String, "Collapsed")
+        let pickup = app.buttons["today-pickup-countdown"]
+        XCTAssertTrue(pickup.waitForExistence(timeout: 5), "Exercise the priority interface, not an empty Today shell")
         XCTAssertEqual(app.maps.count, 0, "A compact route must not construct Apple Maps, even with Auto selected")
         for _ in 0..<3 {
             tabs.buttons["Roster"].tap(); XCTAssertTrue(tabs.buttons["Roster"].isSelected)
             tabs.buttons["Today"].tap(); XCTAssertTrue(tabs.buttons["Today"].isSelected)
             XCTAssertTrue(handle.waitForExistence(timeout: 5))
+            XCTAssertFalse(app.staticTexts["Loading saved roster…"].exists)
+            XCTAssertEqual(app.webViews.count, 0, "Tab selection must use the native cache without opening Live RAIDO")
             let before = handle.frame.minY
             app.scrollViews.firstMatch.swipeUp()
             XCTAssertLessThan(handle.frame.minY, before - 20, "Today must scroll after returning from Roster")
@@ -51,6 +55,30 @@ import XCTest
             tabs.buttons["Today"].tap(); XCTAssertTrue(tabs.buttons["Today"].isSelected)
             app.scrollViews.firstMatch.swipeDown()
         }
+        let previousLabel = pickup.label
+        let previousMapY = handle.frame.minY
+        let minuteTick = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            pickup.label != previousLabel
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [minuteTick], timeout: 75), .completed,
+                       "The native countdown must update while the cached briefing stays interactive")
+        XCTAssertEqual(handle.frame.minY, previousMapY, accuracy: 2, "A countdown tick must preserve Today scroll position")
+        pickup.tap()
+        XCTAssertTrue(app.navigationBars["Crew pickup"].waitForExistence(timeout: 5))
+        app.buttons["Done"].firstMatch.tap()
+        app.terminate()
+        // Keep the on-disk cache from the first process; the host must not
+        // recreate the fixture or download a roster before this launch.
+        app.launchArguments.append("--reuse-startup-cache")
+        app.launch()
+        XCTAssertTrue(handle.waitForExistence(timeout: 15))
+        tabs.buttons["Roster"].tap(); XCTAssertTrue(tabs.buttons["Roster"].isSelected)
+        tabs.buttons["Today"].tap(); XCTAssertTrue(tabs.buttons["Today"].isSelected)
+        XCTAssertTrue(pickup.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Loading saved roster…"].exists)
+        XCTAssertEqual(app.webViews.count, 0)
+        app.scrollViews.firstMatch.swipeUp()
+        tabs.buttons["More"].tap(); XCTAssertTrue(tabs.buttons["More"].isSelected)
         app.terminate()
     }
     func testProductionLaunchAndTabResponsiveness() {

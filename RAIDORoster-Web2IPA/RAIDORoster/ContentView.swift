@@ -9904,83 +9904,84 @@ struct TodayView: View {
     var body: some View {
         let _ = raidoColorPalette
         let _ = raidoVisualTheme
-        TimelineView(.everyMinute) { context in
-            let now = max(context.date, foregroundDate)
-            let events = store.todayPriorityEvents(at: now)
-            NavigationStack {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if store.isCacheValidated, let item = store.todayPrimaryItem, TodayRouteMapCard.canDisplay(item) {
-                            TodayRouteMapCard(item: item, iceHeader: true, tabActive: tabActive)
+        let now = max(Date(), foregroundDate)
+        let primaryItem = store.isCacheValidated ? store.todayPrimaryItem : nil
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let item = primaryItem, TodayRouteMapCard.canDisplay(item) {
+                        TodayRouteMapCard(item: item, iceHeader: true, tabActive: tabActive)
+                    } else {
+                        IcePageHeading(title: "Today", subtitle: now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                            .padding(.horizontal, 18).padding(.top, 10).padding(.bottom, 22)
+                    }
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let warning = store.portalFormatWarning {
+                            Label(warning, systemImage: "exclamationmark.icloud")
+                                .font(.caption).foregroundStyle(MidnightTheme.warningInk)
+                                .padding(12).midnightCard(radius: 12)
+                                .accessibilityIdentifier("portal-format-warning")
+                        }
+                        RosterChangeSummaryCard(store:store)
+                        TodayPriorityLiveContent(store: store, tabActive: tabActive) { activePriority = $0 }
+                        if let item = primaryItem {
+                            if item.isOperationalDuty, !item.operationalActivities.isEmpty {
+                                IceReadinessView(item: item, store: store, showsAlcohol: false)
+                            }
+                            IceDutyAgenda(item: item, onCalendarExport: { calendarExporter.export(item) }, canExport: !calendarExporter.isWorking)
+                            TodayPersonalNoteDisclosure(item: item)
+                            if let sector = crewCompanionSector(item, at: now) {
+                                HStack { Text("My position").font(.caption).foregroundStyle(.secondary); Spacer()
+                                    CrewCompanionRolePicker(dutyID: item.id, sectorID: sector.id).id(sector.id) }
+                            }
+                            if !item.aircraft.isEmpty {
+                                DisclosureGroup("Aircraft") { AircraftCard(item: item).padding(.top, 8) }
+                                    .font(.subheadline).padding(13).midnightCard(radius: 13)
+                            }
+                            if !item.hotelAssignments.isEmpty || !item.transferNotes.isEmpty || !item.relocationActivities.isEmpty {
+                                DisclosureGroup("Hotel & transport") { LogisticsCard(item: item).padding(.top, 8) }
+                                    .font(.subheadline).padding(13).midnightCard(radius: 13)
+                            }
+                            if !item.dayNotes.isEmpty || !item.activityNotes.isEmpty {
+                                DisclosureGroup("Duty notes") { NotesCard(item: item).padding(.top, 8) }
+                                    .font(.subheadline).padding(13).midnightCard(radius: 13)
+                            }
+                            if item.isOperationalDuty, let next = store.nextOperationalDuty(after: item), let interval = store.restInterval(after: item, before: next) {
+                                RestToNextDutyCard(next: next, interval: interval)
+                            }
+                        } else if store.isRestoring {
+                            ProgressView("Loading saved roster…").frame(maxWidth:.infinity).padding(.vertical,24)
                         } else {
-                            IcePageHeading(title: "Today", subtitle: now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                                .padding(.horizontal, 18).padding(.top, 10).padding(.bottom, 22)
+                            ContentUnavailableView(store.hasCache ? "Roster needs a resync" : "Import your roster", systemImage: "calendar.badge.exclamationmark",
+                                description: Text("Open Live RAIDO while online to save your duty briefing."))
+                            Button("Open Live RAIDO", action: openPortal).raidoPrimaryAction()
                         }
-                        VStack(alignment: .leading, spacing: 12) {
-                            if let warning = store.portalFormatWarning {
-                                Label(warning, systemImage: "exclamationmark.icloud")
-                                    .font(.caption).foregroundStyle(MidnightTheme.warningInk)
-                                    .padding(12).midnightCard(radius: 12)
-                                    .accessibilityIdentifier("portal-format-warning")
-                            }
-                            RosterChangeSummaryCard(store:store)
-                            TodayPriorityPanel(events: panelEvents(events), now: now) { activePriority = $0 }
-                            if store.isCacheValidated, let item = store.todayPrimaryItem {
-                                if item.isOperationalDuty, !item.operationalActivities.isEmpty {
-                                    IceReadinessView(item: item, store: store, showsAlcohol: false)
-                                }
-                                IceDutyAgenda(item: item, onCalendarExport: { calendarExporter.export(item) }, canExport: !calendarExporter.isWorking)
-                                TodayPersonalNoteDisclosure(item: item)
-                                if let sector = crewCompanionSector(item, at: now) {
-                                    HStack { Text("My position").font(.caption).foregroundStyle(.secondary); Spacer()
-                                        CrewCompanionRolePicker(dutyID: item.id, sectorID: sector.id).id(sector.id) }
-                                }
-                                if !item.aircraft.isEmpty {
-                                    DisclosureGroup("Aircraft") { AircraftCard(item: item).padding(.top, 8) }
-                                        .font(.subheadline).padding(13).midnightCard(radius: 13)
-                                }
-                                if !item.hotelAssignments.isEmpty || !item.transferNotes.isEmpty || !item.relocationActivities.isEmpty {
-                                    DisclosureGroup("Hotel & transport") { LogisticsCard(item: item).padding(.top, 8) }
-                                        .font(.subheadline).padding(13).midnightCard(radius: 13)
-                                }
-                                if !item.dayNotes.isEmpty || !item.activityNotes.isEmpty {
-                                    DisclosureGroup("Duty notes") { NotesCard(item: item).padding(.top, 8) }
-                                        .font(.subheadline).padding(13).midnightCard(radius: 13)
-                                }
-                                if item.isOperationalDuty, let next = store.nextOperationalDuty(after: item), let interval = store.restInterval(after: item, before: next) {
-                                    RestToNextDutyCard(next: next, interval: interval)
-                                }
-                            } else if store.isRestoring {
-                                ProgressView("Loading saved roster…").frame(maxWidth:.infinity).padding(.vertical,24)
-                            } else {
-                                ContentUnavailableView(store.hasCache ? "Roster needs a resync" : "Import your roster", systemImage: "calendar.badge.exclamationmark",
-                                    description: Text("Open Live RAIDO while online to save your duty briefing."))
-                                Button("Open Live RAIDO", action: openPortal).raidoPrimaryAction()
-                            }
-                            HStack(spacing: 9) {
-                                MidnightQuickAction(title: "Announcements", symbol: "megaphone") { activeSheet = .announcements }
-                                MidnightQuickAction(title: "Crew Control", symbol: "headphones") { activeSheet = .crewControl }
-                                MidnightQuickAction(title: "Documents", symbol: "lock.doc") { activeSheet = .documents }
-                            }.padding(.top, 5)
-                            SyncFreshnessStrip(store: store)
-                        }.padding(.horizontal, 18).padding(.bottom, 20)
+                        HStack(spacing: 9) {
+                            MidnightQuickAction(title: "Announcements", symbol: "megaphone") { activeSheet = .announcements }
+                            MidnightQuickAction(title: "Crew Control", symbol: "headphones") { activeSheet = .crewControl }
+                            MidnightQuickAction(title: "Documents", symbol: "lock.doc") { activeSheet = .documents }
+                        }.padding(.top, 5)
+                        SyncFreshnessStrip(store: store)
+                    }.padding(.horizontal, 18).padding(.bottom, 20)
+                }
+            }.midnightCanvas().toolbar(.hidden, for: .navigationBar)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    TodayPriorityLiveContent(store: store, tabActive: tabActive, strip: true) { activePriority = $0 }
+                }
+                .sheet(item: $activePriority) { event in TodayPriorityDetails(event: event, store: store) }
+                .sheet(item: $activeSheet) { sheet in
+                    switch sheet {
+                    case .crewControl: CrewControlSheet(item: store.todayPrimaryItem ?? store.nextDuty)
+                    case .announcements: AnnouncementsView(item: store.isCacheValidated ? store.todayPrimaryItem : nil)
+                    case .documents: CrewDocumentsView()
                     }
-                }.midnightCanvas().toolbar(.hidden, for: .navigationBar)
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        TodayPriorityStrip(events: events, now: now) { activePriority = $0 }
-                    }
-                    .sheet(item: $activePriority) { event in TodayPriorityDetails(event: event, store: store) }
-                    .sheet(item: $activeSheet) { sheet in
-                        switch sheet {
-                        case .crewControl: CrewControlSheet(item: store.todayPrimaryItem ?? store.nextDuty)
-                        case .announcements: AnnouncementsView(item: store.isCacheValidated ? store.todayPrimaryItem : nil)
-                        case .documents: CrewDocumentsView()
-                        }
-                    }
-                    .alert("Calendar", isPresented: Binding(get: { calendarExporter.message != nil }, set: { if !$0 { calendarExporter.message = nil } })) {
-                        Button("OK", role: .cancel) { calendarExporter.message = nil }
-                    } message: { Text(calendarExporter.message ?? "") }
-            }
+                }
+                .alert("Calendar", isPresented: Binding(get: { calendarExporter.message != nil }, set: { if !$0 { calendarExporter.message = nil } })) {
+                    Button("OK", role: .cancel) { calendarExporter.message = nil }
+                } message: { Text(calendarExporter.message ?? "") }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.NSCalendarDayChanged)) { _ in
+            foregroundDate = Date()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             foregroundDate = Date()
@@ -10002,15 +10003,6 @@ struct TodayView: View {
         // A notification tapped during launch waits for cache restoration.
         DispatchQueue.main.async {
             if TodayNotificationRouter.shared.pendingID == id { TodayNotificationRouter.shared.pendingID = nil }
-        }
-    }
-    private func panelEvents(_ events: [TodayPriorityEvent]) -> [TodayPriorityEvent] {
-        var counts: [TodayPriorityKind:Int] = [:]
-        return events.filter { event in
-            let limit = event.kind == .relocation ? 2 : 1
-            let count = counts[event.kind, default:0]
-            counts[event.kind] = count + 1
-            return count < limit
         }
     }
 }

@@ -185,6 +185,44 @@ enum TodayPriorityAdapter {
     }
 }
 
+// Countdown ticks invalidate only these small leaves. The cached briefing,
+// NavigationStack, scroll position and route map live outside the timeline.
+struct TodayPriorityLiveContent: View {
+    @ObservedObject var store: RosterStore
+    let tabActive: Bool
+    var strip = false
+    let select: (TodayPriorityEvent) -> Void
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var foregroundDate = Date.distantPast
+
+    var body: some View {
+        if tabActive && scenePhase == .active {
+            TimelineView(.everyMinute) { context in
+                let now = max(context.date, foregroundDate)
+                let events = store.todayPriorityEvents(at: now)
+                if strip {
+                    TodayPriorityStrip(events: events, now: now, select: select)
+                } else {
+                    TodayPriorityPanel(events: panelEvents(events), now: now, select: select)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                foregroundDate = Date()
+            }
+        }
+    }
+
+    private func panelEvents(_ events: [TodayPriorityEvent]) -> [TodayPriorityEvent] {
+        var counts: [TodayPriorityKind: Int] = [:]
+        return events.filter { event in
+            let limit = event.kind == .relocation ? 2 : 1
+            let count = counts[event.kind, default: 0]
+            counts[event.kind] = count + 1
+            return count < limit
+        }
+    }
+}
+
 struct TodayPriorityPanel: View {
     let events: [TodayPriorityEvent]
     let now: Date
