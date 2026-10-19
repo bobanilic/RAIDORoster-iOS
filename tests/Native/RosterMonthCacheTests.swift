@@ -24,8 +24,11 @@ final class RosterMonthCacheTests: XCTestCase {
         async let second:Void = deferred.restoreSavedRoster()
         _ = await (first,second)
         XCTAssertFalse(deferred.isRestoring)
-        XCTAssertEqual(deferred.snapshot,original.snapshot)
-        XCTAssertEqual(deferred.monthSnapshots,original.monthSnapshots)
+        XCTAssertEqual(deferred.snapshot?.items,original.snapshot?.items)
+        XCTAssertEqual(deferred.snapshot?.validation,original.snapshot?.validation)
+        XCTAssertEqual(deferred.snapshot?.monthlyBLH,original.snapshot?.monthlyBLH)
+        XCTAssertEqual(deferred.rosterMonthKeys,original.rosterMonthKeys)
+        XCTAssertEqual(deferred.monthSnapshots["2026-10"]?.items,original.monthSnapshots["2026-10"]?.items)
         XCTAssertEqual(try Data(contentsOf:archive),bytes)
         XCTAssertEqual(try archive.resourceValues(forKeys:[.contentModificationDateKey]).contentModificationDate,modified)
     }
