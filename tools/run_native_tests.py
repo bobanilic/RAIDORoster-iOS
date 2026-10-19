@@ -22,7 +22,7 @@ try:
                    '-destination', f"platform=iOS Simulator,id={device['udid']}",
                    '-derivedDataPath', str(root / 'RAIDORoster-Web2IPA/build/NativeDerivedData'),
                    '-resultBundlePath', str(result), '-parallel-testing-enabled', 'NO',
-                   'CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO', 'test']
+                   'CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO', 'ONLY_ACTIVE_ARCH=YES', 'test']
         print(f"Testing native roster ingestion and JavaScript in {device['name']}", flush=True)
         try:
             finished = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, timeout=22 * 60)

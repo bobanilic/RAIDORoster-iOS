@@ -132,6 +132,35 @@ final class RosterBridgeTests: XCTestCase {
             XCTFail("A different returned month must be rejected")
         } catch { /* expected: requested month was not returned */ }
     }
+    func testActualRelocationHTMLReachesUpcomingPriorities() async throws {
+        let ready = expectation(description:"Roster fixture ready")
+        try loadFixture("roster",path:"HumanResourceRoster.aspx",expectation:ready)
+        defer {
+            webView?.configuration.userContentController.removeAllScriptMessageHandlers()
+            webView = nil; recorder = nil; fixtureWindow?.isHidden = true; fixtureWindow = nil
+        }
+        await fulfillment(of:[ready],timeout:60)
+        let view = try XCTUnwrap(webView)
+        let url = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"roster",withExtension:"html"))
+        var html = try String(contentsOf:url,encoding:.utf8)
+        let tableStart = try XCTUnwrap(html.range(of:"<table"))
+        let tableEnd = try XCTUnwrap(html.range(of:"</table>",range:tableStart.lowerBound..<html.endIndex))
+        let first = html[tableStart.lowerBound..<tableEnd.upperBound]
+            .replacingOccurrences(of:"Activity 6H501",with:"Activity RLCN")
+            .replacingOccurrences(of:"08OCT26",with:"23OCT26")
+            .replacingOccurrences(of:"08Oct",with:"23Oct")
+        html.replaceSubrange(tableStart.lowerBound..<tableEnd.upperBound,with:first)
+        let payload = try await view.callAsyncJavaScript("return window.RAIDOPlus.extractHTML(html,url,month)",
+            arguments:["html":html,"url":"https://gjt.noc.vmc.navblue.cloud/RaidoMobile/HumanResourceRoster.aspx","month":"2026-10"],in:nil,contentWorld:.page)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:folder) }
+        let store = RosterStore(storageFolderURL:folder,automaticSideEffects:false)
+        XCTAssertTrue(store.ingest(messageBody:try XCTUnwrap(payload),archiveOnly:true,expectedMonth:"2026-10"))
+        let now = ISO8601DateFormatter().date(from:"2026-10-19T08:00:00Z")!
+        let move = try XCTUnwrap(store.priorityEvents(at:now).first { $0.kind == .relocation })
+        XCTAssertEqual(move.title,"Hotel relocation")
+        XCTAssertEqual(TodayPriorityPolicy.status(move,now:now),"In 4 days")
+    }
     func testLoginPageDoesNotReportParserFailure() async throws {
         let expectation = expectation(description: "No roster error on login")
         expectation.isInverted = true

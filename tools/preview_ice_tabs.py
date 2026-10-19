@@ -7,6 +7,7 @@ from pathlib import Path
 import hashlib
 import json
 import plistlib
+import platform
 import subprocess
 import time
 import shutil
@@ -38,7 +39,7 @@ extension RosterStore {
         let days = calendar.range(of: .day, in: .month, for: start)!
         let members = [CrewMember(role: "SCCM", code: "AAA", name: "Alex Morgan", country: nil, phone: nil),
                        CrewMember(role: "CCM", code: "BBB", name: "Jamie Taylor", country: nil, phone: nil)]
-        let items = days.map { day -> RosterItem in
+        var items = days.map { day -> RosterItem in
             let iso = String(format: "%04d-%02d-%02d", year, month, day)
             let fly = day == currentDay || day % 3 == 0
             let category = fly ? "FLIGHT" : day % 4 == 0 ? "STANDBY" : "OFF"
@@ -56,10 +57,53 @@ extension RosterStore {
                 title: fly ? "Flight duty" : category.capitalized, route: fly ? "TLV-PFO-TLV" : "", timeText: fly ? "11:30–15:40" : "",
                 rawText: "Sample roster", cells: [], activities: fly ? [sector(false), sector(true)] : [], activeHotels: nil)
         }
+        if ProcessInfo.processInfo.arguments.contains("--priorities") {
+            let off = ProcessInfo.processInfo.arguments.contains("--off-day")
+            let model = items.flatMap(\.flightActivities).first!
+            func stamp(_ date: Date, zone: TimeZone) -> String {
+                let f = DateFormatter(); f.locale = Locale(identifier:"en_US_POSIX"); f.timeZone = zone; f.dateFormat="yyyy-MM-dd HH:mm"
+                return f.string(from:date)
+            }
+            let utc = TimeZone(secondsFromGMT:0)!, local = TimeZone(identifier:"Asia/Jerusalem")!
+            func revised(_ values: [String:String]) -> RosterActivity {
+                var raw = try! JSONSerialization.jsonObject(with:JSONEncoder().encode(model)) as! [String:Any]
+                for (key,value) in values { raw[key]=value }
+                return try! JSONDecoder().decode(RosterActivity.self,from:JSONSerialization.data(withJSONObject:raw))
+            }
+            let todayISO = EarningsMath.day(today)
+            if off, let index = items.firstIndex(where:{$0.dateISO == todayISO}) {
+                items[index] = RosterItem(id:todayISO,index:currentDay,dateISO:todayISO,dateText:todayISO,
+                    category:"OFF",title:"Day off",route:"",timeText:"",rawText:"Sample day off",cells:[],activities:[],activeHotels:nil)
+            }
+            if !off {
+                let pickup=today.addingTimeInterval(45*60), report=today.addingTimeInterval(60*60)
+                let start=today.addingTimeInterval(90*60), end=start.addingTimeInterval(3600)
+                let iso=EarningsMath.day(start)
+                let f=DateFormatter(); f.locale=Locale(identifier:"en_US_POSIX"); f.timeZone=local; f.dateFormat="d MMM HH:mm"
+                let flight=revised(["id":"priority-flight","pickup":f.string(from:pickup)+" LT","checkInUTC":stamp(report,zone:utc),"checkInLT":stamp(report,zone:local),
+                    "startUTC":stamp(start,zone:utc),"startLT":stamp(start,zone:local),"endUTC":stamp(end,zone:utc),"endLT":stamp(end,zone:local)])
+                items.removeAll {$0.dateISO == iso}
+                items.append(RosterItem(id:iso,index:currentDay,dateISO:iso,dateText:iso,category:"FLIGHT",title:"Flight duty",route:flight.route,timeText:flight.timeText,
+                    rawText:"Sample priority flight",cells:[],activities:[flight],activeHotels:nil))
+            }
+            let moveDate=calendar.date(byAdding:.day,value:4,to:today)!, moveISO=EarningsMath.day(moveDate)
+            let move=revised(["id":"priority-move","code":"RLCN","category":"RELOCATION","title":"Hotel relocation","description":"Sample hotel change",
+                "route":"","station":"VNO","startLT":"","startUTC":"","endLT":"","endUTC":"","checkInLT":"","checkInUTC":"","checkOutLT":"","checkOutUTC":"",
+                "pickup":"","transferNote":"","hotelName":"Hotel Central","aircraftReg":""])
+            items.removeAll {$0.dateISO == moveISO}
+            items.append(RosterItem(id:moveISO,index:currentDay+4,dateISO:moveISO,dateText:moveISO,category:"OFF",title:"Day off",route:"",timeText:"",
+                rawText:"Sample relocation",cells:[],activities:[move],activeHotels:nil))
+            items.sort {($0.dateISO ?? "") < ($1.dateISO ?? "")}
+        }
         let monthKey = String(format: "%04d-%02d", year, month)
         let value = RosterSnapshot(capturedAt: today, sourceURL: "https://example.invalid/preview", pageTitle: "Sample roster", items: items,
             validation: RosterValidation(isValid: true, parser: "preview", month: monthKey, datedRows: items.count, message: "Sample data"), monthlyBLH: "40:00")
         snapshot = value; monthSnapshots = [monthKey: value]; selectedRosterMonthKey = monthKey
+        for (key,rows) in Dictionary(grouping:items,by:{String(($0.dateISO ?? "").prefix(7))}) where key != monthKey {
+            monthSnapshots[key]=RosterSnapshot(capturedAt:today,sourceURL:value.sourceURL,pageTitle:value.pageTitle,items:rows,
+                validation:RosterValidation(isValid:true,parser:"preview",month:key,datedRows:rows.count,message:"Sample data"),monthlyBLH:nil)
+        }
+
     }
 }
 
@@ -148,7 +192,7 @@ try:
         try:
             run(['xcodebuild', '-project', str(root / 'RAIDORoster.xcodeproj'), '-scheme', 'RAIDOMapChecks', '-configuration', 'Debug',
                  '-sdk', 'iphonesimulator', '-destination', 'generic/platform=iOS Simulator', '-derivedDataPath', '/tmp/raido-ice-preview',
-                 'CODE_SIGNING_ALLOWED=NO', 'build-for-testing'], stdout=log, stderr=subprocess.STDOUT)
+                 'CODE_SIGNING_ALLOWED=NO', 'ONLY_ACTIVE_ARCH=YES', 'ARCHS=' + platform.machine(), 'build-for-testing'], stdout=log, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError:
             print('\n'.join(line for line in Path(log.name).read_text().splitlines() if 'error:' in line))
             raise
@@ -209,6 +253,13 @@ try:
                         run(['xcrun', 'simctl', 'terminate', udid, bundle])
     # Change theme inside the same running view hierarchy, exercising palette
     # invalidation and UIKit chrome refresh rather than only cold starts.
+    for theme in ['ice', 'getJet']:
+        for mode in ['light', 'dark']:
+            run(['xcrun','simctl','ui',udid,'appearance',mode])
+            run(['xcrun','simctl','launch',udid,bundle,'--theme='+theme,'--mode='+mode,'--tab=today','--priorities'])
+            time.sleep(3)
+            run(['xcrun','simctl','io',udid,'screenshot',f'/tmp/raido-priorities-{theme}-{mode}.png'])
+            run(['xcrun','simctl','terminate',udid,bundle])
     for target in ['getJet', 'ice']:
         origin = 'ice' if target == 'getJet' else 'getJet'
         print('Rendering live theme switch', origin, target, flush=True)

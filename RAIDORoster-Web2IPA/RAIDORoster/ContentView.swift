@@ -413,18 +413,27 @@ final class DutyReminderScheduler: ObservableObject {
 
     private let center = UNUserNotificationCenter.current()
     private let identifierPrefix = "RAIDO-ROSTER-"
+    private var reminderGeneration = UUID()
+    private var relocationReminders: Bool { UserDefaults.standard.object(forKey: "RAIDORoster.RelocationReminders") as? Bool ?? true }
+    private var alcoholLead: Int { UserDefaults.standard.integer(forKey: "RAIDORoster.AlcoholReminderLead") }
+    private func remindersOff(pickup: Int, report: Int) -> Bool {
+        pickup <= 0 && report <= 0 && !relocationReminders && alcoholLead <= 0
+    }
 
     func requestAndSchedule(_ items: [RosterItem], pickupLead: Int, reportLead: Int) {
+        let ticket = UUID(); reminderGeneration = ticket
         isWorking = true
         Task { @MainActor in
-            defer { isWorking = false }
+            guard reminderGeneration == ticket else { return }
+            defer { if reminderGeneration == ticket { isWorking = false } }
             do {
-                if pickupLead <= 0 && reportLead <= 0 {
+                if remindersOff(pickup: pickupLead, report: reportLead) {
                     await clearPending()
                     message = "Duty reminders are off."
                     return
                 }
                 let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+                guard reminderGeneration == ticket else { return }
                 guard granted else {
                     message = "Notification access was not granted."
                     return
@@ -438,14 +447,17 @@ final class DutyReminderScheduler: ObservableObject {
     }
 
     func syncIfAuthorized(_ items: [RosterItem], pickupLead: Int, reportLead: Int, completion: @escaping (String) -> Void) {
+        let ticket = UUID(); reminderGeneration = ticket
         Task { @MainActor in
-            if pickupLead <= 0 && reportLead <= 0 {
+            guard reminderGeneration == ticket else { return }
+            if remindersOff(pickup: pickupLead, report: reportLead) {
                 await clearPending()
                 completion("Duty reminders off")
                 return
             }
 
             let settings = await center.notificationSettings()
+            guard reminderGeneration == ticket else { return }
             guard settings.authorizationStatus == .authorized ||
                     settings.authorizationStatus == .provisional ||
                     settings.authorizationStatus == .ephemeral else {
@@ -463,16 +475,18 @@ final class DutyReminderScheduler: ObservableObject {
     }
 
     func clearRosterReminders() {
+        reminderGeneration = UUID()
         Task { @MainActor in await clearPending() }
     }
 
     private func schedule(_ items: [RosterItem], pickupLead: Int, reportLead: Int) async throws -> Int {
-        await clearPending()
         let now = Date()
         var requests: [(Date, UNNotificationRequest)] = []
 
-        for item in items where item.isOperationalDuty {
-            if reportLead > 0, let report = item.dutyStartUTCDate {
+        let lower = EarningsMath.day(now.addingTimeInterval(-2 * 24 * 3600))
+        let upper = EarningsMath.day(now.addingTimeInterval(90 * 24 * 3600))
+        for item in items where (item.dateISO ?? "") >= lower && (item.dateISO ?? "") <= upper {
+            if reportLead > 0, item.isOperationalDuty, !item.operationalActivities.isEmpty, let report = item.dutyStartUTCDate {
                 let fire = report.addingTimeInterval(TimeInterval(-reportLead * 60))
                 if fire > now.addingTimeInterval(2) {
                     let content = UNMutableNotificationContent()
@@ -489,18 +503,24 @@ final class DutyReminderScheduler: ObservableObject {
                 }
             }
 
-            if pickupLead > 0, let pickup = item.preDutyPickupUTCDate {
-                let fire = pickup.addingTimeInterval(TimeInterval(-pickupLead * 60))
-                if fire > now.addingTimeInterval(2) {
+            for event in TodayPriorityAdapter.events(item: item, capturedAt: now) {
+                for (id, fire) in TodayPriorityPolicy.reminderDates(event, now: now, pickupLead: pickupLead,
+                    relocationEnabled: relocationReminders, alcoholLead: alcoholLead) {
                     let content = UNMutableNotificationContent()
-                    content.title = "Pickup in \(pickupLead) min"
-                    let pickupText = item.preDutyPickupDisplay
-                    let dutyText = reminderBody(item)
-                    content.body = pickupText.isEmpty ? dutyText : "\(pickupText) • \(dutyText)"
+                    switch event.kind {
+                    case .pickup: content.title = "Pickup in \(pickupLead) min"
+                    case .alcohol: content.title = "Alcohol precaution begins in \(alcoholLead) min"
+                    default: content.title = "Upcoming hotel relocation"
+                    }
+                    let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_GB")
+                    formatter.timeZone = TodayPriorityPolicy.calendar(for:event).timeZone; formatter.dateFormat = "d MMM"
+                    content.body = [formatter.string(from:event.date),event.clock,event.detail,event.missing.joined(separator:" · ")]
+                        .filter { !$0.isEmpty }.joined(separator:" · ")
+                    content.userInfo = ["raidoPriorityID":event.id]
                     content.sound = .default
                     let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, fire.timeIntervalSinceNow), repeats: false)
                     let request = UNNotificationRequest(
-                        identifier: identifierPrefix + "PICKUP-" + item.id,
+                        identifier: identifierPrefix + id,
                         content: content,
                         trigger: trigger
                     )
@@ -512,16 +532,12 @@ final class DutyReminderScheduler: ObservableObject {
         // Stay comfortably within iOS' finite pending-notification budget.
         // Nearest reminders are the ones that matter operationally.
         let selected = requests.sorted { $0.0 < $1.0 }.prefix(60)
-        for (_, request) in selected {
-            try await center.add(request)
-        }
-        return selected.count
+        return try await DutyNotificationQueue.shared.replace(selected.map { $0.1 }, prefix: identifierPrefix)
     }
 
     private func clearPending() async {
-        let pending = await center.pendingNotificationRequests()
-        let ids = pending.map(\.identifier).filter { $0.hasPrefix(identifierPrefix) }
-        if !ids.isEmpty { center.removePendingNotificationRequests(withIdentifiers: ids) }
+        do { _ = try await DutyNotificationQueue.shared.replace([], prefix: identifierPrefix) }
+        catch { DeviceCacheStorage.report("Clear duty reminders", error: error) }
     }
 
     private func reminderBody(_ item: RosterItem) -> String {
@@ -994,6 +1010,9 @@ struct ContentView: View {
             } else {
                 appState.browser.pauseOfflineMonths()
             }
+        }
+        .onReceive(TodayNotificationRouter.shared.$pendingID) { value in
+            if value != nil { selectedTab = .today }
         }
     }
 }
@@ -1523,7 +1542,8 @@ struct RosterMonthCalendarView: View {
             }.padding(.vertical, 6)
 
             if let selectedItem {
-                IceSelectedRosterDay(item: selectedItem, isChanged: selectedItem.dateISO.map(changedDates.contains) ?? false)
+                IceSelectedRosterDay(item: selectedItem, isChanged: selectedItem.dateISO.map(changedDates.contains) ?? false,
+                    dayItems: items.filter { $0.dateISO == selectedItem.dateISO })
                     .transition(.opacity)
             }
             if let month = store.selectedRosterMonth {
@@ -1935,7 +1955,7 @@ struct TodayPrimaryTimingRow: View {
 
 
 
-private struct TodayAirportMapPoint: Identifiable {
+struct TodayAirportMapPoint: Identifiable {
     let code: String
     let name: String
     let coordinate: CLLocationCoordinate2D
@@ -3834,7 +3854,7 @@ final class FlightCompanionV3Observer: ObservableObject {
     }
 }
 
-private enum TodayGlobalAirportIndex {
+enum TodayGlobalAirportIndex {
     private struct Entry: Decodable {
         let name: String
         let latitude: Double
@@ -4666,7 +4686,7 @@ struct TodayRouteMapCard: View {
     }
 }
 
-private struct OfflineAviationMapCanvas: View {
+struct OfflineAviationMapCanvas: View {
     @Environment(\.raidoPalette) private var raidoColorPalette
     @Environment(\.raidoTheme) private var raidoVisualTheme
     @AppStorage("RAIDORoster.Map.PlaceLabels") private var showsPlaceLabels = true
@@ -4677,6 +4697,7 @@ private struct OfflineAviationMapCanvas: View {
     let zoom: CGFloat
     let pan: CGSize
     let colorScheme: ColorScheme
+    var routeSegments: [[CLLocationCoordinate2D]]? = nil
 
     private var coordinates: [CLLocationCoordinate2D] {
         points.map(\.coordinate)
@@ -4724,10 +4745,10 @@ private struct OfflineAviationMapCanvas: View {
                     airports: coordinates, aircraft: isTracking ? liveLocation?.coordinate : nil)
             }
 
-            if coordinates.count >= 2 {
+            for segment in routeSegments ?? [coordinates] where segment.count >= 2 {
                 var route = Path()
-                route.move(to: viewport.point(for: coordinates[0], in: size, zoom: zoom, pan: pan))
-                for coordinate in coordinates.dropFirst() {
+                route.move(to: viewport.point(for: segment[0], in: size, zoom: zoom, pan: pan))
+                for coordinate in segment.dropFirst() {
                     route.addLine(
                         to: viewport.point(
                             for: coordinate,
@@ -7941,6 +7962,8 @@ struct SettingsView: View {
     @AppStorage("RAIDORoster.RestAwarenessHours") private var restAwarenessHours = 10
     @AppStorage("RAIDORoster.PickupReminderLead") private var pickupReminderLead = 0
     @AppStorage("RAIDORoster.ReportReminderLead") private var reportReminderLead = 0
+    @AppStorage("RAIDORoster.RelocationReminders") private var relocationReminders = true
+    @AppStorage("RAIDORoster.AlcoholReminderLead") private var alcoholReminderLead = 0
 
     @State private var showFleet = false
 
@@ -8042,6 +8065,14 @@ struct SettingsView: View {
 
 
                 Section("Duty reminders") {
+                    Toggle("Hotel relocation reminders", isOn: $relocationReminders)
+                    Text("The evening before and on relocation day. Missing times are shown as missing, not midnight.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Picker("Alcohol precaution reminder", selection: $alcoholReminderLead) {
+                        Text("Off").tag(0)
+                        Text("15 min before it begins").tag(15)
+                        Text("30 min before it begins").tag(30)
+                    }
                     Picker("Pickup reminder", selection: $pickupReminderLead) {
                         Text("Off").tag(0)
                         Text("15 min before").tag(15)
@@ -8059,7 +8090,7 @@ struct SettingsView: View {
 
                     Button {
                         reminderScheduler.requestAndSchedule(
-                            store.items,
+                            store.priorityRosterItems,
                             pickupLead: pickupReminderLead,
                             reportLead: reportReminderLead
                         )
@@ -8283,6 +8314,7 @@ struct RosterDetailView: View {
                 if let change = store.change(for: item.dateISO) {
                     RosterChangeDisclosure(change: change)
                 }
+                HistoricalFlightRouteCard(item: item)
                 DutyBriefingView(item: item, showTechnical: true)
                 BriefingSectionTitle("My note")
                 PersonalDutyNoteCard(item: item)
@@ -8598,7 +8630,7 @@ private func parseNominalLocalStamp(_ value: String) -> Date? {
     return formatter.date(from: value)
 }
 
-private func pickupUTCDate(for activity: RosterActivity) -> Date? {
+func pickupUTCDate(for activity: RosterActivity) -> Date? {
     let pickup = activity.pickup.uppercased()
     guard let timeRange = pickup.range(of: #"\b([01]?\d|2[0-3]):[0-5]\d\b"#, options: .regularExpression) else { return nil }
     let time = String(pickup[timeRange])
@@ -9372,7 +9404,7 @@ private struct IceToolRow: View {
     }
 }
 
-private enum IceAirportClock {
+enum IceAirportClock {
     private static let records: [String: [String]] = {
         guard let url = Bundle.main.url(forResource: "AirportTimeZones", withExtension: "json"),
               let data = try? Data(contentsOf: url),
@@ -9480,6 +9512,7 @@ private struct IceReadinessView: View {
     @Environment(\.raidoTheme) private var raidoVisualTheme
     let item: RosterItem
     @ObservedObject var store: RosterStore
+    var showsAlcohol = true
     @AppStorage("RAIDORoster.RestAwarenessHours") private var restAwarenessHours = 10
     var body: some View {
         let _ = raidoColorPalette
@@ -9488,7 +9521,7 @@ private struct IceReadinessView: View {
 
         TimelineView(.periodic(from: .now, by: 60)) { context in
             VStack(spacing: 9) {
-                if let reference = store.precautionReferenceDate(for: item),
+                if showsAlcohol, let reference = store.precautionReferenceDate(for: item),
                    let cutoff = store.alcoholPrecautionCutoff(for: item), context.date < reference {
                     let active = context.date >= cutoff
                     DisclosureGroup {
@@ -9616,6 +9649,7 @@ private struct IceSelectedRosterDay: View {
     @Environment(\.raidoTheme) private var raidoVisualTheme
     let item: RosterItem
     let isChanged: Bool
+    var dayItems: [RosterItem] = []
     var body: some View {
         let _ = raidoColorPalette
 
@@ -9631,6 +9665,7 @@ private struct IceSelectedRosterDay: View {
                 Spacer(minLength: 4)
                 if item.sectorCount > 0 { Text("\(item.sectorCount) sectors").font(.caption).foregroundStyle(.secondary) }
             }
+            HistoricalFlightRouteCard(item: item, dayItems: dayItems).id(item.dateISO)
             IcePickupCard(item: item)
             IceDutyAgenda(item: item)
             NavigationLink { RosterDetailView(item: item) } label: {
@@ -9652,78 +9687,110 @@ struct TodayView: View {
         var id: String { rawValue }
     }
     @State private var activeSheet: CompanionSheet?
+    @State private var activePriority: TodayPriorityEvent?
+    @State private var foregroundDate = Date.distantPast
     var body: some View {
         let _ = raidoColorPalette
-
         let _ = raidoVisualTheme
-
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if store.isCacheValidated, let item = store.todayPrimaryItem, TodayRouteMapCard.canDisplay(item) {
-                        TodayRouteMapCard(item: item, iceHeader: true)
-                    } else {
-                        IcePageHeading(title: "Today", subtitle: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                            .padding(.horizontal, 18).padding(.top, 10).padding(.bottom, 22)
-                    }
-                    VStack(alignment: .leading, spacing: 12) {
-                        if let warning = store.portalFormatWarning {
-                            Label(warning, systemImage: "exclamationmark.icloud")
-                                .font(.caption).foregroundStyle(MidnightTheme.warningInk)
-                                .padding(12).midnightCard(radius: 12)
-                                .accessibilityIdentifier("portal-format-warning")
-                        }
-                        if store.isCacheValidated, let item = store.todayPrimaryItem {
-                            IcePickupCard(item: item)
-                            IceReadinessView(item: item, store: store)
-                            IceDutyAgenda(item: item, onCalendarExport: { calendarExporter.export(item) }, canExport: !calendarExporter.isWorking)
-                            TodayPersonalNoteDisclosure(item: item)
-                            if let sector = crewCompanionSector(item, at: Date()) {
-                                HStack { Text("My position").font(.caption).foregroundStyle(.secondary); Spacer()
-                                    CrewCompanionRolePicker(dutyID: item.id, sectorID: sector.id).id(sector.id) }
-                            }
-                            if !item.aircraft.isEmpty {
-                                DisclosureGroup("Aircraft") { AircraftCard(item: item).padding(.top, 8) }
-                                    .font(.subheadline).padding(13).midnightCard(radius: 13)
-                            }
-                            if !item.hotelAssignments.isEmpty || !item.transferNotes.isEmpty {
-                                DisclosureGroup("Hotel & transport") { LogisticsCard(item: item).padding(.top, 8) }
-                                    .font(.subheadline).padding(13).midnightCard(radius: 13)
-                            }
-                            if !item.dayNotes.isEmpty || !item.activityNotes.isEmpty {
-                                DisclosureGroup("Duty notes") { NotesCard(item: item).padding(.top, 8) }
-                                    .font(.subheadline).padding(13).midnightCard(radius: 13)
-                            }
-                            if let next = store.nextOperationalDuty(after: item), let interval = store.restInterval(after: item, before: next) {
-                                RestToNextDutyCard(next: next, interval: interval)
-                            }
+        TimelineView(.everyMinute) { context in
+            let now = max(context.date, foregroundDate)
+            let events = store.priorityEvents(at: now)
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if store.isCacheValidated, let item = store.todayPrimaryItem, TodayRouteMapCard.canDisplay(item) {
+                            TodayRouteMapCard(item: item, iceHeader: true)
                         } else {
-                            ContentUnavailableView(store.hasCache ? "Roster needs a resync" : "Import your roster", systemImage: "calendar.badge.exclamationmark",
-                                description: Text("Open Live RAIDO while online to save your duty briefing."))
-                            Button("Open Live RAIDO", action: openPortal).raidoPrimaryAction()
+                            IcePageHeading(title: "Today", subtitle: now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                                .padding(.horizontal, 18).padding(.top, 10).padding(.bottom, 22)
                         }
-                        HStack(spacing: 9) {
-                            MidnightQuickAction(title: "Announcements", symbol: "megaphone") { activeSheet = .announcements }
-                            MidnightQuickAction(title: "Crew Control", symbol: "headphones") { activeSheet = .crewControl }
-                            MidnightQuickAction(title: "Documents", symbol: "lock.doc") { activeSheet = .documents }
-                        }.padding(.top, 5)
-                        SyncFreshnessStrip(store: store)
-                    }.padding(.horizontal, 18).padding(.bottom, 20)
-                }
-            }.midnightCanvas().toolbar(.hidden, for: .navigationBar)
-                .sheet(item: $activeSheet) { sheet in
-                    switch sheet {
-                    case .crewControl: CrewControlSheet(item: store.todayPrimaryItem ?? store.nextDuty)
-                    case .announcements: AnnouncementsView(item: store.isCacheValidated ? store.todayPrimaryItem : nil)
-                    case .documents: CrewDocumentsView()
+                        VStack(alignment: .leading, spacing: 12) {
+                            if let warning = store.portalFormatWarning {
+                                Label(warning, systemImage: "exclamationmark.icloud")
+                                    .font(.caption).foregroundStyle(MidnightTheme.warningInk)
+                                    .padding(12).midnightCard(radius: 12)
+                                    .accessibilityIdentifier("portal-format-warning")
+                            }
+                            TodayPriorityPanel(events: panelEvents(events), now: now) { activePriority = $0 }
+                            if store.isCacheValidated, let item = store.todayPrimaryItem {
+                                if item.isOperationalDuty, !item.operationalActivities.isEmpty {
+                                    IceReadinessView(item: item, store: store, showsAlcohol: false)
+                                }
+                                IceDutyAgenda(item: item, onCalendarExport: { calendarExporter.export(item) }, canExport: !calendarExporter.isWorking)
+                                TodayPersonalNoteDisclosure(item: item)
+                                if let sector = crewCompanionSector(item, at: now) {
+                                    HStack { Text("My position").font(.caption).foregroundStyle(.secondary); Spacer()
+                                        CrewCompanionRolePicker(dutyID: item.id, sectorID: sector.id).id(sector.id) }
+                                }
+                                if !item.aircraft.isEmpty {
+                                    DisclosureGroup("Aircraft") { AircraftCard(item: item).padding(.top, 8) }
+                                        .font(.subheadline).padding(13).midnightCard(radius: 13)
+                                }
+                                if !item.hotelAssignments.isEmpty || !item.transferNotes.isEmpty || item.activityList.contains(where: { $0.category == "RELOCATION" }) {
+                                    DisclosureGroup("Hotel & transport") { LogisticsCard(item: item).padding(.top, 8) }
+                                        .font(.subheadline).padding(13).midnightCard(radius: 13)
+                                }
+                                if !item.dayNotes.isEmpty || !item.activityNotes.isEmpty {
+                                    DisclosureGroup("Duty notes") { NotesCard(item: item).padding(.top, 8) }
+                                        .font(.subheadline).padding(13).midnightCard(radius: 13)
+                                }
+                                if item.isOperationalDuty, let next = store.nextOperationalDuty(after: item), let interval = store.restInterval(after: item, before: next) {
+                                    RestToNextDutyCard(next: next, interval: interval)
+                                }
+                            } else {
+                                ContentUnavailableView(store.hasCache ? "Roster needs a resync" : "Import your roster", systemImage: "calendar.badge.exclamationmark",
+                                    description: Text("Open Live RAIDO while online to save your duty briefing."))
+                                Button("Open Live RAIDO", action: openPortal).raidoPrimaryAction()
+                            }
+                            HStack(spacing: 9) {
+                                MidnightQuickAction(title: "Announcements", symbol: "megaphone") { activeSheet = .announcements }
+                                MidnightQuickAction(title: "Crew Control", symbol: "headphones") { activeSheet = .crewControl }
+                                MidnightQuickAction(title: "Documents", symbol: "lock.doc") { activeSheet = .documents }
+                            }.padding(.top, 5)
+                            SyncFreshnessStrip(store: store)
+                        }.padding(.horizontal, 18).padding(.bottom, 20)
                     }
-                }
-                .alert("Calendar", isPresented: Binding(get: { calendarExporter.message != nil }, set: { if !$0 { calendarExporter.message = nil } })) {
-                    Button("OK", role: .cancel) { calendarExporter.message = nil }
-                } message: { Text(calendarExporter.message ?? "") }
+                }.midnightCanvas().toolbar(.hidden, for: .navigationBar)
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        TodayPriorityStrip(events: events, now: now) { activePriority = $0 }
+                    }
+                    .sheet(item: $activePriority) { event in TodayPriorityDetails(event: event, store: store) }
+                    .sheet(item: $activeSheet) { sheet in
+                        switch sheet {
+                        case .crewControl: CrewControlSheet(item: store.todayPrimaryItem ?? store.nextDuty)
+                        case .announcements: AnnouncementsView(item: store.isCacheValidated ? store.todayPrimaryItem : nil)
+                        case .documents: CrewDocumentsView()
+                        }
+                    }
+                    .alert("Calendar", isPresented: Binding(get: { calendarExporter.message != nil }, set: { if !$0 { calendarExporter.message = nil } })) {
+                        Button("OK", role: .cancel) { calendarExporter.message = nil }
+                    } message: { Text(calendarExporter.message ?? "") }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            foregroundDate = Date(); store.refreshDutyReminders()
+        }
+        .onChange(of: store.monthSnapshots) { _, _ in
+            if let selected = activePriority { activePriority = store.priorityEvents(at: Date()).first { $0.id == selected.id } }
+        }
+        .onReceive(TodayNotificationRouter.shared.$pendingID) { id in
+            guard let id else { return }
+            activePriority = store.priorityEvents(at: Date()).first { $0.id == id }
+            // Let the root TabView receive the same event before consuming it.
+            DispatchQueue.main.async { TodayNotificationRouter.shared.pendingID = nil }
+        }
+    }
+    private func panelEvents(_ events: [TodayPriorityEvent]) -> [TodayPriorityEvent] {
+        var counts: [TodayPriorityKind:Int] = [:]
+        return events.filter { event in
+            let limit = event.kind == .relocation ? 2 : 1
+            let count = counts[event.kind, default:0]
+            counts[event.kind] = count + 1
+            return count < limit
         }
     }
 }
+
 
 private struct IceMoreView: View {
     @Environment(\.raidoPalette) private var raidoColorPalette

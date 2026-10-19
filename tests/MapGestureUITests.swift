@@ -1,6 +1,59 @@
 import XCTest
 
 @MainActor final class MapGestureUITests: XCTestCase {
+    func testPriorityCountdownStripAndDetailsInBothThemes() {
+        continueAfterFailure = false
+        for theme in ["ice","getJet"] {
+            let app = XCUIApplication(bundleIdentifier:"com.bobanilic.raidoroster")
+            app.launchArguments=["--theme="+theme,"--mode=dark","--tab=today","--priorities"]
+            app.launch()
+            let counter=app.buttons["today-pickup-countdown"]
+            XCTAssertTrue(counter.waitForExistence(timeout:15))
+            let alcohol=app.buttons["today-priority-alcohol"]
+            XCTAssertTrue(alcohol.exists)
+            let position=counter.frame.minY
+            app.scrollViews.firstMatch.swipeUp()
+            XCTAssertEqual(counter.frame.minY,position,accuracy:2,"Countdown stays above the tab bar while Today scrolls")
+            counter.tap()
+            XCTAssertTrue(app.navigationBars["Crew pickup"].waitForExistence(timeout:5))
+            app.buttons["Done"].firstMatch.tap()
+            XCTAssertTrue(counter.waitForExistence(timeout:5))
+            app.terminate()
+        }
+    }
+    func testFutureRelocationIsVisibleOnOffDay() {
+        continueAfterFailure=false
+        let app=XCUIApplication(bundleIdentifier:"com.bobanilic.raidoroster")
+        app.launchArguments=["--theme=getJet","--mode=light","--tab=today","--priorities","--off-day"]
+        app.launch()
+        let move=app.buttons["today-priority-relocation"]
+        XCTAssertTrue(move.waitForExistence(timeout:15))
+        for _ in 0..<3 where !move.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        move.tap()
+        XCTAssertTrue(app.navigationBars["Hotel relocation"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.staticTexts["Relocation time not provided"].exists)
+        XCTAssertTrue(app.buttons["Find hotel in Maps"].exists)
+        app.terminate()
+    }
+    func testHistoricalRouteExpandsAndSelectsSector() {
+        continueAfterFailure=false
+        let app=XCUIApplication(bundleIdentifier:"com.bobanilic.raidoroster")
+        app.launchArguments=["--theme=getJet","--mode=dark","--tab=roster"]
+        app.launch()
+        let map=app.buttons["historical-route-map"]
+        XCTAssertTrue(app.scrollViews.firstMatch.waitForExistence(timeout:15))
+        for _ in 0..<5 where !map.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        XCTAssertTrue(map.exists)
+        let sector=app.buttons["GJT102"]
+        if sector.isHittable { sector.tap() }
+        map.tap()
+        XCTAssertTrue(app.navigationBars["Scheduled route"].waitForExistence(timeout:5))
+        XCTAssertTrue(app.buttons["Recenter"].exists)
+        let screenshot=XCTAttachment(screenshot:app.screenshot());screenshot.lifetime = .keepAlways;add(screenshot)
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(map.waitForExistence(timeout:5))
+        app.terminate()
+    }
     func testPaletteSettingsPersistIndependently() {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier: "com.bobanilic.raidoroster")

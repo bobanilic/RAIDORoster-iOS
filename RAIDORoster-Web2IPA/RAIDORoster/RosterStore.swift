@@ -441,6 +441,7 @@ final class RosterStore: ObservableObject {
                 snapshot = newSnapshot
                 save(newSnapshot)
             }
+            refreshDutyReminders()
             return true
         }
 
@@ -461,12 +462,17 @@ final class RosterStore: ObservableObject {
             }
         }
 
+        refreshDutyReminders()
+        return true
+    }
+
+    func refreshDutyReminders() {
+        guard automaticSideEffects else { return }
         let pickupLead = UserDefaults.standard.integer(forKey: "RAIDORoster.PickupReminderLead")
         let reportLead = UserDefaults.standard.integer(forKey: "RAIDORoster.ReportReminderLead")
-        automaticReminderScheduler.syncIfAuthorized(parsed, pickupLead: pickupLead, reportLead: reportLead) { [weak self] status in
+        automaticReminderScheduler.syncIfAuthorized(priorityRosterItems, pickupLead: pickupLead, reportLead: reportLead) { [weak self] status in
             self?.reminderSyncStatus = status
         }
-        return true
     }
 
     func rememberRosterSourceURL(_ url: URL) {
