@@ -193,7 +193,12 @@ try:
         RaidoAppearancePreferences.migrate(.standard)
         if args.contains("--startup") {
             let fixture = RosterStore(automaticSideEffects:false)
-            fixture.installIceFixture();fixture.persistStartupFixture()
+            if args.contains("--clean-install") {
+                fixture.clearCache()
+                UserDefaults.standard.removeObject(forKey: "RAIDORoster.LastPortalURL")
+            } else {
+                fixture.installIceFixture();fixture.persistStartupFixture()
+            }
         }''')
     app.write_text(host)
     with zipfile.ZipFile(ipa) as archive:
@@ -224,6 +229,8 @@ try:
     udid = device['udid']
     if device['state'] != 'Booted': run(['xcrun', 'simctl', 'boot', udid], timeout=60)
     run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], timeout=240)
+    if '--startup-only' in sys.argv:
+        subprocess.run(['xcrun', 'simctl', 'uninstall', udid, bundle], check=False, timeout=30)
     run(['xcrun', 'simctl', 'install', udid, str(product)])
     run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '06:44', '--batteryState', 'charged', '--batteryLevel', '100'])
     if '--startup-only' in sys.argv:
@@ -233,11 +240,12 @@ try:
                     '-destination','platform=iOS Simulator,id='+udid,'-derivedDataPath','/tmp/raido-ice-preview',
                     '-parallel-testing-enabled','NO','CODE_SIGNING_ALLOWED=YES','CODE_SIGNING_REQUIRED=NO',
                     'CODE_SIGN_STYLE=Manual','CODE_SIGN_IDENTITY=-','AD_HOC_CODE_SIGNING_ALLOWED=YES',
+                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testCleanInstallMobileLoginAndReturnToTabs',
                     '-only-testing:RAIDOMapChecks/MapGestureUITests/testProductionLaunchAndTabResponsiveness',
                     'test-without-building'],stdout=log,stderr=subprocess.STDOUT,timeout=600)
             except (subprocess.CalledProcessError,subprocess.TimeoutExpired):
                 print(Path(log.name).read_text()[-12000:]);raise
-        print('Passed production launch, tab taps, foreground return and toast dismissal',flush=True)
+        print('Passed clean-install mobile login, production launch, tab taps, foreground return and toast dismissal',flush=True)
         sys.exit(0)
     combinations = [(theme, palette, mode, tab)
         for theme in ['ice', 'getJet'] for palette in ['iceBlue', 'forestGreen', 'midnightChampagne', 'burgundyRose', 'espressoBronze']

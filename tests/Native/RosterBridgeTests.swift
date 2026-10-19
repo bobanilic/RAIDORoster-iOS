@@ -39,7 +39,33 @@ final class RosterBridgeTests: XCTestCase {
         XCTAssertEqual(PortalBridgePolicy.navigation(external, userTapped: true, popup: false), .external)
         XCTAssertEqual(PortalBridgePolicy.navigation(URL(string: "javascript:alert(1)")!, userTapped: true, popup: false), .blocked)
         XCTAssertEqual(PortalBridgePolicy.navigation(URL(string: "mailto:crew@example.invalid")!, userTapped: true, popup: false), .external)
-        XCTAssertEqual(PortalBridgePolicy.navigation(URL(string: "https://\(PortalBridgePolicy.portalHost)/")!, userTapped: true, popup: true), .external)
+        XCTAssertEqual(PortalBridgePolicy.navigation(URL(string: "https://\(PortalBridgePolicy.portalHost)/")!, userTapped: true, popup: true), .portal)
+    }
+    func testMobileEntryAndRecoveryStates() async throws {
+        let defaults = UserDefaults.standard
+        let key = "RAIDORoster.LastPortalURL", previous = defaults.object(forKey: "RAIDORoster.LastPortalURL")
+        defer { if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) } }
+        defaults.removeObject(forKey: key)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let model = RosterBrowserModel(store: RosterStore(storageFolderURL: folder, automaticSideEffects: false))
+        XCTAssertEqual(model.preferredStartURL.absoluteString, "https://gjt.noc.vmc.navblue.cloud/raidomobile/")
+        defaults.set("https://gjt.noc.vmc.navblue.cloud/", forKey: key)
+        XCTAssertEqual(model.preferredStartURL, RosterBrowserModel.startURL, "Discard the legacy chooser preference")
+        defaults.set("https://example.invalid/HumanResourceRoster.aspx", forKey: key)
+        XCTAssertEqual(model.preferredStartURL, RosterBrowserModel.startURL)
+        model.navigationStarted(timeout: .milliseconds(20))
+        XCTAssertTrue(model.isLoading)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertFalse(model.isLoading); XCTAssertNotNil(model.loadError)
+        model.navigationStarted(timeout: .milliseconds(20)); model.navigationFinished()
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertNil(model.loadError, "Finished navigation cancels its timeout")
+        let coordinator = RosterWebView.Coordinator(model: model)
+        coordinator.webViewWebContentProcessDidTerminate(WKWebView())
+        XCTAssertNotNil(model.loadError)
+        model.navigationStarted(); model.navigationFinished()
+        XCTAssertNil(model.loadError, "Retry clears the terminated-page failure")
     }
     func testDatesCountsFieldsAndSizeAreCheckedNatively() throws {
         XCTAssertFalse(PortalBridgePolicy.day("2026-02-30"))
@@ -184,6 +210,19 @@ final class RosterBridgeTests: XCTestCase {
         expectation.isInverted = true
         try loadFixture("login", path: "Login.aspx", expectation: expectation)
         await fulfillment(of: [expectation], timeout: 2)
+        let view = try XCTUnwrap(webView)
+        let auth = try await view.evaluateJavaScript("window.RAIDOPlus.history.inspect().kind")
+        XCTAssertEqual(auth as? String, "auth", "History worker still detects sign-in pages")
+        let interactive = try await view.evaluateJavaScript("""
+            (() => {
+              const field = document.querySelector('input[type=text]');
+              field.focus();
+              return document.activeElement === field && !field.disabled && !document.querySelector('button').disabled;
+            })()
+            """)
+        XCTAssertEqual(interactive as? Bool, true)
+        let observers = try await view.evaluateJavaScript("window.testRosterObservers || 0")
+        XCTAssertEqual(observers as? Int, 0, "No roster mutation observation on login")
         webView?.configuration.userContentController.removeAllScriptMessageHandlers()
         webView = nil; recorder = nil
         fixtureWindow?.isHidden = true; fixtureWindow = nil

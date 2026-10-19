@@ -5,8 +5,11 @@ import os
 
 @MainActor
 final class RosterBrowserModel: ObservableObject {
-    static let startURL = URL(string: "https://gjt.noc.vmc.navblue.cloud/")!
+    static let startURL = URL(string: "https://gjt.noc.vmc.navblue.cloud/raidomobile/")!
 
+    @Published private(set) var isLoading = false
+    private var loadWatchdog: Task<Void, Never>?
+    private var lastCalendarFeedRefresh = Date.distantPast
     @Published var canGoBack = false
     @Published var pageTitle = ""
     @Published var currentURL: URL?
@@ -36,7 +39,7 @@ final class RosterBrowserModel: ObservableObject {
     var preferredStartURL: URL {
         if let saved = UserDefaults.standard.string(forKey: "RAIDORoster.LastPortalURL"),
            let url = URL(string: saved),
-           PortalBridgePolicy.isPortal(url) {
+           RosterMonthCachePolicy.isRosterURL(url) {
             return url
         }
         return Self.startURL
@@ -54,21 +57,51 @@ final class RosterBrowserModel: ObservableObject {
 
     func reload() {
         loadError = nil
-        webView?.reload()
+        guard let webView else { return }
+        if webView.url == nil { webView.load(URLRequest(url: preferredStartURL)) }
+        else { webView.reload() }
+    }
+
+    func navigationStarted(timeout: Duration = .seconds(30)) {
+        loadWatchdog?.cancel()
+        loadError = nil
+        isLoading = true
+        loadWatchdog = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: timeout) } catch { return }
+            guard let self, !Task.isCancelled else { return }
+            self.navigationFailed("RAIDO took too long to load. Check your connection and try again.")
+            self.webView?.stopLoading()
+        }
+    }
+
+    func navigationFinished() {
+        loadWatchdog?.cancel(); loadWatchdog = nil
+        isLoading = false
+        loadError = nil
+    }
+
+    func navigationFailed(_ message: String) {
+        loadWatchdog?.cancel(); loadWatchdog = nil
+        isLoading = false
+        loadError = message
     }
 
     func resumeOfflineMonths() {
-        guard !portalVisible else { return }
+        guard !portalVisible, store.rosterSourceURL != nil else { return }
         offlineCache.resume()
         refreshCurrentRosterIfNeeded()
     }
 
-    func pauseOfflineMonths() { offlineCache.pause() }
+    func pauseOfflineMonths() { if store.rosterSourceURL != nil { offlineCache.pause() } }
 
     func setPortalVisible(_ visible: Bool) {
         portalVisible = visible
-        if visible { pauseOfflineMonths() }
+        if visible {
+            pauseOfflineMonths()
+            if webView?.isLoading == true { navigationStarted() }
+        }
         else {
+            loadWatchdog?.cancel(); loadWatchdog = nil
             // Returning from a refreshed or newly signed-in portal is an
             // explicit opportunity to retry failed months immediately.
             resumeOfflineMonths()
@@ -84,7 +117,9 @@ final class RosterBrowserModel: ObservableObject {
     func copyHistoryDiagnostics() { UIPasteboard.general.string = offlineCache.diagnosticText }
 
     fileprivate func rosterPageLoaded(_ url: URL) {
-        store.rememberRosterSourceURL(url)
+        if store.rosterSourceURL != url { store.rememberRosterSourceURL(url) }
+        UserDefaults.standard.set(url.absoluteString, forKey: "RAIDORoster.LastPortalURL")
+        refreshRosterCalendarFeed()
         if !portalVisible { offlineCache.start(source: url) }
     }
 
@@ -142,7 +177,9 @@ final class RosterBrowserModel: ObservableObject {
     }
 
     func refreshRosterCalendarFeed() {
-        guard let webView, let url = webView.url, PortalBridgePolicy.isPortal(url) else { return }
+        guard let webView, let url = webView.url, RosterMonthCachePolicy.isRosterURL(url),
+              store.isCacheValidated, Date().timeIntervalSince(lastCalendarFeedRefresh) >= 5 * 60 else { return }
+        lastCalendarFeedRefresh = Date()
         let script = #"""
         (() => {
           const downloadPage = '/RaidoMobile/Dialogues/HumanResources/DownloadRosterAsExternalCalendar.aspx';
@@ -413,8 +450,7 @@ struct RosterWebView: UIViewRepresentable {
 
         @objc func refresh(_ sender: UIRefreshControl) {
             guard let model else { return }
-            model.loadError = nil
-            model.webView?.reload()
+            model.reload()
             sender.endRefreshing()
         }
 
@@ -428,7 +464,11 @@ struct RosterWebView: UIViewRepresentable {
             }
             switch message.name {
             case "rosterCache":
-                Task { @MainActor in model.store.ingest(messageBody: message.body) }
+                Task { @MainActor in
+                    guard let url = model.webView?.url, RosterMonthCachePolicy.isRosterURL(url),
+                          model.store.ingest(messageBody: message.body) else { return }
+                    model.rosterPageLoaded(url)
+                }
             case "rosterCalendarFeed":
                 Task { @MainActor in model.store.ingestCalendarFeed(messageBody: message.body) }
             default:
@@ -438,7 +478,7 @@ struct RosterWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             guard let model else { return }
-            Task { @MainActor in model.loadError = nil }
+            Task { @MainActor in model.navigationStarted() }
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -447,18 +487,9 @@ struct RosterWebView: UIViewRepresentable {
                 model.canGoBack = webView.canGoBack
                 model.pageTitle = webView.title ?? "RAIDO"
                 model.currentURL = webView.url
-                model.loadError = nil
-
-                if let url = webView.url,
-                   url.host == RosterBrowserModel.startURL.host,
-                   url.absoluteString != RosterBrowserModel.startURL.absoluteString {
-                    UserDefaults.standard.set(url.absoluteString, forKey: "RAIDORoster.LastPortalURL")
-                }
-
-                RosterWebView.requestExtraction(in: webView)
-                model.refreshRosterCalendarFeed()
+                model.navigationFinished()
                 if let url = webView.url, RosterMonthCachePolicy.isRosterURL(url) {
-                    model.rosterPageLoaded(url)
+                    RosterWebView.requestExtraction(in: webView)
                 }
             }
         }
@@ -472,12 +503,17 @@ struct RosterWebView: UIViewRepresentable {
         }
 
         private func showOfflineError(_ error: Error) {
-            guard let model else { return }
+            // Superseded navigations and intentional stopLoading are not failures.
+            guard (error as NSError).code != NSURLErrorCancelled, let model else { return }
             Task { @MainActor in
-                model.loadError = model.store.hasCache
-                    ? "The live RAIDO website needs a connection. Your native offline roster is still available."
-                    : "The live RAIDO website needs an internet connection."
+                model.navigationFailed(model.store.hasCache
+                    ? "RAIDO could not load. Check your connection or open your saved roster."
+                    : "RAIDO could not load. Check your connection and try again.")
             }
+        }
+
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            model?.navigationFailed("The RAIDO web page stopped. Tap Try RAIDO Again to reopen it.")
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -487,21 +523,25 @@ struct RosterWebView: UIViewRepresentable {
                 userTapped: navigationAction.navigationType == .linkActivated,
                 popup: navigationAction.targetFrame == nil)
             switch action {
-            case .portal: decisionHandler(.allow)
+            case .portal:
+                if navigationAction.targetFrame == nil {
+                    decisionHandler(.cancel)
+                    webView.load(navigationAction.request)
+                } else { decisionHandler(.allow) }
             case .external:
                 decisionHandler(.cancel)
                 UIApplication.shared.open(url)
             case .blocked:
                 decisionHandler(.cancel)
                 if navigationAction.targetFrame?.isMainFrame == true {
-                    model?.loadError = "This destination is outside the approved RAIDO portal. Your saved roster is available."
+                    model?.navigationFailed("This destination is outside the approved RAIDO portal. Return to the mobile login page to continue.")
                 }
             }
         }
 
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-            // Never replace the signed-in portal with popup content. User-tapped
-            // supported links are handled by the navigation policy above.
+            // Approved same-host target=_blank requests are loaded in the existing
+            // persistent view by decidePolicyFor. No extra window or data store.
             return nil
         }
 

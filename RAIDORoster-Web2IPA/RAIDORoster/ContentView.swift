@@ -615,7 +615,7 @@ final class CalendarExporter: ObservableObject {
     @Published var message: String?
     @Published var isWorking = false
 
-    private let eventStore = EKEventStore()
+    private lazy var eventStore = EKEventStore()
     private let legacyMarkerPrefix = "[RAIDO-ROSTER-ID:"
     private let stableMarkerPrefix = "[RAIDO-CALENDAR-KEY:"
 
@@ -1037,6 +1037,7 @@ struct ContentView: View {
     @StateObject private var appState = AppState()
     @State private var selectedTab: MainTab = .today
     @State private var showPortal = false
+    @State private var flightServicesConfigured = false
 
     var body: some View {
         let _ = raidoColorPalette
@@ -1044,7 +1045,13 @@ struct ContentView: View {
         let _ = raidoVisualTheme
 
         TabView(selection: $selectedTab) {
-            TodayView(store: appState.rosterStore) { showPortal = true }
+            Group {
+                if !appState.rosterStore.hasCache {
+                    RaidoWelcomeView(isRestoring: appState.rosterStore.isRestoring) { showPortal = true }
+                } else {
+                    TodayView(store: appState.rosterStore) { showPortal = true }
+                }
+            }
                 .tabItem { Label("Today", systemImage: "sun.max") }.tag(MainTab.today)
             RosterHomeView(store: appState.rosterStore, browser: appState.browser) { showPortal = true }
                 .tabItem { Label("Roster", systemImage: "calendar") }.tag(MainTab.roster)
@@ -1070,13 +1077,17 @@ struct ContentView: View {
             // The tab shell can draw while disk decoding runs off the UI thread.
             await appState.rosterStore.restoreSavedRoster()
             guard !Task.isCancelled else { return }
+            guard appState.rosterStore.hasCache else { return }
             TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from:appState.rosterStore.items)
+            flightServicesConfigured = true
             appState.browser.resumeOfflineMonths()
             appState.rosterStore.refreshDutyReminders()
         }
         .onChange(of: appState.rosterStore.snapshot) { _, _ in
-            guard !appState.rosterStore.isRestoring else { return }
+            guard !appState.rosterStore.isRestoring,
+                  appState.rosterStore.hasCache || flightServicesConfigured else { return }
             TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
+            flightServicesConfigured = true
         }
         .onOpenURL { url in
             guard url.scheme == "raidoroster",url.host == "priority" else { return }
@@ -1090,6 +1101,46 @@ struct ContentView: View {
     }
 }
 
+
+struct RaidoWelcomeView: View {
+    let isRestoring: Bool
+    let openPortal: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 22) {
+                Spacer(minLength: 24)
+                Image(systemName: "calendar.badge.clock")
+                    .font(.system(size: 54, weight: .light))
+                    .foregroundStyle(MidnightTheme.accent)
+                    .accessibilityHidden(true)
+                VStack(spacing: 10) {
+                    Text("Your day, ready to fly").font(.title2.weight(.semibold))
+                    Text("Connect your RAIDO roster to keep your duties and briefings close, even offline.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                if isRestoring {
+                    ProgressView("Loading saved roster…")
+                } else {
+                    Button(action: openPortal) {
+                        Label("Log in to RAIDO", systemImage: "arrow.right.circle.fill")
+                            .frame(maxWidth: .infinity, minHeight: 28)
+                    }
+                    .raidoPrimaryAction()
+                    .accessibilityIdentifier("raido-welcome-login")
+                    Text("Sign in securely through the RAIDO mobile portal.")
+                        .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                }
+                Spacer(minLength: 24)
+            }
+            .frame(maxWidth: 390, maxHeight: .infinity)
+            .padding(.horizontal, 28)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .midnightCanvas().toolbar(.hidden, for: .navigationBar)
+        }
+    }
+}
 
 struct SyncFreshnessStrip: View {
     @Environment(\.raidoPalette) private var raidoColorPalette
@@ -6198,13 +6249,17 @@ struct PortalView: View {
             ZStack {
                 RosterWebView(model: model).ignoresSafeArea(edges: .bottom)
 
+                if model.isLoading && model.loadError == nil {
+                    VStack { ProgressView("Opening RAIDO…").padding(12).midnightCard(radius: 12); Spacer() }
+                        .padding(.top, 8).allowsHitTesting(false)
+                }
                 if let error = model.loadError {
                     MidnightTheme.background.ignoresSafeArea()
                     VStack(spacing: 14) {
                         Image(systemName: "wifi.slash")
                             .font(.system(size: 42))
                             .foregroundStyle(.secondary)
-                        Text("RAIDO unavailable offline").font(.title3.bold())
+                        Text("RAIDO could not open").font(.title3.bold())
                         Text(error)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -6217,7 +6272,9 @@ struct PortalView: View {
                         if store.hasCache {
                             Button("View Offline Roster", action: openRoster).raidoPrimaryAction()
                         }
-                        Button("Try RAIDO Again") { model.reload() }.buttonStyle(.bordered)
+                        Button("Try RAIDO Again") { model.reload() }.raidoPrimaryAction()
+                            .accessibilityIdentifier("raido-portal-retry")
+                        Button("Open Mobile Login") { model.openStartPage() }.buttonStyle(.bordered)
                     }
                     .padding(28)
                 }
@@ -6230,6 +6287,7 @@ struct PortalView: View {
                     Button { model.goBack() } label: { Image(systemName: "chevron.backward") }
                         .disabled(!model.canGoBack)
                     Button { model.reload() } label: { Image(systemName: "arrow.clockwise") }
+                        .accessibilityLabel("Reload RAIDO")
                 }
             }
         }
@@ -9031,13 +9089,41 @@ struct RaidoChromeRefresh: UIViewRepresentable {
     let theme: RaidoTheme
     let appearance: RaidoAppearance
     let palette: RaidoPalette
-    func makeUIView(context: Context) -> UIView { UIView(frame: .zero) }
-    func updateUIView(_ view: UIView, context: Context) {
-        MidnightTheme.configure()
-        DispatchQueue.main.async {
-            guard let window = view.window else { return }
+    final class ChromeView: UIView {
+        var refresh: (() -> Void)?
+        override func didMoveToWindow() { super.didMoveToWindow(); refresh?() }
+        override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+            super.traitCollectionDidChange(previousTraitCollection); refresh?()
+        }
+    }
+    final class Coordinator {
+        var appliedKey: String?
+        weak var appliedWindow: UIWindow?
+        var pending = false
+        var apply: (() -> Void)?
+    }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeUIView(context: Context) -> ChromeView { ChromeView(frame: .zero) }
+    func updateUIView(_ view: ChromeView, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.apply = { [weak view, weak coordinator] in
+            guard let view, let coordinator, let window = view.window else { return }
+            let key = "\(theme.rawValue)|\(appearance.rawValue)|\(palette.rawValue)|\(view.traitCollection.userInterfaceStyle.rawValue)"
+            guard coordinator.appliedKey != key || coordinator.appliedWindow !== window else { return }
+            coordinator.appliedKey = key; coordinator.appliedWindow = window
+            MidnightTheme.configure()
             updateChrome(window)
         }
+        view.refresh = { [weak coordinator] in
+            guard let coordinator, !coordinator.pending else { return }
+            coordinator.pending = true
+            DispatchQueue.main.async { [weak coordinator] in
+                guard let coordinator else { return }
+                coordinator.pending = false
+                coordinator.apply?()
+            }
+        }
+        view.refresh?()
     }
     private func updateChrome(_ view: UIView) {
         if let nav = view as? UINavigationBar {

@@ -1,6 +1,34 @@
 import XCTest
 
 @MainActor final class MapGestureUITests: XCTestCase {
+    func testCleanInstallMobileLoginAndReturnToTabs() {
+        continueAfterFailure = false
+        let app = XCUIApplication(bundleIdentifier: "com.bobanilic.raidoroster")
+        app.launchArguments = ["--startup", "--clean-install", "--theme=ice", "--mode=dark"]
+        app.launch()
+        let login = app.buttons["raido-welcome-login"]
+        XCTAssertTrue(login.waitForExistence(timeout: 15)); XCTAssertTrue(login.isHittable)
+        XCTAssertEqual(login.frame.midX, app.frame.midX, accuracy: 4)
+        login.tap()
+        let username = app.webViews.textFields.firstMatch
+        let password = app.webViews.secureTextFields.firstMatch
+        XCTAssertTrue(username.waitForExistence(timeout: 40), "Public mobile login form must load without credentials")
+        XCTAssertTrue(password.exists)
+        username.tap(); XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        password.tap(); XCTAssertTrue(app.keyboards.firstMatch.exists)
+        XCTAssertTrue(app.webViews.buttons["Login"].exists)
+        app.buttons["Reload RAIDO"].tap()
+        XCTAssertTrue(username.waitForExistence(timeout: 40))
+        app.buttons["Done"].firstMatch.tap()
+        let tabs = app.tabBars.firstMatch
+        XCTAssertTrue(tabs.waitForExistence(timeout: 5))
+        tabs.buttons["Roster"].tap(); XCTAssertTrue(tabs.buttons["Roster"].isSelected)
+        tabs.buttons["Today"].tap(); XCTAssertTrue(login.waitForExistence(timeout: 5))
+        login.tap(); XCTAssertTrue(username.waitForExistence(timeout: 40))
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(tabs.waitForExistence(timeout: 5))
+        app.terminate()
+    }
     func testProductionLaunchAndTabResponsiveness() {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier:"com.bobanilic.raidoroster")

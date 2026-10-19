@@ -1,7 +1,16 @@
 (() => {
-  const VERSION = '3.2.0';
+  const VERSION = '3.2.1';
   if (window !== window.top) return;
   const SCHEMA_VERSION = 1;
+  // Login/chooser pages never install roster observers or parse the DOM. Keep
+  // the small history auth probe available to the bounded offline worker.
+  const isRosterPage = () => /\/HumanResourceRoster\.aspx$/i.test(location.pathname) &&
+    !document.querySelector('input[type="password"]');
+  if (!isRosterPage()) {
+    window.RAIDOPlus = { version: VERSION, extractNow() {},
+      history: { inspect: () => ({kind: document.querySelector('input[type="password"]') ? 'auth' : 'format'}) } };
+    return;
+  }
   if (window.RAIDOPlus?.version === VERSION) {
     window.RAIDOPlus.extractNow();
     return;
@@ -849,6 +858,7 @@
   }
 
   function extractNow() {
+    if (!isRosterPage()) { observer?.disconnect(); clearTimeout(timer); return; }
     try {
       const b = build();
       post(b);
