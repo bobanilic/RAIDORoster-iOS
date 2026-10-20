@@ -35,9 +35,7 @@ extension RosterStore {
         if let cache = priorityEventCache, cache.lower == lower, cache.upper == upper, cache.zone == zone {
             return cache.events
         }
-        let events = prioritySources(from:lower,through:upper).flatMap {
-            TodayPriorityAdapter.events(item:$0.item,capturedAt:$0.capturedAt)
-        }
+        let events = TodayPriorityAdapter.events(sources: prioritySources(from:lower,through:upper))
         priorityEventCache = (lower,upper,zone,events)
         return events
     }
@@ -48,6 +46,10 @@ extension RosterStore {
         let nextAlcohol = events.filter { $0.kind == .alcohol && $0.end > now }.min { $0.end < $1.end }?.id
         events.removeAll { $0.kind == .alcohol && $0.id != nextAlcohol }
         return TodayPriorityPolicy.ordered(events, now: now)
+    }
+
+    func alcoholPrecautionEvent(for item: RosterItem, at now: Date) -> TodayPriorityEvent? {
+        priorityEvents(at: now).first { $0.kind == .alcohol && $0.itemID == item.id }
     }
 
     func todayPriorityEvents(at now: Date) -> [TodayPriorityEvent] {
@@ -77,6 +79,19 @@ extension RosterStore {
 }
 
 enum TodayPriorityAdapter {
+    static func events(sources: [(item: RosterItem, capturedAt: Date)]) -> [TodayPriorityEvent] {
+        let events = sources.flatMap { Self.events(item: $0.item, capturedAt: $0.capturedAt) }
+        let duties = sources.compactMap { source -> PrecautionDutyWindow? in
+            let item = source.item
+            guard item.isOperationalDuty, !item.operationalActivities.isEmpty,
+                  let start = item.dutyStartUTCDate,
+                  let reference = item.preDutyPickupUTCDate ?? item.dutyStartUTCDate else { return nil }
+            return .init(itemID: item.id, dayKey: item.dateISO ?? item.id, reference: reference,
+                         start: start, end: max(start, item.dutyEndUTCDate ?? start))
+        }
+        return TodayPriorityPolicy.preparePrecautions(events, duties: duties)
+    }
+
     static func zone(activity: RosterActivity?, item: RosterItem) -> TimeZone? {
         let activities = (activity.map { [$0] } ?? []) + item.operationalActivities + item.hotelAssignments
         for candidate in activities {
@@ -411,7 +426,7 @@ struct TodayPriorityDetails: View {
         .presentationDragIndicator(.visible)
     }
     private func precaution(now: Date) -> some View {
-        let active = now >= event.date && now < event.end
+        let active = TodayPriorityPolicy.visible(event, now: now)
         let finished = now >= event.end
         let color: Color = colorScheme == .dark ? Color(red:1,green:0.74,blue:0.71) : Color(red:0.58,green:0.16,blue:0.20)
         return VStack(alignment:.leading,spacing:16) {

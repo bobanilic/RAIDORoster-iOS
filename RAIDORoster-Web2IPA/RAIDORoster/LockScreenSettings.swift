@@ -25,7 +25,7 @@ struct LockScreenSettings: View {
                     }
                 }
             } header: { Text("Lock Screen") } footer: {
-                Text("Cards begin within your selected window before saved pickup/report. The default is two hours. Precaution notifications still cover the earlier 12-hour period. iOS limits a Live Activity to eight active hours, so this card cannot stay permanently. No GPS or continuous background scanning is used.")
+                Text("Cards begin within your selected window before saved pickup/report. The default is two hours. Precaution appears only in the pre-duty 12-hour window and waits until the preceding duty has ended. iOS limits a Live Activity to eight active hours, so this card cannot stay permanently. No GPS or continuous background scanning is used.")
             }
             Section("Appearance") {
                 Picker("Lock Screen background",selection:$appearance) {

@@ -4,7 +4,7 @@ import XCTest
     func testFourSectorsAcrossTwoDutyGroups() {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier: "com.bobanilic.raidoroster")
-        app.launchArguments = ["--startup", "--split-duty", "--theme=ice", "--mode=dark"]
+        app.launchArguments = ["--startup", "--split-duty", "--theme=getJet", "--mode=dark"]
         app.launch()
         let tabs = app.tabBars.firstMatch
         XCTAssertTrue(tabs.waitForExistence(timeout: 15))

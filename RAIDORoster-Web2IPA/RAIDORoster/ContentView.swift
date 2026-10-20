@@ -559,6 +559,7 @@ final class DutyReminderScheduler: ObservableObject {
 
         let lower = EarningsMath.day(now.addingTimeInterval(-2 * 24 * 3600))
         let upper = EarningsMath.day(now.addingTimeInterval(90 * 24 * 3600))
+        let priorityEventsByItem = Dictionary(grouping: TodayPriorityAdapter.events(sources: items.map { (item: $0, capturedAt: now) }), by: \.itemID)
         for item in items where (item.dateISO ?? "") >= lower && (item.dateISO ?? "") <= upper {
             if reportLead > 0, item.isOperationalDuty, !item.operationalActivities.isEmpty, let report = item.dutyStartUTCDate {
                 let fire = report.addingTimeInterval(TimeInterval(-reportLead * 60))
@@ -577,22 +578,26 @@ final class DutyReminderScheduler: ObservableObject {
                 }
             }
 
-            for event in TodayPriorityAdapter.events(item: item, capturedAt: now) {
-                if lockPrecaution && event.kind == .alcohol && event.date > now {
+            for event in priorityEventsByItem[item.id] ?? [] {
+                let activeFire = max(event.date, event.availableFrom ?? event.date)
+                if lockPrecaution && event.kind == .alcohol && activeFire > now {
                     let content = UNMutableNotificationContent()
                     content.title = "🔴 Alcohol precaution active"
-                    content.body = "Pre-duty precaution · " + (event.reference == "PU" ? "Pickup" : "Report") + " · " + TodayPriorityPolicy.localDayLabel(event.end,event:event,now:event.date) + " · " + event.clock + " LT. Open RAIDO for details."
+                    content.body = "Pre-duty precaution · " + (event.reference == "PU" ? "Pickup" : "Report") + " · " + TodayPriorityPolicy.localDayLabel(event.end,event:event,now:activeFire) + " · " + event.clock + " LT. Open RAIDO for details."
                     content.userInfo = ["raidoPriorityID":event.id]
                     content.sound = .default
-                    let trigger = UNTimeIntervalNotificationTrigger(timeInterval:max(1,event.date.timeIntervalSinceNow),repeats:false)
-                    requests.append((event.date,UNNotificationRequest(identifier:identifierPrefix + "PRECAUTION-ACTIVE-" + event.id,content:content,trigger:trigger)))
+                    let trigger = UNTimeIntervalNotificationTrigger(timeInterval:max(1,activeFire.timeIntervalSinceNow),repeats:false)
+                    requests.append((activeFire,UNNotificationRequest(identifier:identifierPrefix + "PRECAUTION-ACTIVE-" + event.id,content:content,trigger:trigger)))
                 }
                 for (id, fire) in TodayPriorityPolicy.reminderDates(event, now: now, pickupLead: pickupLead,
                     relocationEnabled: relocationReminders, alcoholLead: alcoholLead) {
+                    // A delayed pre-alert and active alert must not duplicate
+                    // one another at release when both options are enabled.
+                    if lockPrecaution && event.kind == .alcohol && fire == activeFire { continue }
                     let content = UNMutableNotificationContent()
                     switch event.kind {
                     case .pickup: content.title = "Pickup in \(pickupLead) min"
-                    case .alcohol: content.title = "🟡 Precaution starts in \(alcoholLead == 60 ? "1 hour" : "\(alcoholLead) min")"
+                    case .alcohol: content.title = fire >= event.date ? "Alcohol precaution active" : "🟡 Precaution starts in \(alcoholLead == 60 ? "1 hour" : "\(alcoholLead) min")"
                     default: content.title = "Upcoming hotel relocation"
                     }
                     let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_GB")
@@ -1963,9 +1968,8 @@ struct CrewReadinessCard: View {
 
         TimelineView(.periodic(from: .now, by: 60)) { context in
             VStack(alignment: .leading, spacing: 12) {
-                if let reference = store.precautionReferenceDate(for: item),
-                   let cutoff = store.alcoholPrecautionCutoff(for: item),
-                   context.date < reference {
+                if let event = store.alcoholPrecautionEvent(for: item, at: context.date) {
+                    let reference = event.end, cutoff = event.date
                     awarenessRow(
                         icon: "wineglass",
                         title: context.date < cutoff ? "12H ALCOHOL PRECAUTION" : "ALCOHOL PRECAUTION WINDOW",
@@ -9749,8 +9753,8 @@ private struct IceReadinessView: View {
 
         TimelineView(.periodic(from: .now, by: 60)) { context in
             VStack(spacing: 9) {
-                if showsAlcohol, let reference = store.precautionReferenceDate(for: item),
-                   let cutoff = store.alcoholPrecautionCutoff(for: item), context.date < reference {
+                if showsAlcohol, let event = store.alcoholPrecautionEvent(for: item, at: context.date) {
+                    let reference = event.end, cutoff = event.date
                     let active = context.date >= cutoff
                     DisclosureGroup {
                         Text("12 hours before pickup, or report when pickup is unavailable. Company policy remains authoritative.")

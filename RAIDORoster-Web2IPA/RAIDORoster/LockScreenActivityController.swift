@@ -125,7 +125,7 @@ final class LockScreenActivityController: ObservableObject {
         lastPlans = plans;lastStyle = style
         if count > 0 {
             let hours = plans.first?.leadHours ?? 2
-            status = "\(count) duty countdown\(count == 1 ? "" : "s") ready. Cards begin \(hours) hours before pickup/report."
+            status = "\(count) duty countdown\(count == 1 ? "" : "s") ready. Cards begin up to \(hours) hours before pickup/report, after the preceding duty."
         }
     }
 

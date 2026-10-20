@@ -82,6 +82,50 @@ import Foundation
             let nativeOffset = orbitFormat.format(.seconds(-seconds))
             expect(String(nativeOffset.suffix(5)) == expected,"Orbit minute precision and padded hours at \(seconds) seconds")
         }
+        // A four-sector day split by the portal must not restart a pre-duty
+        // precaution for its evening sector, nor expose tomorrow's while flying.
+        func precaution(_ item: String, _ reference: String) -> TodayPriorityEvent {
+            let end = date(reference)
+            return .init(id:"precaution-"+item,kind:.alcohol,itemID:item,title:"Precaution",detail:"Fixture",
+                         date:end.addingTimeInterval(-12*3600),end:end,hasTime:true,zoneID:"Europe/Vilnius",clock:"05:00",capturedAt:now)
+        }
+        let morning=precaution("morning","2026-10-20T05:00:00Z")
+        let evening=precaution("evening","2026-10-20T19:00:00Z")
+        let tomorrow=precaution("tomorrow","2026-10-21T05:00:00Z")
+        let dutyWindows: [PrecautionDutyWindow] = [
+            .init(itemID:"morning",dayKey:"2026-10-20",reference:morning.end,start:morning.end,end:date("2026-10-20T15:05:00Z")),
+            .init(itemID:"evening",dayKey:"2026-10-20",reference:evening.end,start:evening.end,end:date("2026-10-20T22:30:00Z")),
+            .init(itemID:"tomorrow",dayKey:"2026-10-21",reference:tomorrow.end,start:tomorrow.end,end:date("2026-10-21T12:00:00Z"))]
+        let prepared=TodayPriorityPolicy.preparePrecautions([morning,evening,tomorrow,pickup],duties:dutyWindows)
+        expect(prepared.filter { $0.kind == .alcohol }.map(\.itemID)==["morning","tomorrow"],"Evening sector cannot start another same-day precaution")
+        expect(prepared.contains(pickup),"Pickup events are unchanged")
+        let nextDuty=prepared.first { $0.itemID == "tomorrow" }!
+        expect(nextDuty.date==tomorrow.date,"Nominal cutoff remains twelve elapsed hours before report")
+        expect(nextDuty.availableFrom==date("2026-10-20T22:30:00Z"),"Display waits for final release across every same-day duty group")
+        for instant in ["2026-10-20T05:00:00Z","2026-10-20T10:00:00Z","2026-10-20T16:00:00Z","2026-10-20T20:00:00Z"] {
+            expect(!TodayPriorityPolicy.ordered(prepared,now:date(instant)).contains { $0.kind == .alcohol },"No alcohol panel at report, in flight, between sectors or during final sector")
+        }
+        expect(TodayPriorityPolicy.visible(nextDuty,now:date("2026-10-20T22:30:00Z")),"Next precaution can appear at release inside its twelve-hour window")
+        expect(!TodayPriorityPolicy.visible(nextDuty,now:nextDuty.end),"Next report ends the display")
+        expect(!TodayPriorityPolicy.visible(tomorrow,now:tomorrow.date.addingTimeInterval(-1)),"No early begins-in panel before the twelve-hour cutoff")
+        let shifted=TodayPriorityPolicy.reminderDates(nextDuty,now:date("2026-10-20T12:00:00Z"),pickupLead:0,relocationEnabled:false,alcoholLead:15)
+        expect(shifted.first?.1==nextDuty.availableFrom,"Pre-alert cannot fire during the preceding duty")
+        let delayedPlan=LockScreenPolicy.plans(events:[nextDuty],now:date("2026-10-20T12:00:00Z"),pickup:false,precaution:true,leadHours:8).first!
+        expect(delayedPlan.startsAt==nextDuty.availableFrom,"Native Lock Screen scheduling also waits for release")
+        expect(LockScreenPolicy.needsReschedule(delayedPlan,scheduledStart:tomorrow.end.addingTimeInterval(-8*3600),referenceAt:tomorrow.end,isPending:false,now:date("2026-10-20T21:30:00Z")),"Old active card is replaced when the corrected start is later")
+        let overnightDuty=PrecautionDutyWindow(itemID:"night",dayKey:"2026-10-19",reference:date("2026-10-19T21:00:00Z"),start:date("2026-10-19T21:00:00Z"),end:date("2026-10-20T07:00:00Z"))
+        let early=precaution("early","2026-10-20T08:00:00Z")
+        let earlyDuty=PrecautionDutyWindow(itemID:"early",dayKey:"2026-10-20",reference:early.end,start:early.end,end:date("2026-10-20T12:00:00Z"))
+        let acrossMidnight=TodayPriorityPolicy.preparePrecautions([early],duties:[overnightDuty,earlyDuty]).first!
+        expect(acrossMidnight.availableFrom==overnightDuty.end,"Overnight flights block the next roster day's precaution")
+        expect(!TodayPriorityPolicy.visible(acrossMidnight,now:date("2026-10-20T06:00:00Z")),"Local/UTC midnight never resets an active duty")
+        let collision=PrecautionDutyWindow(itemID:"night",dayKey:"2026-10-19",reference:overnightDuty.reference,start:overnightDuty.start,end:early.end)
+        expect(TodayPriorityPolicy.preparePrecautions([early],duties:[collision,earlyDuty]).isEmpty,"Overlapping duties do not fabricate a pre-duty display period")
+        let longRest=precaution("later","2026-10-22T12:00:00Z")
+        let laterDuty=PrecautionDutyWindow(itemID:"later",dayKey:"2026-10-22",reference:longRest.end,start:longRest.end,end:date("2026-10-22T19:00:00Z"))
+        let afterRest=TodayPriorityPolicy.preparePrecautions([longRest],duties:dutyWindows+[laterDuty]).first!
+        expect(afterRest.availableFrom==nil,"Long rest retains the normal twelve-hour cutoff")
+        expect(!TodayPriorityPolicy.visible(afterRest,now:date("2026-10-21T13:00:00Z")),"Duty ending does not activate a far-future precaution early")
         print("Passed \(count) Today priority, countdown, DST and reminder checks")
     }
 }

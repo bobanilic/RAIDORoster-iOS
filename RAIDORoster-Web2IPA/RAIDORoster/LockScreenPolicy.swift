@@ -11,7 +11,8 @@ struct DutyLockScreenPlan: Equatable {
     let savedAt: Date
     let detail: String
     var leadHours: Int = 2
-    var startsAt: Date { referenceAt.addingTimeInterval(-Double(leadHours) * 3600) }
+    var notBefore: Date? = nil
+    var startsAt: Date { max(referenceAt.addingTimeInterval(-Double(leadHours) * 3600), notBefore ?? .distantPast) }
 }
 
 enum LockScreenPolicy {
@@ -44,7 +45,7 @@ enum LockScreenPolicy {
                 let alcohol = precaution ? future.first { $0.kind == .alcohol && $0.itemID == event.itemID } : nil
                 plans.append(.init(id:event.id,pickupAt:event.date,referenceAt:event.date,
                     precautionBegins:alcohol?.date,referenceLabel:"Pickup",clock:event.clock,zoneID:event.zoneID,
-                    savedAt:event.capturedAt,detail:event.detail,leadHours:hours))
+                    savedAt:event.capturedAt,detail:event.detail,leadHours:hours,notBefore:alcohol?.availableFrom))
             }
         }
         if precaution {
@@ -52,7 +53,7 @@ enum LockScreenPolicy {
                 if plans.contains(where: { $0.referenceAt == event.end }) { continue }
                 plans.append(.init(id:event.id,pickupAt:nil,referenceAt:event.end,precautionBegins:event.date,
                     referenceLabel:event.reference == "PU" ? "Pickup" : "Report",clock:event.clock,zoneID:event.zoneID,
-                    savedAt:event.capturedAt,detail:"Pre-duty precaution",leadHours:hours))
+                    savedAt:event.capturedAt,detail:"Pre-duty precaution",leadHours:hours,notBefore:event.availableFrom))
             }
         }
         var seen = Set<String>()

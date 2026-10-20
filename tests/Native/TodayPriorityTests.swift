@@ -9,6 +9,32 @@ final class TodayPriorityTests: XCTestCase {
         .init(id:id,kind:kind,itemID:"item",title:"Fixture",detail:"Sanitized fixture",date:date(start),end:date(end),
               hasTime:timed,zoneID:"Europe/Vilnius",clock:"08:00",capturedAt:date("2026-10-19T08:00:00Z"))
     }
+    func testPrecautionUsesFirstDailyReportAndWaitsForFinalRelease() throws {
+        try store { store in
+            func flight(_ id: String, _ day: String, _ start: String, _ end: String) -> [String: Any] {
+                var value = activity(id: id, category: "FLIGHT", day: day)
+                value["startUTC"] = day+" "+start; value["checkInUTC"] = day+" "+start
+                value["endUTC"] = day+" "+end; value["checkOutUTC"] = day+" "+end
+                return value
+            }
+            let rows: [[String: Any]] = [
+                ["id":"morning","dateISO":"2026-10-20","category":"FLIGHT","rawText":"Sanitized duty","activities":[flight("a","2026-10-20","05:00","15:05")]],
+                ["id":"evening","dateISO":"2026-10-20","category":"FLIGHT","rawText":"Sanitized duty","activities":[flight("b","2026-10-20","19:00","22:30")]],
+                ["id":"tomorrow","dateISO":"2026-10-21","category":"FLIGHT","rawText":"Sanitized duty","activities":[flight("c","2026-10-21","05:00","12:00")]]]
+            let payload: [String:Any] = ["schemaVersion":1,"sourceURL":"https://gjt.noc.vmc.navblue.cloud/RaidoMobile/HumanResourceRoster.aspx",
+                "validation":["isValid":true,"parser":"raido-duty-envelope-test","month":"2026-10","datedRows":3],"rows":rows]
+            XCTAssertTrue(store.ingest(messageBody:payload,archiveOnly:true,expectedMonth:"2026-10"))
+            let cached=store.priorityEventCandidates(at:date("2026-10-20T10:00:00Z"))
+            XCTAssertEqual(cached.filter { $0.kind == .alcohol }.count,2)
+            let next=try XCTUnwrap(cached.first { $0.itemID == "tomorrow" && $0.kind == .alcohol })
+            XCTAssertEqual(next.availableFrom,date("2026-10-20T22:30:00Z"))
+            for instant in ["2026-10-20T05:00:00Z","2026-10-20T10:00:00Z","2026-10-20T16:00:00Z","2026-10-20T20:00:00Z"] {
+                XCTAssertFalse(store.todayPriorityEvents(at:date(instant)).contains { $0.kind == .alcohol })
+            }
+            XCTAssertEqual(store.todayPriorityEvents(at:date("2026-10-20T22:30:00Z")).first { $0.kind == .alcohol }?.itemID,"tomorrow")
+            XCTAssertFalse(store.todayPriorityEvents(at:date("2026-10-21T05:00:00Z")).contains { $0.kind == .alcohol })
+        }
+    }
     func testImminentPickupOverridesPrecautionAndFutureRelocation() {
         let now = date("2026-10-19T09:00:00Z")
         let pickup = event(.pickup,start:"2026-10-19T09:15:00Z",end:"2026-10-19T10:00:00Z",id:"pickup")

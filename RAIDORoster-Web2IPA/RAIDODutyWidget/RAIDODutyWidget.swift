@@ -11,8 +11,8 @@ struct RAIDODutyWidget: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Label(context.state.precautionBegins == nil ? "RAIDO" : "Precaution active",systemImage:context.state.precautionBegins == nil ? "airplane" : "wineglass")
-                        .font(.caption).foregroundStyle(context.state.precautionBegins == nil ? .white : Color(red:1,green:0.64,blue:0.60))
+                    Label((context.isStale || context.state.precautionBegins == nil) ? "RAIDO" : "Precaution active",systemImage:(context.isStale || context.state.precautionBegins == nil) ? "airplane" : "wineglass")
+                        .font(.caption).foregroundStyle((context.isStale || context.state.precautionBegins == nil) ? .white : Color(red:1,green:0.64,blue:0.60))
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     timer(context.state).font(.headline).frame(maxWidth:110)

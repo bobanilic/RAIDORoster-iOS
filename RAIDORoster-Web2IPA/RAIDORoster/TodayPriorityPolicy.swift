@@ -19,9 +19,42 @@ struct TodayPriorityEvent: Identifiable, Equatable {
     var reference = ""
     var notes = ""
     var endClock = ""
+    // A preceding duty may overlap the next 12-hour window.
+    var availableFrom: Date? = nil
+}
+
+struct PrecautionDutyWindow {
+    let itemID: String
+    let dayKey: String
+    let reference: Date
+    let start: Date
+    let end: Date
 }
 
 enum TodayPriorityPolicy {
+    /// One pre-duty event per roster day, never between sectors of that day.
+    /// Keep the nominal 12-hour cutoff; postpone its display/alerts until release
+    /// when a preceding (including overnight) duty overlaps that window.
+    static func preparePrecautions(_ events: [TodayPriorityEvent], duties: [PrecautionDutyWindow]) -> [TodayPriorityEvent] {
+        let days = Dictionary(grouping: duties, by: \.dayKey).values.compactMap { rows -> PrecautionDutyWindow? in
+            guard let first = rows.min(by: { $0.reference == $1.reference ? $0.itemID < $1.itemID : $0.reference < $1.reference }) else { return nil }
+            return .init(itemID: first.itemID, dayKey: first.dayKey, reference: first.reference,
+                         start: rows.map(\.start).min()!, end: rows.map(\.end).max()!)
+        }
+        let firstByID = Dictionary(uniqueKeysWithValues: days.map { ($0.itemID, $0) })
+        return events.compactMap { event in
+            guard event.kind == .alcohol else { return event }
+            guard let duty = firstByID[event.itemID] else { return nil }
+            let release = days.filter {
+                $0.dayKey != duty.dayKey && $0.start < event.end && $0.end > event.date
+            }.map(\.end).max()
+            guard release.map({ $0 < event.end }) ?? true else { return nil }
+            var value = event
+            value.availableFrom = release
+            return value
+        }
+    }
+
     static func localDayLabel(_ date: Date, event: TodayPriorityEvent, now: Date) -> String {
         let calendar = Self.calendar(for: event)
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_GB")
@@ -50,7 +83,7 @@ enum TodayPriorityPolicy {
     static func visible(_ event: TodayPriorityEvent, now: Date) -> Bool {
         guard event.end > now else { return false }
         switch event.kind {
-        case .alcohol: return event.date.timeIntervalSince(now) <= 24 * 3600
+        case .alcohol: return now >= max(event.date, event.availableFrom ?? event.date)
         case .pickup, .transport: return event.date.timeIntervalSince(now) <= 24 * 3600
         case .relocation:
             let calendar = Self.calendar(for: event)
@@ -106,7 +139,7 @@ enum TodayPriorityPolicy {
         case .pickup where pickupLead > 0:
             output.append(("PICKUP-" + event.id, event.date.addingTimeInterval(-Double(pickupLead) * 60)))
         case .alcohol where alcoholLead > 0:
-            output.append(("PRECAUTION-" + event.id, event.date.addingTimeInterval(-Double(alcoholLead) * 60)))
+            output.append(("PRECAUTION-" + event.id, max(event.date.addingTimeInterval(-Double(alcoholLead) * 60), event.availableFrom ?? .distantPast)))
         case .relocation where relocationEnabled:
             let calendar = Self.calendar(for: event)
             let day = calendar.startOfDay(for: event.date)
