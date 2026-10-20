@@ -22,11 +22,11 @@ struct RAIDODutyWidget: Widget {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             } compactLeading: {
-                Image(systemName:context.state.pickupAt == nil ? "wineglass" : "car.side")
+                Image(systemName:context.isStale ? "airplane" : context.state.pickupAt == nil ? "wineglass" : "car.side")
             } compactTrailing: {
                 timer(context.state).font(.caption2).frame(width:65)
             } minimal: {
-                Image(systemName:context.state.pickupAt == nil ? "wineglass" : "car.side")
+                Image(systemName:context.isStale ? "airplane" : context.state.pickupAt == nil ? "wineglass" : "car.side")
             }
             .widgetURL(link(context.attributes.eventID))
             .keylineTint(Color(red:0.58,green:0.82,blue:0.94))
