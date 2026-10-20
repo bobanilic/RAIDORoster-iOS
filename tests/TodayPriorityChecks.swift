@@ -113,6 +113,11 @@ import Foundation
         let delayedPlan=LockScreenPolicy.plans(events:[nextDuty],now:date("2026-10-20T12:00:00Z"),pickup:false,precaution:true,leadHours:8).first!
         expect(delayedPlan.startsAt==nextDuty.availableFrom,"Native Lock Screen scheduling also waits for release")
         expect(LockScreenPolicy.needsReschedule(delayedPlan,scheduledStart:tomorrow.end.addingTimeInterval(-8*3600),referenceAt:tomorrow.end,isPending:false,now:date("2026-10-20T21:30:00Z")),"Old active card is replaced when the corrected start is later")
+        let nextPickup=TodayPriorityEvent(id:"first-pickup",kind:.pickup,itemID:"tomorrow",title:"Pickup",detail:"Fixture",date:nextDuty.end,end:nextDuty.end.addingTimeInterval(1800),hasTime:true,zoneID:"Europe/Vilnius",clock:"05:00",capturedAt:now)
+        let returnPickup=TodayPriorityEvent(id:"return-pickup",kind:.pickup,itemID:"tomorrow",title:"Pickup",detail:"Fixture",date:nextDuty.end.addingTimeInterval(7*3600),end:nextDuty.end.addingTimeInterval(8*3600),hasTime:true,zoneID:"Europe/Vilnius",clock:"12:00",capturedAt:now)
+        let pickupPlans=LockScreenPolicy.plans(events:[nextDuty,nextPickup,returnPickup],now:date("2026-10-20T12:00:00Z"),pickup:true,precaution:true,leadHours:8)
+        expect(pickupPlans.first { $0.id == nextPickup.id }?.startsAt==nextDuty.availableFrom,"Combined pre-duty pickup/precaution also waits for release")
+        expect(pickupPlans.first { $0.id == returnPickup.id }?.precautionBegins==nil,"Return transport never inherits an already-ended morning precaution")
         let overnightDuty=PrecautionDutyWindow(itemID:"night",dayKey:"2026-10-19",reference:date("2026-10-19T21:00:00Z"),start:date("2026-10-19T21:00:00Z"),end:date("2026-10-20T07:00:00Z"))
         let earlyPrecaution=precaution("early","2026-10-20T08:00:00Z")
         let earlyDuty=PrecautionDutyWindow(itemID:"early",dayKey:"2026-10-20",reference:earlyPrecaution.end,start:earlyPrecaution.end,end:date("2026-10-20T12:00:00Z"))

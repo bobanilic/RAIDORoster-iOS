@@ -42,7 +42,7 @@ enum LockScreenPolicy {
         var plans: [DutyLockScreenPlan] = []
         if pickup {
             for event in future where event.kind == .pickup && event.date > now && event.date.timeIntervalSince(now) <= 7 * 86400 {
-                let alcohol = precaution ? future.first { $0.kind == .alcohol && $0.itemID == event.itemID } : nil
+                let alcohol = precaution ? future.first { $0.kind == .alcohol && $0.itemID == event.itemID && $0.end == event.date } : nil
                 plans.append(.init(id:event.id,pickupAt:event.date,referenceAt:event.date,
                     precautionBegins:alcohol?.date,referenceLabel:"Pickup",clock:event.clock,zoneID:event.zoneID,
                     savedAt:event.capturedAt,detail:event.detail,leadHours:hours,notBefore:alcohol?.availableFrom))
