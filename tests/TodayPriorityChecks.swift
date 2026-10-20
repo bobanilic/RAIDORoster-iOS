@@ -114,13 +114,13 @@ import Foundation
         expect(delayedPlan.startsAt==nextDuty.availableFrom,"Native Lock Screen scheduling also waits for release")
         expect(LockScreenPolicy.needsReschedule(delayedPlan,scheduledStart:tomorrow.end.addingTimeInterval(-8*3600),referenceAt:tomorrow.end,isPending:false,now:date("2026-10-20T21:30:00Z")),"Old active card is replaced when the corrected start is later")
         let overnightDuty=PrecautionDutyWindow(itemID:"night",dayKey:"2026-10-19",reference:date("2026-10-19T21:00:00Z"),start:date("2026-10-19T21:00:00Z"),end:date("2026-10-20T07:00:00Z"))
-        let early=precaution("early","2026-10-20T08:00:00Z")
-        let earlyDuty=PrecautionDutyWindow(itemID:"early",dayKey:"2026-10-20",reference:early.end,start:early.end,end:date("2026-10-20T12:00:00Z"))
-        let acrossMidnight=TodayPriorityPolicy.preparePrecautions([early],duties:[overnightDuty,earlyDuty]).first!
+        let earlyPrecaution=precaution("early","2026-10-20T08:00:00Z")
+        let earlyDuty=PrecautionDutyWindow(itemID:"early",dayKey:"2026-10-20",reference:earlyPrecaution.end,start:earlyPrecaution.end,end:date("2026-10-20T12:00:00Z"))
+        let acrossMidnight=TodayPriorityPolicy.preparePrecautions([earlyPrecaution],duties:[overnightDuty,earlyDuty]).first!
         expect(acrossMidnight.availableFrom==overnightDuty.end,"Overnight flights block the next roster day's precaution")
         expect(!TodayPriorityPolicy.visible(acrossMidnight,now:date("2026-10-20T06:00:00Z")),"Local/UTC midnight never resets an active duty")
-        let collision=PrecautionDutyWindow(itemID:"night",dayKey:"2026-10-19",reference:overnightDuty.reference,start:overnightDuty.start,end:early.end)
-        expect(TodayPriorityPolicy.preparePrecautions([early],duties:[collision,earlyDuty]).isEmpty,"Overlapping duties do not fabricate a pre-duty display period")
+        let collision=PrecautionDutyWindow(itemID:"night",dayKey:"2026-10-19",reference:overnightDuty.reference,start:overnightDuty.start,end:earlyPrecaution.end)
+        expect(TodayPriorityPolicy.preparePrecautions([earlyPrecaution],duties:[collision,earlyDuty]).isEmpty,"Overlapping duties do not fabricate a pre-duty display period")
         let longRest=precaution("later","2026-10-22T12:00:00Z")
         let laterDuty=PrecautionDutyWindow(itemID:"later",dayKey:"2026-10-22",reference:longRest.end,start:longRest.end,end:date("2026-10-22T19:00:00Z"))
         let afterRest=TodayPriorityPolicy.preparePrecautions([longRest],duties:dutyWindows+[laterDuty]).first!
