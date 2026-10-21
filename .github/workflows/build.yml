@@ -37,6 +37,10 @@ jobs:
           retention-days: 14
   simulator:
     needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [four-sectors, login, responsiveness, today-return]
     runs-on: macos-15-intel
     timeout-minutes: 30
     env:
@@ -48,7 +52,7 @@ jobs:
           name: RAIDO-${{ needs.release.outputs.version }}-IPA
           path: RAIDORoster-Web2IPA
       - name: Check production launch and tab responsiveness
-        run: bash tools/ci.sh startup
+        run: bash tools/ci.sh startup --startup-case ${{ matrix.scenario }}
       - name: Shut down simulator before runner cleanup
         if: always()
         timeout-minutes: 1
@@ -56,11 +60,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: RAIDO-${{ needs.release.outputs.version }}-simulator
+          name: RAIDO-${{ needs.release.outputs.version }}-simulator-${{ matrix.scenario }}
           path: |
             /tmp/raido-*.png
             /tmp/raido-*.log
             /tmp/raido-theme-size.json
+            /tmp/raido-startup-*.xcresult
           if-no-files-found: warn
           retention-days: 7
   native-tests:

@@ -13,7 +13,20 @@ import time
 import shutil
 import zipfile
 import sys
+import argparse
 from install_preview_ui_checks import install as install_ui_checks
+
+startup_cases = {
+    'four-sectors': 'testFourSectorsAcrossTwoDutyGroups',
+    'login': 'testCleanInstallMobileLoginAndReturnToTabs',
+    'responsiveness': 'testProductionLaunchAndTabResponsiveness',
+    'today-return': 'testTodayReturnWithAutomaticMapAndNotificationsDisabled',
+}
+parser = argparse.ArgumentParser()
+parser.add_argument('--startup-case', choices=startup_cases)
+options, _ = parser.parse_known_args()
+if options.startup_case and '--startup-only' not in sys.argv:
+    parser.error('--startup-case requires --startup-only')
 
 root = Path(__file__).resolve().parents[1] / 'RAIDORoster-Web2IPA'
 ipa = root / 'RAIDORoster-unsigned.ipa'
@@ -261,29 +274,31 @@ try:
         udid = run(['xcrun', 'simctl', 'create', 'RAIDO-startup-checks', device['deviceTypeIdentifier'], runtime],
                    capture_output=True, text=True, timeout=60).stdout.strip()
         ephemeral_simulator = udid
+    # Finish boot outside the XCTest watchdog, as the native runner does.
+    if ephemeral_simulator or device['state'] != 'Booted':
+        run(['xcrun', 'simctl', 'boot', udid], timeout=60)
+    run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], timeout=240)
     if '--startup-only' not in sys.argv:
-        if device['state'] != 'Booted': run(['xcrun', 'simctl', 'boot', udid], timeout=60)
-        run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], timeout=240)
         run(['xcrun', 'simctl', 'install', udid, str(product)], timeout=90)
         run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '06:44', '--batteryState', 'charged', '--batteryLevel', '100'])
     # For startup checks XCTest installs/boots the app and runner together, as
     # in the passing native suite. A separate simctl install was hanging before
     # any UI test ran. The test command and job retain their existing limits.
     if '--startup-only' in sys.argv:
+        cases = [startup_cases[options.startup_case]] if options.startup_case else list(startup_cases.values())
+        result = '/tmp/raido-startup-' + (options.startup_case or 'all') + '.xcresult'
         with open('/tmp/raido-startup-ui-tests.log','w') as log:
             try:
                 run(['xcodebuild','-project',str(project),'-scheme','RAIDOMapChecks','-configuration','Debug',
                     '-destination','platform=iOS Simulator,id='+udid,'-derivedDataPath','/tmp/raido-ice-preview',
                     '-parallel-testing-enabled','NO','CODE_SIGNING_ALLOWED=YES','CODE_SIGNING_REQUIRED=NO',
                     'CODE_SIGN_STYLE=Manual','CODE_SIGN_IDENTITY=-','AD_HOC_CODE_SIGNING_ALLOWED=YES',
-                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testFourSectorsAcrossTwoDutyGroups',
-                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testCleanInstallMobileLoginAndReturnToTabs',
-                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testProductionLaunchAndTabResponsiveness',
-                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testTodayReturnWithAutomaticMapAndNotificationsDisabled',
+                    '-resultBundlePath', result,
+                    *['-only-testing:RAIDOMapChecks/MapGestureUITests/' + case for case in cases],
                     'test-without-building'],stdout=log,stderr=subprocess.STDOUT,timeout=900)
             except (subprocess.CalledProcessError,subprocess.TimeoutExpired):
                 print(Path(log.name).read_text()[-12000:]);raise
-        print('Passed clean-install mobile login, production launch, tab taps, foreground return and toast dismissal',flush=True)
+        print('Passed startup scenarios: ' + ', '.join(cases),flush=True)
         sys.exit(0)
     combinations = [(theme, palette, mode, tab)
         for theme in ['ice', 'getJet'] for palette in ['iceBlue', 'forestGreen', 'midnightChampagne', 'burgundyRose', 'espressoBronze']
