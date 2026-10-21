@@ -11,8 +11,7 @@ root = Path(__file__).resolve().parents[1]
 result = root / 'RAIDORoster-Web2IPA/build/NativeTests.xcresult'
 if result.exists():
     raise SystemExit(f'Result bundle already exists: {result}; use a clean CI checkout or move it before rerunning')
-devices = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j']))['devices']
-runtime, device = newest_iphone(devices)
+device = None
 result.parent.mkdir(parents=True, exist_ok=True)
 deadline = time.monotonic() + 30 * 60
 
@@ -38,6 +37,9 @@ try:
     # A boot failure must not hide the native fixture compiler result. Avoid
     # competing simulator migration and compiler work on the Intel CI runner.
     stage('build', common + ['-destination', 'generic/platform=iOS Simulator', 'build-for-testing'], 20 * 60)
+    devices = json.loads(subprocess.check_output(
+        ['xcrun', 'simctl', 'list', 'devices', 'available', '-j'], timeout=60))['devices']
+    runtime, device = newest_iphone(devices)
     print(f"Testing all native cases in {device['name']} ({runtime})", flush=True)
     if device['state'] != 'Booted':
         stage('boot', ['xcrun', 'simctl', 'boot', device['udid']], 60)
@@ -46,6 +48,7 @@ try:
                             '-resultBundlePath', str(result), 'test-without-building'], 30 * 60)
 finally:
     try:
-        subprocess.run(['xcrun', 'simctl', 'shutdown', device['udid']], check=False, timeout=30)
+        if device:
+            subprocess.run(['xcrun', 'simctl', 'shutdown', device['udid']], check=False, timeout=30)
     except subprocess.TimeoutExpired:
         print('Simulator shutdown timed out; runner cleanup will finish it', file=sys.stderr)

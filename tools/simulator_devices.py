@@ -12,6 +12,8 @@ def newest_iphone(devices):
         runtime, device = choice
         version = tuple(int(part) for part in re.findall(r'\d+', runtime.rsplit('iOS-', 1)[1]))
         # Never accidentally select an old runtime because its phone name sorts first.
-        return version, device['state'] == 'Booted', device['name']
+        generation = re.search(r'iPhone (\d+)', device['name'])
+        return (version, device['state'] == 'Booted', int(generation[1]) if generation else 0,
+                'Pro' in device['name'], 'Max' in device['name'], device['name'])
 
     return max(choices, key=rank)
