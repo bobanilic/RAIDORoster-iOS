@@ -1,4 +1,4 @@
-"""Exercise the exact generated pickup properties and native clock schedule."""
+"""Exercise the canonical roster pickup models and native clock schedule."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -7,28 +7,6 @@ root = Path(__file__).resolve().parents[1]
 content = (root / 'RAIDORoster-Web2IPA/RAIDORoster/ContentView.swift').read_text()
 js = (root / 'RAIDORoster-Web2IPA/RAIDORoster/RosterEnhancements.js').read_text()
 
-def block(anchor):
-    a = content.index(anchor)
-    opening = content.index('{', a)
-    depth = 1
-    b = opening + 1
-    while depth:
-        depth += (content[b] == '{') - (content[b] == '}')
-        b += 1
-    return content[a:b]
-
-properties = '\n'.join(block(anchor) for anchor in [
-    '    var operationalActivities: [RosterActivity]',
-    '    var dutyStartUTCDate: Date?',
-    '    private var pickupReportUTCDate: Date?',
-    '    var preDutyPickupUTCDate: Date?',
-    '    var preDutyPickupDisplay: String',
-])
-helpers = 'private ' + block('func pickupUTCDate(for activity: RosterActivity)') + '\n' + '\n'.join(block(anchor) for anchor in [
-    'private func parseNominalLocalStamp(_ value: String)',
-    'func parseUTCStamp(_ value: String)',
-    'private func activitySortKey(_ activity: RosterActivity)',
-])
 for start, end in [('IceDestinationClock', 'IcePickupCard'), ('IcePickupCard', 'IceReadinessView')]:
     section = content[content.index('private struct ' + start):content.index('private struct ' + end)]
     assert 'TimelineView(.everyMinute)' in section
@@ -37,24 +15,21 @@ for start, end in [('IceDestinationClock', 'IcePickupCard'), ('IcePickupCard', '
 fixture = '''
 import Foundation
 import SwiftUI
-private struct RosterActivity {
-    let category: String
-    let pickup: String
-    let startLT: String
-    let startUTC: String
-    let checkInLT: String
-    let checkInUTC: String
-    let endLT = ""
-    let endUTC = ""
-    let checkOutLT = ""
-    let checkOutUTC = ""
-    var isAuxiliary: Bool { ["HOTEL", "EXPENSE", "RELOCATION"].contains(category.uppercased()) }
+private extension RosterActivity {
+    init(category: String, pickup: String, startLT: String, startUTC: String, checkInLT: String, checkInUTC: String) {
+        self.init(id: "fixture", code: "", category: category, title: "", description: "", route: "", station: "",
+            checkInLT: checkInLT, checkInUTC: checkInUTC, startLT: startLT, startUTC: startUTC,
+            endLT: "", endUTC: "", checkOutLT: "", checkOutUTC: "", hotelName: "", pickup: pickup,
+            transferNote: "", activityNote: "", dayNote: "", aircraftReg: "", aircraftType: "", aircraftVersion: "",
+            aircraftPhone: "", crew: [], rawText: "")
+    }
 }
-private struct RosterItem {
-    let activityList: [RosterActivity]
-PROPERTIES
+private extension RosterItem {
+    init(activityList: [RosterActivity]) {
+        self.init(id: "fixture", index: 0, dateISO: "2026-10-08", dateText: "", category: "FLIGHT", title: "",
+            route: "", timeText: "", rawText: "", cells: [], activities: activityList, activeHotels: nil)
+    }
 }
-HELPERS
 @main struct Checks {
     static func main() {
         var count = 0
@@ -110,7 +85,7 @@ HELPERS
         print("Passed \\(count) generated pickup and native minute-schedule checks")
     }
 }
-'''.replace('PROPERTIES', properties).replace('HELPERS', helpers)
+'''
 
 a = js.index('  function pickupFrom(note) {')
 b = js.index('\n  function aircraftDetails', a)
@@ -132,5 +107,5 @@ with tempfile.TemporaryDirectory(prefix='roster-timing-') as directory:
     source = Path(directory) / 'Checks.swift'
     source.write_text(fixture)
     executable = Path(directory) / 'checks'
-    subprocess.run(['swiftc', '-parse-as-library', str(root / 'RAIDORoster-Web2IPA/RAIDORoster/RosterTimestamp.swift'), str(source), '-o', str(executable)], check=True)
+    subprocess.run(['swiftc', '-parse-as-library', *[str(root / 'RAIDORoster-Web2IPA/RAIDORoster' / name) for name in ['RosterTimestamp.swift', 'RosterModels.swift', 'RosterFormatting.swift']], str(source), '-o', str(executable)], check=True)
     subprocess.run([str(executable)], check=True)

@@ -51,3 +51,17 @@ No device is attached to this Linux workspace. Xcode compilation/tests run in Gi
 5. Open Fleet, inspect an aircraft, leave the tab and background the app. Compare live/stale source labels and confirm absence of data does not imply operational status.
 6. Check Live Activities enabled in iOS, each existing glass/frosted/solid preference and fallback, lock/unlock and Dynamic Island countdowns.
 7. Compare responsiveness and battery during similar duties, recording device/OS, app version, elapsed time and battery levels. Validate flight detection with actual sensor evidence; route estimates remain distinct from measured fixes.
+
+## Established native baseline
+
+Run https://github.com/bobanilic/RAIDORoster-iOS/actions/runs/39621350442 , native job 119295819643: all **75 XCTest cases passed** before production extraction (65.471 s test execution). Release/checks also passed. A separate run at 7171def passed the compiler and 73/75 cases, with two assertions in one simulated login-expiry/retry case failing. The history fixture now becomes key while running, restores the previous key window on cleanup, and includes sanitized worker diagnostics on failure. No authentication assertions were removed. Simulator selection now ranks iPhone generations rather than sorting SE above modern models by name.
+
+## Extraction 1 — roster values and formatting
+
+- `RosterModels.swift`: immutable crew, activity, roster, snapshot/change and metric models, plus their private local helpers. Stored property names, Codable synthesis and IDs are unchanged.
+- `RosterFormatting.swift`: shared roster stamp/pickup parsing, display formatting, standby labels, aircraft labels and the existing nil-if-empty helper. Only helpers actually shared with views have module access; model-only helpers stay private.
+- `RosterDayPresentation.swift`: same-date envelope aggregation and sector collection, preserving independent duty timing.
+- The Xcode application target explicitly includes all three files. Store ownership remains in RosterStore.
+- Day checks compile the complete canonical day policy. Timing checks compile the real roster models/formatting instead of string-extracted properties on incomplete model doubles. Existing assertions are retained.
+- ContentView after this extraction: **9,860 lines / 445,481 bytes**. A source-statement conservation check passes after ignoring imports, blank lines and the two required shared helper access changes. This is a maintainability change, not a measured runtime speedup.
+- Candidate release version becomes **2.29.32 / 22932** in every project configuration, including the widget.
