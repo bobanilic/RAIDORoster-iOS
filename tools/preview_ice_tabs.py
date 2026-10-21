@@ -15,6 +15,7 @@ import zipfile
 import sys
 import argparse
 from install_preview_ui_checks import install as install_ui_checks
+from simulator_devices import newest_iphone
 
 startup_cases = {
     'four-sectors': 'testFourSectorsAcrossTwoDutyGroups',
@@ -265,8 +266,7 @@ try:
             assert info.get(key) == value, f'Simulator privacy configuration differs: {key}'
     bundle = info['CFBundleIdentifier']
     devices = json.loads(run(['xcrun', 'simctl', 'list', 'devices', 'available', '-j'], capture_output=True, text=True).stdout)
-    choices = [(runtime, d) for runtime, group in devices['devices'].items() for d in group if d['name'].startswith('iPhone')]
-    runtime, device = next(((r, d) for r, d in choices if d['name'] == 'iPhone 16 Pro'), choices[0])
+    runtime, device = newest_iphone(devices['devices'])
     udid = device['udid']
     if '--startup-only' in sys.argv:
         # A fresh device has no app to uninstall. Avoid an unrelated stale

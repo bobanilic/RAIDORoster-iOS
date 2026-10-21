@@ -93,6 +93,6 @@ jobs:
           name: RAIDO-native-tests
           path: |
             RAIDORoster-Web2IPA/build/NativeTests.xcresult
-            /tmp/raido-native-tests.log
+            /tmp/raido-native-*.log
           if-no-files-found: warn
           retention-days: 7
