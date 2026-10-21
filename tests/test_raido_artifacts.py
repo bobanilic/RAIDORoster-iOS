@@ -12,6 +12,11 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 class ArtifactChecks(unittest.TestCase):
+    def binary(self, cpu=0x0100000c, platform=2, signed=False):
+        commands = struct.pack('<6I', 0x32, 24, platform, 0x110000, 0x1a0000, 0)
+        if signed: commands += struct.pack('<4I', 0x1d, 16, 0, 0)
+        return struct.pack('<8I', 0xfeedfacf, cpu, 0, 2, 2 if signed else 1, len(commands), 0, 0) + commands
+
     def make_ipa(self, root, **overrides):
         info = plistlib.loads((ROOT / 'RAIDORoster-Web2IPA/RAIDORoster/Info.plist').read_bytes())
         expected = module._version.version()
@@ -24,13 +29,13 @@ class ArtifactChecks(unittest.TestCase):
         with zipfile.ZipFile(root / 'RAIDORoster-unsigned.ipa', 'w') as archive:
             prefix = 'Payload/RAIDORoster.app/'
             archive.writestr(prefix + 'Info.plist', plistlib.dumps(info))
-            archive.writestr(prefix + 'RAIDORoster', b'\xcf\xfa\xed\xfe' + struct.pack('<I', cpu) + bytes(24))
+            archive.writestr(prefix + 'RAIDORoster', self.binary(cpu))
             widget = {'CFBundleShortVersionString':expected['version'],'CFBundleVersion':expected['build'],
                       'CFBundleExecutable':'RAIDODutyWidget','CFBundleIdentifier':'com.bobanilic.raidoroster.DutyWidget',
                       'NSExtension':{'NSExtensionPointIdentifier':'com.apple.widgetkit-extension'}}
             widget_prefix = prefix + 'PlugIns/RAIDODutyWidget.appex/'
             archive.writestr(widget_prefix+'Info.plist',plistlib.dumps(widget))
-            archive.writestr(widget_prefix+'RAIDODutyWidget',b'\xcf\xfa\xed\xfe'+struct.pack('<I',0x0100000c)+bytes(24))
+            archive.writestr(widget_prefix+'RAIDODutyWidget',self.binary())
             for name in ('RosterEnhancements.js', 'GetJetAnnouncements.json', 'OfflineLand.json',
                          'OfflinePlaceLabels.json', 'GlobalAirportIndex.json', 'AirportTimeZones.json'):
                 archive.write(ROOT / 'RAIDORoster-Web2IPA/RAIDORoster' / name, prefix + name)
@@ -41,6 +46,29 @@ class ArtifactChecks(unittest.TestCase):
             result = module.verify(root)
             self.assertEqual(result['version'], module._version.version()['version'])
             self.assertEqual(len(result['artifacts'][0]['sha256']), 64)
+            self.assertEqual(result['signing'], 'unsigned')
+
+    def test_rejects_arm64_simulator_and_signed_or_malformed_binaries(self):
+        for value in [self.binary(platform=7), self.binary(signed=True), self.binary()[:-1],
+                      struct.pack('<8I', 0xfeedfacf, 0x0100000c, 0, 2, 1, 0, 0, 0)]:
+            with self.subTest(binary=value):
+                self.assertFalse(module.arm64_device_binary(value))
+        for magic, fmt in [(0xcafebabe, '>IIIII'), (0xcafebabf, '>IIQQII')]:
+            header = struct.pack('>II', magic, 1)
+            size = struct.calcsize(fmt)
+            value = self.binary()
+            fields = [0x0100000c, 0, 8 + size, len(value), 0] + ([0] if magic == 0xcafebabf else [])
+            fat = header + struct.pack(fmt, *fields) + value
+            self.assertTrue(module.arm64_device_binary(fat))
+            self.assertFalse(module.arm64_device_binary(fat[:-1]))
+
+    def test_rejects_signing_material(self):
+        for name in ['_CodeSignature/CodeResources', 'embedded.mobileprovision']:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory); self.make_ipa(root)
+                with zipfile.ZipFile(root / 'RAIDORoster-unsigned.ipa', 'a') as archive:
+                    archive.writestr('Payload/RAIDORoster.app/' + name, b'signing material')
+                with self.assertRaisesRegex(ValueError, 'unsigned'): module.verify(root)
 
     def test_rejects_invalid_metadata_or_configuration(self):
         for changes in ({'CFBundleShortVersionString': '0.0.1'}, {'CFBundleVersion': '0'},
