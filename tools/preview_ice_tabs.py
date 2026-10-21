@@ -37,6 +37,8 @@ content = root / 'RAIDORoster/ContentView.swift'
 app = root / 'RAIDORoster/RAIDORosterApp.swift'
 announcement_view = root / 'RAIDORoster/AnnouncementsView.swift'
 original_content, original_app = content.read_text(), app.read_text()
+fleet_source = root / 'RAIDORoster/FleetView.swift'
+original_fleet = fleet_source.read_text()
 store_source = root / 'RAIDORoster/RosterStore.swift'
 original_store = store_source.read_text()
 original_announcements = announcement_view.read_text()
@@ -210,7 +212,7 @@ try:
     if '--startup-only' not in sys.argv:
         generated = generated.replace('private var todayMapSource = "auto"', 'private var todayMapSource = "offline"')
     # Display all Fleet definitions immediately, without polling or network data.
-    generated = generated.replace('@State private var showOtherFleet = false', '@State private var showOtherFleet = true')
+    fleet_source.write_text(original_fleet.replace('@State private var showOtherFleet = false', '@State private var showOtherFleet = true'))
     fixture, preview_views = preview.split('struct IcePreviewRoot: View {', 1)
     store_source.write_text(original_store + fixture)
     content.write_text(generated + 'struct IcePreviewRoot: View {' + preview_views)
@@ -384,6 +386,7 @@ finally:
         if report.is_file(): shutil.copy(report, Path('/tmp') / ('raido-ice-crash-' + report.name))
     stderr = Path('/tmp/raido-ice-app-stderr.log')
     if stderr.exists(): print(stderr.read_text(errors='replace')[-6000:])
+    fleet_source.write_text(original_fleet)
     content.write_text(original_content); app.write_text(original_app)
     store_source.write_text(original_store)
     announcement_view.write_text(original_announcements)
