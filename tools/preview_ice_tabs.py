@@ -16,6 +16,7 @@ import sys
 import argparse
 from install_preview_ui_checks import install as install_ui_checks
 from simulator_devices import newest_iphone
+from ui_test_runner import run_startup_tests
 
 startup_cases = {
     'four-sectors': 'testFourSectorsAcrossTwoDutyGroups',
@@ -289,17 +290,15 @@ try:
     if '--startup-only' in sys.argv:
         cases = [startup_cases[options.startup_case]] if options.startup_case else list(startup_cases.values())
         result = '/tmp/raido-startup-' + (options.startup_case or 'all') + '.xcresult'
-        with open('/tmp/raido-startup-ui-tests.log','w') as log:
-            try:
-                run(['xcodebuild','-project',str(project),'-scheme','RAIDOMapChecks','-configuration','Debug',
-                    '-destination','platform=iOS Simulator,id='+udid,'-derivedDataPath','/tmp/raido-ice-preview',
-                    '-parallel-testing-enabled','NO','CODE_SIGNING_ALLOWED=YES','CODE_SIGNING_REQUIRED=NO',
-                    'CODE_SIGN_STYLE=Manual','CODE_SIGN_IDENTITY=-','AD_HOC_CODE_SIGNING_ALLOWED=YES',
-                    '-resultBundlePath', result,
-                    *['-only-testing:RAIDOMapChecks/MapGestureUITests/' + case for case in cases],
-                    'test-without-building'],stdout=log,stderr=subprocess.STDOUT,timeout=900)
-            except (subprocess.CalledProcessError,subprocess.TimeoutExpired):
-                print(Path(log.name).read_text()[-12000:]);raise
+        log = Path('/tmp/raido-startup-ui-tests.log')
+        try:
+            run_startup_tests(['xcodebuild','-project',str(project),'-scheme','RAIDOMapChecks','-configuration','Debug',
+                '-destination','platform=iOS Simulator,id='+udid,'-derivedDataPath','/tmp/raido-ice-preview',
+                '-parallel-testing-enabled','NO','CODE_SIGNING_ALLOWED=YES','CODE_SIGNING_REQUIRED=NO',
+                'CODE_SIGN_STYLE=Manual','CODE_SIGN_IDENTITY=-','AD_HOC_CODE_SIGNING_ALLOWED=YES',
+                *['-only-testing:RAIDOMapChecks/MapGestureUITests/' + case for case in cases]], log, result, budget=900)
+        except (subprocess.CalledProcessError,subprocess.TimeoutExpired,RuntimeError):
+            print(log.read_text()[-12000:]);raise
         print('Passed startup scenarios: ' + ', '.join(cases),flush=True)
         sys.exit(0)
     combinations = [(theme, palette, mode, tab)
