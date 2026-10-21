@@ -15,7 +15,7 @@ import zipfile
 import sys
 import argparse
 from install_preview_ui_checks import install as install_ui_checks
-from simulator_devices import newest_iphone
+from simulator_devices import BOOT_TIMEOUT_SECONDS, newest_iphone
 from ui_test_runner import run_startup_tests
 
 startup_cases = {
@@ -42,6 +42,8 @@ fleet_source = root / 'RAIDORoster/FleetView.swift'
 original_fleet = fleet_source.read_text()
 store_source = root / 'RAIDORoster/RosterStore.swift'
 original_store = store_source.read_text()
+priority_source = root / 'RAIDORoster/TodayPriorityViews.swift'
+original_priority = priority_source.read_text()
 original_announcements = announcement_view.read_text()
 project = root / 'RAIDORoster.xcodeproj'
 original_project = (project / 'project.pbxproj').read_bytes()
@@ -217,6 +219,18 @@ try:
     fixture, preview_views = preview.split('struct IcePreviewRoot: View {', 1)
     store_source.write_text(original_store + fixture)
     content.write_text(generated + 'struct IcePreviewRoot: View {' + preview_views)
+    # Disposable host diagnostics contain counts and lifecycle state only. They
+    # distinguish a missing synthetic event from an inactive leaf in xcresult.
+    marker = '            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in'
+    assert original_priority.count(marker) == 1
+    diagnostic = '''            .onAppear {
+                print("Synthetic priority leaf: activeTab=\\(tabActive), scene=\\(scenePhase), events=\\(store.todayPriorityEvents(at: Date()).count)")
+            }
+            .onChange(of: scenePhase) { _, value in
+                print("Synthetic priority scene: \\(value)")
+            }
+'''
+    priority_source.write_text(original_priority.replace(marker, diagnostic + marker))
     host = original_app.replace('ContentView()', 'Group { if ProcessInfo.processInfo.arguments.contains("--startup") { ContentView() } else { IcePreviewRoot() } }')
     host = host.replace('        RaidoAppearancePreferences.migrate(.standard)', '''
         let args = ProcessInfo.processInfo.arguments
@@ -243,6 +257,12 @@ try:
                 UserDefaults.standard.removeObject(forKey: "RAIDORoster.LastPortalURL")
             } else if !args.contains("--reuse-startup-cache") {
                 fixture.installIceFixture();fixture.persistStartupFixture()
+                if args.contains("--priorities"), !args.contains("--off-day") {
+                    let restored = RosterStore(automaticSideEffects: false)
+                    let events = restored.todayPriorityEvents(at: Date())
+                    precondition(events.contains { $0.kind == .pickup }, "Synthetic cached priority fixture must contain pickup")
+                    print("Synthetic cached priority fixture: \\(events.count) events")
+                }
             }
         }''')
     app.write_text(host)
@@ -280,7 +300,7 @@ try:
     # Finish boot outside the XCTest watchdog, as the native runner does.
     if ephemeral_simulator or device['state'] != 'Booted':
         run(['xcrun', 'simctl', 'boot', udid], timeout=60)
-    run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], timeout=240)
+    run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], timeout=BOOT_TIMEOUT_SECONDS)
     if '--startup-only' not in sys.argv:
         run(['xcrun', 'simctl', 'install', udid, str(product)], timeout=90)
         run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '06:44', '--batteryState', 'charged', '--batteryLevel', '100'])
@@ -388,6 +408,7 @@ finally:
     fleet_source.write_text(original_fleet)
     content.write_text(original_content); app.write_text(original_app)
     store_source.write_text(original_store)
+    priority_source.write_text(original_priority)
     announcement_view.write_text(original_announcements)
     (project / 'project.pbxproj').write_bytes(original_project)
     if test_scheme is not None: test_scheme.unlink(missing_ok=True)

@@ -5,7 +5,7 @@ import platform
 import subprocess
 import sys
 import time
-from simulator_devices import newest_iphone
+from simulator_devices import BOOT_TIMEOUT_SECONDS, newest_iphone
 
 root = Path(__file__).resolve().parents[1]
 result = root / 'RAIDORoster-Web2IPA/build/NativeTests.xcresult'
@@ -43,7 +43,7 @@ try:
     print(f"Testing all native cases in {device['name']} ({runtime})", flush=True)
     if device['state'] != 'Booted':
         stage('boot', ['xcrun', 'simctl', 'boot', device['udid']], 60)
-    stage('bootstatus', ['xcrun', 'simctl', 'bootstatus', device['udid'], '-b'], 240)
+    stage('bootstatus', ['xcrun', 'simctl', 'bootstatus', device['udid'], '-b'], BOOT_TIMEOUT_SECONDS)
     stage('tests', common + ['-destination', f"platform=iOS Simulator,id={device['udid']}",
                             '-resultBundlePath', str(result), 'test-without-building'], 30 * 60)
 finally:

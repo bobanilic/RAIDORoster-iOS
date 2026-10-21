@@ -16,9 +16,12 @@ class SimulatorSelectionTests(unittest.TestCase):
                    'iOS-26-2': [self.device('iPhone 17 Pro Max')]}
         self.assertEqual(module.newest_iphone(choices)[0], 'iOS-26-2')
 
-    def test_phone_generation_precedes_alphabetical_se_name(self):
+    def test_validated_profile_then_generation_precede_alphabetical_se_name(self):
         choices = {'iOS-26-2': [self.device('iPhone SE (3rd generation)'), self.device('iPhone 17'),
-                               self.device('iPhone 17 Pro Max'), self.device('iPhone 17 Pro')]}
+                               self.device('iPhone 17 Pro Max'), self.device('iPhone 17 Pro'),
+                               self.device('iPhone 16 Pro')]}
+        self.assertEqual(module.newest_iphone(choices)[1]['name'], 'iPhone 16 Pro')
+        choices['iOS-26-2'].pop()
         self.assertEqual(module.newest_iphone(choices)[1]['name'], 'iPhone 17 Pro Max')
 
     def test_unavailable_phones_and_other_platforms_are_excluded(self):
