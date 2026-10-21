@@ -36,8 +36,7 @@ class ArtifactChecks(unittest.TestCase):
             widget_prefix = prefix + 'PlugIns/RAIDODutyWidget.appex/'
             archive.writestr(widget_prefix+'Info.plist',plistlib.dumps(widget))
             archive.writestr(widget_prefix+'RAIDODutyWidget',self.binary())
-            for name in ('RosterEnhancements.js', 'GetJetAnnouncements.json', 'OfflineLand.json',
-                         'OfflinePlaceLabels.json', 'GlobalAirportIndex.json', 'AirportTimeZones.json'):
+            for name in module.RESOURCES:
                 archive.write(ROOT / 'RAIDORoster-Web2IPA/RAIDORoster' / name, prefix + name)
 
     def test_version_and_hash(self):
@@ -47,6 +46,8 @@ class ArtifactChecks(unittest.TestCase):
             self.assertEqual(result['version'], module._version.version()['version'])
             self.assertEqual(len(result['artifacts'][0]['sha256']), 64)
             self.assertEqual(result['signing'], 'unsigned')
+            self.assertEqual(set(result['resourceSHA256']), set(module.RESOURCES))
+            self.assertTrue(all(len(value) == 64 for value in result['resourceSHA256'].values()))
 
     def test_rejects_arm64_simulator_and_signed_or_malformed_binaries(self):
         for value in [self.binary(platform=7), self.binary(signed=True), self.binary()[:-1],

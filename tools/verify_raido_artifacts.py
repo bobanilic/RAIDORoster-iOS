@@ -11,6 +11,9 @@ import subprocess
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+RESOURCES = ('RosterEnhancements.js', 'GetJetAnnouncements.json', 'OfflineLand.json',
+             'OfflinePlaceLabels.json', 'GlobalAirportIndex.json', 'AirportTimeZones.json',
+             'ThirdPartyNotices.txt')
 spec = importlib.util.spec_from_file_location('raido_version', Path(__file__).with_name('version.py'))
 _version = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(_version)
@@ -108,10 +111,12 @@ def verify(root: Path, expected_version=None, expected_build=None) -> dict:
             raise ValueError('Invalid Lock Screen extension point')
         if widget.get('CFBundleIdentifier') != 'com.bobanilic.raidoroster.DutyWidget':
             raise ValueError('Invalid Lock Screen extension identifier')
-        for resource in ('RosterEnhancements.js', 'GetJetAnnouncements.json', 'OfflineLand.json',
-                         'OfflinePlaceLabels.json', 'GlobalAirportIndex.json', 'AirportTimeZones.json'):
-            if archive.read(prefix + resource) != (ROOT / 'RAIDORoster-Web2IPA/RAIDORoster' / resource).read_bytes():
+        resource_hashes = {}
+        for resource in RESOURCES:
+            source = (ROOT / 'RAIDORoster-Web2IPA/RAIDORoster' / resource).read_bytes()
+            if archive.read(prefix + resource) != source:
                 raise ValueError(f'Packaged resource differs from committed source: {resource}')
+            resource_hashes[resource] = hashlib.sha256(source).hexdigest()
     try:
         sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     except (OSError, subprocess.CalledProcessError):
@@ -121,6 +126,7 @@ def verify(root: Path, expected_version=None, expected_build=None) -> dict:
     return {'version': release, 'build': build, 'commit': sha,
             'platform': 'iPhoneOS', 'architecture': 'arm64', 'signing': 'unsigned',
             'widgetExtension': 'RAIDODutyWidget.appex', 'resourcesMatchSource': True,
+            'resourceSHA256': resource_hashes,
             'artifacts': [{'name': ipa.name, 'bytes': ipa.stat().st_size,
                            'sha256': hashlib.sha256(ipa.read_bytes()).hexdigest()}]}
 

@@ -65,3 +65,25 @@ Run https://github.com/bobanilic/RAIDORoster-iOS/actions/runs/39621350442 , nati
 - Day checks compile the complete canonical day policy. Timing checks compile the real roster models/formatting instead of string-extracted properties on incomplete model doubles. Existing assertions are retained.
 - ContentView after this extraction: **9,860 lines / 445,481 bytes**. A source-statement conservation check passes after ignoring imports, blank lines and the two required shared helper access changes. This is a maintainability change, not a measured runtime speedup.
 - Candidate release version becomes **2.29.32 / 22932** in every project configuration, including the widget.
+
+Extraction 1 verification: https://github.com/bobanilic/RAIDORoster-iOS/actions/runs/39626216986 , release job 119312050304. Full Python/Swift checks, application/widget Release compilation, packaging and verification passed. In particular: 7 day-envelope, 24 pickup/minute-schedule, 71 Today priority/DST/reminder, 16 Fleet responsiveness, 46 Fleet tracking and the actual store cancellation/cache checks passed. Warning categories match the baseline; no new isolation warning was reported in Release.
+
+## Extraction 2 — Fleet
+
+- `FleetModels.swift` (184 lines before imports/formatting follow-ups): catalogue, cached observation and history values, public-observation intelligence and announcement airline resolution.
+- `FleetLiveStore.swift` (567 lines): the existing main-actor store, its private provider DTOs and private cache-writer actor.
+- `FleetView.swift` (834 lines before explicit import follow-up): existing feature view, private detail/row/photo views and formatting.
+- The store, model values and distance helper are internal only where the extracted files actually share them. Provider implementation and view-specific types remain private. `IcePageHeading` is an existing shared presentation component and now has module access.
+- The exact store models, store and networking policies compile in the CLI fake-URLProtocol checks, replacing the previous large declaration slice from ContentView. Announcement selection likewise compiles the canonical Fleet models/resolver. The preview-only Fleet toggle follows its new source file and is restored in `finally`.
+- No Fleet provider, identity, timestamp, caching, backoff, refresh, cancellation or history algorithm was changed. No old branch was merged. All production statements are conserved after normalizing imports, blank lines and necessary access modifiers.
+- ContentView after Fleet extraction: **8,287 lines / 370,389 bytes**.
+
+## Separate hardening changes
+
+These are separate from moving declarations:
+
+- Pickup nominal-local conversion reused a new DateFormatter for each nonempty local anchor, with exactly the same fixed-format Gregorian/POSIX/GMT settings as RosterTimestamp. It now calls the existing bounded parser. LT/UTC anchor offset calculation and stored timestamps remain unchanged. This removes redundant formatter construction; there is no measured device latency, FPS or energy claim.
+- UI runner recovery is limited to one repeat after the specific accessibility-initialization failure when no test case started. Both logs and xcresults are retained within the original 900 s total command budget. Assertion failures and other failures do not trigger that recovery. A zero-test or wrong-test success cannot be reported as a pass. Functional tests cover the retry boundary and budget.
+- Verification now includes the bundled third-party notice text and records individual resource SHA-256 values, in addition to exact parser/JSON comparisons.
+
+The pre-extraction UI baseline also passed the public mobile-login interaction and four-sector scenarios in run 39621350442. Its responsiveness job failed before any test case entered because the UI test runner timed out waiting for accessibility initialization. That setup failure is distinct from an application responsiveness assertion.
