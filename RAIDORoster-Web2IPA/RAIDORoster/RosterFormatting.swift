@@ -1,13 +1,9 @@
 import Foundation
 
 private func parseNominalLocalStamp(_ value: String) -> Date? {
-    guard !value.isEmpty else { return nil }
-    let formatter = DateFormatter()
-    formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.timeZone = TimeZone(secondsFromGMT: 0)
-    formatter.dateFormat = "yyyy-MM-dd HH:mm"
-    return formatter.date(from: value)
+    // This is intentionally a nominal GMT stamp; the paired LT/UTC anchors
+    // supply the offset below. Reuse the identical bounded roster parser.
+    RosterTimestamp.parse(value)
 }
 
 func pickupUTCDate(for activity: RosterActivity) -> Date? {
