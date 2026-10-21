@@ -57,6 +57,19 @@ import XCTest
         let app = XCUIApplication(bundleIdentifier: "com.bobanilic.raidoroster")
         app.launchArguments = ["--startup", "--today-return", "--priorities", "--theme=ice", "--mode=dark"]
         app.launch()
+        // A first-run Flight Companion location prompt makes scenePhase
+        // inactive. This scenario exercises cached UI without GPS permission;
+        // answer the system prompt before asserting the active priority leaf.
+        let systemAlert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        if systemAlert.waitForExistence(timeout: 5) {
+            XCTAssertTrue(systemAlert.staticTexts.matching(NSPredicate(format:
+                "label CONTAINS[c] %@", "use your location")).firstMatch.exists,
+                "Only the expected location prompt may be dismissed")
+            let deny = systemAlert.buttons.matching(NSPredicate(format:
+                "label IN %@", ["Don’t Allow", "Don't Allow"])).firstMatch
+            XCTAssertTrue(deny.exists)
+            deny.tap()
+        }
         let tabs = app.tabBars.firstMatch
         let handle = app.buttons["today-map-handle"]
         XCTAssertTrue(handle.waitForExistence(timeout: 15))
