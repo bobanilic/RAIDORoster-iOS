@@ -43,10 +43,10 @@ jobs:
       fail-fast: false
       matrix:
         scenario: [four-sectors, login, responsiveness, today-return]
-    # Use the validated ARM host for latency-sensitive UI/AX interactions.
-    # Keep four sectors on Intel as cross-architecture coverage; test/toolchain
-    # and execution/result bounds remain identical on both hosts.
-    runs-on: ${{ matrix.scenario == 'four-sectors' && 'macos-15-intel' || 'macos-15' }}
+    # Use the validated ARM host for all simulator UI/AX interactions. Intel
+    # also failed to boot the four-sector device before any test could begin.
+    # Release and native jobs retain Intel coverage with the same Xcode.
+    runs-on: macos-15
     # Two bounded 15 min UI attempts (only one AX setup recovery), plus
     # build/boot, result inspection, simulator deletion and artifact upload.
     timeout-minutes: 50

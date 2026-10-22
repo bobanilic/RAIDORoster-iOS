@@ -99,3 +99,35 @@ After this test-only synchronization correction, require a new full workflow
 and one fresh confirmation of each affected scenario. The failed confirmation
 is retained, not retried unchanged or marked as passing. The proposed change
 must not merge while a required job remains unsuccessful.
+
+## Intel control failed before UI testing
+
+At `f48c0ac`, [run 39814007425](https://github.com/bobanilic/RAIDORoster-iOS/actions/runs/39814007425)
+passed release verification, all 75 native tests and all three ARM UI scenarios.
+Login completed on its first command in 485.935 s; its finalized bundle reports
+Passed 1 / Failed 0 / Skipped 0, all three readiness markers, 66.977 s test-case
+execution and no missing-idle warnings. Responsiveness completed its first
+command in 298.038 s; Today completed in 376.912 s. Their completed result
+bundles were verified. The new readiness correction did not remove assertions.
+
+The remaining [four-sector Intel job 119951254017](https://github.com/bobanilic/RAIDORoster-iOS/actions/runs/39814007425/job/119951254017)
+never entered XCTest: simulator `bootstatus` timed out after 360.527 s, then
+shutdown and deletion also exceeded their separate 30 s limits (32.693 s and
+36.317 s observed). Artifact 12442822453 retains the build and provisioning
+logs. This is a failed simulator provisioning job, not a passed four-sector
+case, assertion failure, or demonstrated application regression. The overall
+workflow is correctly failed. GitHub also reported an Actions degradation
+during this run, delaying job-state updates; that does not establish the cause
+of this host-local boot failure.
+
+Use `macos-15` ARM for the entire UI matrix, which has now demonstrated a
+successful boot and completed test in every other UI scenario. Keep release
+and the full native suite on Intel, preserving cross-architecture validation.
+The earlier choice to retain four sectors on Intel was a control; this new
+boot failure justifies removing that remaining UI-host dependency. Do not
+increase its boot limit, skip its assertions, or retry the failed job unchanged.
+
+Require a full green workflow on this configuration before merging. The
+automatic post-merge workflow supplies the independent fresh-run confirmation
+for all UI scenarios, avoiding separate serialized reruns of the same jobs.
+No production files or version/build metadata change.
