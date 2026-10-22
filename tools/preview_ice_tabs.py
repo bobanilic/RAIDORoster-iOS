@@ -13,7 +13,22 @@ import time
 import shutil
 import zipfile
 import sys
+import argparse
 from install_preview_ui_checks import install as install_ui_checks
+from simulator_devices import BOOT_TIMEOUT_SECONDS, newest_iphone
+from ui_test_runner import run_startup_tests
+
+startup_cases = {
+    'four-sectors': 'testFourSectorsAcrossTwoDutyGroups',
+    'login': 'testCleanInstallMobileLoginAndReturnToTabs',
+    'responsiveness': 'testProductionLaunchAndTabResponsiveness',
+    'today-return': 'testTodayReturnWithAutomaticMapAndNotificationsDisabled',
+}
+parser = argparse.ArgumentParser()
+parser.add_argument('--startup-case', choices=startup_cases)
+options, _ = parser.parse_known_args()
+if options.startup_case and '--startup-only' not in sys.argv:
+    parser.error('--startup-case requires --startup-only')
 
 root = Path(__file__).resolve().parents[1] / 'RAIDORoster-Web2IPA'
 ipa = root / 'RAIDORoster-unsigned.ipa'
@@ -23,8 +38,12 @@ content = root / 'RAIDORoster/ContentView.swift'
 app = root / 'RAIDORoster/RAIDORosterApp.swift'
 announcement_view = root / 'RAIDORoster/AnnouncementsView.swift'
 original_content, original_app = content.read_text(), app.read_text()
+fleet_source = root / 'RAIDORoster/FleetView.swift'
+original_fleet = fleet_source.read_text()
 store_source = root / 'RAIDORoster/RosterStore.swift'
 original_store = store_source.read_text()
+priority_source = root / 'RAIDORoster/TodayPriorityViews.swift'
+original_priority = priority_source.read_text()
 original_announcements = announcement_view.read_text()
 project = root / 'RAIDORoster.xcodeproj'
 original_project = (project / 'project.pbxproj').read_bytes()
@@ -173,7 +192,30 @@ struct IcePreviewRoot: View {
 '''
 
 def run(args, **kwargs):
-    return subprocess.run(args, check=True, **kwargs)
+    # Keep provisioning/build/cleanup timestamps separate from buffered XCTest
+    # output, whose CI upload timestamp is not its execution timestamp.
+    label = ' '.join(str(value) for value in args[:4])
+    started = time.monotonic()
+    def phase(message):
+        line = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()) + ' ' + message
+        print(line, flush=True)
+        with Path('/tmp/raido-simulator-phases.log').open('a') as log:
+            log.write(line + '\n')
+    phase('Started: ' + label)
+    kwargs.setdefault('check', True)
+    outcome = 'interrupted'
+    try:
+        result = subprocess.run(args, **kwargs)
+        outcome = 'exit=' + str(result.returncode)
+        return result
+    except subprocess.CalledProcessError as error:
+        outcome = 'exit=' + str(error.returncode)
+        raise
+    except subprocess.TimeoutExpired:
+        outcome = 'timed out'
+        raise
+    finally:
+        phase(f'Ended: {label}; {outcome}; elapsed={time.monotonic() - started:.3f}s')
 
 try:
     # Exercise the same selectSector action used by the actual Flight picker.
@@ -196,10 +238,22 @@ try:
     if '--startup-only' not in sys.argv:
         generated = generated.replace('private var todayMapSource = "auto"', 'private var todayMapSource = "offline"')
     # Display all Fleet definitions immediately, without polling or network data.
-    generated = generated.replace('@State private var showOtherFleet = false', '@State private var showOtherFleet = true')
+    fleet_source.write_text(original_fleet.replace('@State private var showOtherFleet = false', '@State private var showOtherFleet = true'))
     fixture, preview_views = preview.split('struct IcePreviewRoot: View {', 1)
     store_source.write_text(original_store + fixture)
     content.write_text(generated + 'struct IcePreviewRoot: View {' + preview_views)
+    # Disposable host diagnostics contain counts and lifecycle state only. They
+    # distinguish a missing synthetic event from an inactive leaf in xcresult.
+    marker = '            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in'
+    assert original_priority.count(marker) == 1
+    diagnostic = '''            .onAppear {
+                print("Synthetic priority leaf: activeTab=\\(tabActive), scene=\\(scenePhase), events=\\(store.todayPriorityEvents(at: Date()).count)")
+            }
+            .onChange(of: scenePhase) { _, value in
+                print("Synthetic priority scene: \\(value)")
+            }
+'''
+    priority_source.write_text(original_priority.replace(marker, diagnostic + marker))
     host = original_app.replace('ContentView()', 'Group { if ProcessInfo.processInfo.arguments.contains("--startup") { ContentView() } else { IcePreviewRoot() } }')
     host = host.replace('        RaidoAppearancePreferences.migrate(.standard)', '''
         let args = ProcessInfo.processInfo.arguments
@@ -226,6 +280,12 @@ try:
                 UserDefaults.standard.removeObject(forKey: "RAIDORoster.LastPortalURL")
             } else if !args.contains("--reuse-startup-cache") {
                 fixture.installIceFixture();fixture.persistStartupFixture()
+                if args.contains("--priorities"), !args.contains("--off-day") {
+                    let restored = RosterStore(automaticSideEffects: false)
+                    let events = restored.todayPriorityEvents(at: Date())
+                    precondition(events.contains { $0.kind == .pickup }, "Synthetic cached priority fixture must contain pickup")
+                    print("Synthetic cached priority fixture: \\(events.count) events")
+                }
             }
         }''')
     app.write_text(host)
@@ -252,8 +312,7 @@ try:
             assert info.get(key) == value, f'Simulator privacy configuration differs: {key}'
     bundle = info['CFBundleIdentifier']
     devices = json.loads(run(['xcrun', 'simctl', 'list', 'devices', 'available', '-j'], capture_output=True, text=True).stdout)
-    choices = [(runtime, d) for runtime, group in devices['devices'].items() for d in group if d['name'].startswith('iPhone')]
-    runtime, device = next(((r, d) for r, d in choices if d['name'] == 'iPhone 16 Pro'), choices[0])
+    runtime, device = newest_iphone(devices['devices'])
     udid = device['udid']
     if '--startup-only' in sys.argv:
         # A fresh device has no app to uninstall. Avoid an unrelated stale
@@ -261,29 +320,29 @@ try:
         udid = run(['xcrun', 'simctl', 'create', 'RAIDO-startup-checks', device['deviceTypeIdentifier'], runtime],
                    capture_output=True, text=True, timeout=60).stdout.strip()
         ephemeral_simulator = udid
+    # Finish boot outside the XCTest watchdog, as the native runner does.
+    if ephemeral_simulator or device['state'] != 'Booted':
+        run(['xcrun', 'simctl', 'boot', udid], timeout=60)
+    run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], timeout=BOOT_TIMEOUT_SECONDS)
     if '--startup-only' not in sys.argv:
-        if device['state'] != 'Booted': run(['xcrun', 'simctl', 'boot', udid], timeout=60)
-        run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], timeout=240)
         run(['xcrun', 'simctl', 'install', udid, str(product)], timeout=90)
         run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '06:44', '--batteryState', 'charged', '--batteryLevel', '100'])
     # For startup checks XCTest installs/boots the app and runner together, as
     # in the passing native suite. A separate simctl install was hanging before
-    # any UI test ran. The test command and job retain their existing limits.
+    # any UI test ran. UI execution and its one AX recovery have separate bounds.
     if '--startup-only' in sys.argv:
-        with open('/tmp/raido-startup-ui-tests.log','w') as log:
-            try:
-                run(['xcodebuild','-project',str(project),'-scheme','RAIDOMapChecks','-configuration','Debug',
-                    '-destination','platform=iOS Simulator,id='+udid,'-derivedDataPath','/tmp/raido-ice-preview',
-                    '-parallel-testing-enabled','NO','CODE_SIGNING_ALLOWED=YES','CODE_SIGNING_REQUIRED=NO',
-                    'CODE_SIGN_STYLE=Manual','CODE_SIGN_IDENTITY=-','AD_HOC_CODE_SIGNING_ALLOWED=YES',
-                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testFourSectorsAcrossTwoDutyGroups',
-                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testCleanInstallMobileLoginAndReturnToTabs',
-                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testProductionLaunchAndTabResponsiveness',
-                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testTodayReturnWithAutomaticMapAndNotificationsDisabled',
-                    'test-without-building'],stdout=log,stderr=subprocess.STDOUT,timeout=900)
-            except (subprocess.CalledProcessError,subprocess.TimeoutExpired):
-                print(Path(log.name).read_text()[-12000:]);raise
-        print('Passed clean-install mobile login, production launch, tab taps, foreground return and toast dismissal',flush=True)
+        cases = [startup_cases[options.startup_case]] if options.startup_case else list(startup_cases.values())
+        result = '/tmp/raido-startup-' + (options.startup_case or 'all') + '.xcresult'
+        log = Path('/tmp/raido-startup-ui-tests.log')
+        try:
+            run_startup_tests(['xcodebuild','-project',str(project),'-scheme','RAIDOMapChecks','-configuration','Debug',
+                '-destination','platform=iOS Simulator,id='+udid,'-derivedDataPath','/tmp/raido-ice-preview',
+                '-parallel-testing-enabled','NO','CODE_SIGNING_ALLOWED=YES','CODE_SIGNING_REQUIRED=NO',
+                'CODE_SIGN_STYLE=Manual','CODE_SIGN_IDENTITY=-','AD_HOC_CODE_SIGNING_ALLOWED=YES',
+                *['-only-testing:RAIDOMapChecks/MapGestureUITests/' + case for case in cases]], log, result)
+        except (subprocess.CalledProcessError,subprocess.TimeoutExpired,RuntimeError):
+            print(log.read_text()[-12000:]);raise
+        print('Passed startup scenarios: ' + ', '.join(cases),flush=True)
         sys.exit(0)
     combinations = [(theme, palette, mode, tab)
         for theme in ['ice', 'getJet'] for palette in ['iceBlue', 'forestGreen', 'midnightChampagne', 'burgundyRose', 'espressoBronze']
@@ -362,15 +421,17 @@ finally:
     if ephemeral_simulator:
         for action in ['shutdown', 'delete']:
             try:
-                subprocess.run(['xcrun', 'simctl', action, ephemeral_simulator], check=False, timeout=30)
+                run(['xcrun', 'simctl', action, ephemeral_simulator], check=False, timeout=30)
             except subprocess.TimeoutExpired:
                 print('Temporary simulator ' + action + ' timed out; runner cleanup will finish it', file=sys.stderr)
     for report in (Path.home() / 'Library/Logs/DiagnosticReports').glob('RAIDORoster*'):
         if report.is_file(): shutil.copy(report, Path('/tmp') / ('raido-ice-crash-' + report.name))
     stderr = Path('/tmp/raido-ice-app-stderr.log')
     if stderr.exists(): print(stderr.read_text(errors='replace')[-6000:])
+    fleet_source.write_text(original_fleet)
     content.write_text(original_content); app.write_text(original_app)
     store_source.write_text(original_store)
+    priority_source.write_text(original_priority)
     announcement_view.write_text(original_announcements)
     (project / 'project.pbxproj').write_bytes(original_project)
     if test_scheme is not None: test_scheme.unlink(missing_ok=True)

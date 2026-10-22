@@ -11,7 +11,7 @@ final class TodayPriorityTests: XCTestCase {
     }
     func testPrecautionUsesFirstDailyReportAndWaitsForFinalRelease() throws {
         try store { store in
-            func flight(_ id: String, _ day: String, _ start: String, _ end: String) -> [String: Any] {
+            @MainActor func flight(_ id: String, _ day: String, _ start: String, _ end: String) -> [String: Any] {
                 var value = activity(id: id, category: "FLIGHT", day: day)
                 value["startUTC"] = day+" "+start; value["checkInUTC"] = day+" "+start
                 value["endUTC"] = day+" "+end; value["checkOutUTC"] = day+" "+end

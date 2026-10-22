@@ -1,15 +1,10 @@
-"""Check the actual generated aircraft catalogue and announcement resolver."""
+"""Check the canonical aircraft catalogue and announcement resolver."""
 from pathlib import Path
 import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parents[1]
 app = root / 'RAIDORoster-Web2IPA/RAIDORoster'
-content = (app / 'ContentView.swift').read_text()
-a = content.index('private struct FleetAircraftDefinition:')
-b = content.index('\nprivate struct FleetLiveSnapshot:', a)
-c = content.index('func announcementAirline(registration: String) -> AnnouncementAirline {')
-d = content.index('\n}', c) + 2
 checks = '''
 @main struct Checks {
     static func main() throws {
@@ -25,13 +20,13 @@ checks = '''
             precondition(announcementAirline(registration: aircraft.registration) == expected)
             precondition(announcementAirline(registration: aircraft.registration.replacingOccurrences(of: "-", with: "")) == expected)
         }
-        print("Passed actual generated announcement selection: \\(FleetAircraftDefinition.all.count) aircraft, compact tails, unknown tails, offline scripts")
+        print("Passed canonical announcement selection: \\(FleetAircraftDefinition.all.count) aircraft, compact tails, unknown tails, offline scripts")
     }
 }
 '''
 with tempfile.TemporaryDirectory(prefix='announcement-selection-') as directory:
     source = Path(directory) / 'Checks.swift'
-    source.write_text('import Foundation\n' + content[a:b] + '\n' + content[c:d] + '\n' + checks)
+    source.write_text('import Foundation\n' + checks)
     executable = Path(directory) / 'checks'
-    subprocess.run(['swiftc', str(app / 'AnnouncementModels.swift'), str(source), '-o', str(executable)], check=True)
+    subprocess.run(['swiftc', str(app / 'AnnouncementModels.swift'), str(app / 'FleetModels.swift'), str(app / 'FleetTrackingPolicy.swift'), str(source), '-o', str(executable)], check=True)
     subprocess.run([str(executable), str(app / 'GetJetAnnouncements.json')], check=True)

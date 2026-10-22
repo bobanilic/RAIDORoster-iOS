@@ -282,8 +282,8 @@ final class RosterMonthCacheTests: XCTestCase {
         fixture.mode = .direct
         fixture.worker.start(source:fixture.source,force:true)
         try await fixture.finished()
-        XCTAssertNotNil(fixture.store.monthSnapshots["2026-07"])
-        XCTAssertFalse(fixture.worker.needsRetry)
+        XCTAssertNotNil(fixture.store.monthSnapshots["2026-07"], fixture.worker.diagnosticText)
+        XCTAssertFalse(fixture.worker.needsRetry, fixture.worker.diagnosticText)
     }
     func testYearSelectorMayResetToJanuary() async throws {
         let fixture = try HistoryFixture(mode:.selectorsReset,target:"2025-07")
@@ -351,12 +351,16 @@ private final class HistoryFixture {
     var mode: Mode
     var loads = 0
     var worker: RosterOfflineCache!
+    private weak var previousKeyWindow: UIWindow?
     init(mode: Mode, target: String = "2026-07", automaticHistory: Bool = false) throws {
         self.mode = mode; self.target = target
         original = try String(contentsOf:XCTUnwrap(Bundle(for:RosterMonthCacheTests.self).url(forResource:"roster",withExtension:"html")),encoding:.utf8)
         store = RosterStore(storageFolderURL:folder,automaticSideEffects:false)
         window = UIWindow(frame:CGRect(x:0,y:0,width:390,height:844))
-        window.rootViewController = UIViewController(); window.isHidden = false
+        window.rootViewController = UIViewController()
+        previousKeyWindow = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows).first { $0.isKeyWindow }
+        window.makeKeyAndVisible()
         worker = RosterOfflineCache(store:store,configuration:{ [unowned self] in self.configuration() },
             loader:{ [unowned self] web,request in self.load(web,request:request) },
             hostView:window.rootViewController!.view,currentMonth:"2026-10",targets:automaticHistory ? nil : [target])
@@ -429,5 +433,8 @@ private final class HistoryFixture {
         while worker.isRunning && Date() < deadline { try await Task.sleep(nanoseconds:100_000_000) }
         XCTAssertFalse(worker.isRunning,"Worker exceeded its test deadline: \(worker.diagnosticText)")
     }
-    func close() { worker.pause(); window.isHidden = true; try? FileManager.default.removeItem(at:folder) }
+    func close() {
+        worker.pause(); window.isHidden = true; previousKeyWindow?.makeKey()
+        try? FileManager.default.removeItem(at:folder)
+    }
 }

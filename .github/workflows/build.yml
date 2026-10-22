@@ -22,6 +22,8 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Read authoritative version
         id: version
         run: echo "version=$(python3 tools/version.py --field version)" >> "$GITHUB_OUTPUT"
@@ -37,18 +39,37 @@ jobs:
           retention-days: 14
   simulator:
     needs: release
-    runs-on: macos-15-intel
-    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [four-sectors, login, responsiveness, today-return]
+    # Controlled runner comparison: the Today scenario also stalled host-side
+    # process discovery on Intel. Keep its test/toolchain/bounds unchanged.
+    runs-on: ${{ matrix.scenario == 'today-return' && 'macos-15' || 'macos-15-intel' }}
+    # Two bounded 15 min UI attempts (only one AX setup recovery), plus
+    # build/boot, result inspection, simulator deletion and artifact upload.
+    timeout-minutes: 50
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Record simulator host and selected toolchain
+        run: |
+          uname -m
+          sw_vers
+          xcodebuild -version
       - uses: actions/download-artifact@v4
         with:
           name: RAIDO-${{ needs.release.outputs.version }}-IPA
           path: RAIDORoster-Web2IPA
       - name: Check production launch and tab responsiveness
-        run: bash tools/ci.sh startup
+        env:
+          # Double the existing Today transition coverage without retries or
+          # changing the selected-state, scrolling and cache assertions.
+          TEST_RUNNER_RAIDO_UI_TRANSITION_CYCLES: '6'
+        run: bash tools/ci.sh startup --startup-case ${{ matrix.scenario }}
       - name: Shut down simulator before runner cleanup
         if: always()
         timeout-minutes: 1
@@ -56,11 +77,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: RAIDO-${{ needs.release.outputs.version }}-simulator
+          name: RAIDO-${{ needs.release.outputs.version }}-simulator-${{ matrix.scenario }}
           path: |
             /tmp/raido-*.png
             /tmp/raido-*.log
             /tmp/raido-theme-size.json
+            /tmp/raido-startup-*.xcresult
           if-no-files-found: warn
           retention-days: 7
   native-tests:
@@ -70,6 +92,8 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Test startup cache, login bridge and Today priorities
         run: bash tools/ci.sh native-tests
       - name: Shut down simulator before runner cleanup
@@ -82,6 +106,6 @@ jobs:
           name: RAIDO-native-tests
           path: |
             RAIDORoster-Web2IPA/build/NativeTests.xcresult
-            /tmp/raido-native-tests.log
+            /tmp/raido-native-*.log
           if-no-files-found: warn
           retention-days: 7

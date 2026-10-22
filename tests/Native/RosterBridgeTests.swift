@@ -1,5 +1,6 @@
 import XCTest
 import WebKit
+import Combine
 @testable import RAIDORoster
 
 @MainActor
@@ -54,12 +55,22 @@ final class RosterBridgeTests: XCTestCase {
         XCTAssertEqual(model.preferredStartURL, RosterBrowserModel.startURL, "Discard the legacy chooser preference")
         defaults.set("https://example.invalid/HumanResourceRoster.aspx", forKey: key)
         XCTAssertEqual(model.preferredStartURL, RosterBrowserModel.startURL)
+        let timedOut = expectation(description: "Navigation watchdog reports its failure")
+        let timeoutObservation = model.$loadError.compactMap { $0 }.first().sink { _ in timedOut.fulfill() }
+        defer { timeoutObservation.cancel() }
         model.navigationStarted(timeout: .milliseconds(20))
         XCTAssertTrue(model.isLoading)
-        try await Task.sleep(for: .milliseconds(100))
+        // Observe the actual watchdog publication. A fixed sleep can resume
+        // before the watchdog task on a busy simulator's main actor.
+        await fulfillment(of: [timedOut], timeout: 5)
         XCTAssertFalse(model.isLoading); XCTAssertNotNil(model.loadError)
+        let cancelledTimeout = expectation(description: "Finished navigation must not report a timeout")
+        cancelledTimeout.isInverted = true
+        // Clear the previous error before observing any new failure.
         model.navigationStarted(timeout: .milliseconds(20)); model.navigationFinished()
-        try await Task.sleep(for: .milliseconds(100))
+        let cancellationObservation = model.$loadError.compactMap { $0 }.sink { _ in cancelledTimeout.fulfill() }
+        defer { cancellationObservation.cancel() }
+        await fulfillment(of: [cancelledTimeout], timeout: 0.2)
         XCTAssertNil(model.loadError, "Finished navigation cancels its timeout")
         let coordinator = RosterWebView.Coordinator(model: model)
         coordinator.webViewWebContentProcessDidTerminate(WKWebView())

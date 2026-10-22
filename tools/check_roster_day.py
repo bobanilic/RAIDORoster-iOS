@@ -3,8 +3,6 @@ from pathlib import Path
 import subprocess
 import tempfile
 root = Path(__file__).resolve().parents[1]
-s = (root/'RAIDORoster-Web2IPA/RAIDORoster/ContentView.swift').read_text()
-a=s.index('enum RosterDayPresentation {'); b=s.index('\nstruct RosterItem:', a)
 fixture = r'''import Foundation
 struct RosterActivity {
     let id: String, category: String, route: String, startUTC: String
@@ -17,7 +15,6 @@ struct RosterItem {
 enum TodayGlobalAirportIndex {
     static func routeCodes(_ route: String) -> [String] { route.split(separator:"-").map(String.init) }
 }
-POLICY
 let day="2026-10-20"
 func sector(_ id: String, _ time: String, _ category: String = "FLIGHT", _ route: String = "VNO-LEJ") -> RosterActivity {
     .init(id:id,category:category,route:route,startUTC:day+" "+time)
@@ -40,6 +37,6 @@ print("Passed 7 day-briefing checks: four sectors, split duties, positioning, du
 '''
 with tempfile.TemporaryDirectory() as tmp:
     source=Path(tmp)/'main.swift'; binary=Path(tmp)/'checks'
-    source.write_text(fixture.replace('POLICY',s[a:b]))
-    subprocess.run(['swiftc',str(source),'-o',str(binary)],check=True)
+    source.write_text(fixture)
+    subprocess.run(['swiftc',str(root/'RAIDORoster-Web2IPA/RAIDORoster/RosterDayPresentation.swift'),str(source),'-o',str(binary)],check=True)
     subprocess.run([str(binary)],check=True)

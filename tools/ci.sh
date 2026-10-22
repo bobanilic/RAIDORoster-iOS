@@ -12,7 +12,8 @@ case "${1:-all}" in
     python3 tools/verify_raido_artifacts.py
     ;;
   startup)
-    python3 tools/preview_ice_tabs.py --startup-only
+    shift
+    python3 tools/preview_ice_tabs.py --startup-only "$@"
     ;;
   native-tests)
     python3 tools/run_native_tests.py
