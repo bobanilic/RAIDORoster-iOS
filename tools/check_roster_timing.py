@@ -24,8 +24,7 @@ properties = '\n'.join(block(anchor) for anchor in [
     '    var preDutyPickupUTCDate: Date?',
     '    var preDutyPickupDisplay: String',
 ])
-helpers = '\n'.join(block(anchor) for anchor in [
-    'private func pickupUTCDate(for activity: RosterActivity)',
+helpers = 'private ' + block('func pickupUTCDate(for activity: RosterActivity)') + '\n' + '\n'.join(block(anchor) for anchor in [
     'private func parseNominalLocalStamp(_ value: String)',
     'func parseUTCStamp(_ value: String)',
     'private func activitySortKey(_ activity: RosterActivity)',
@@ -133,5 +132,5 @@ with tempfile.TemporaryDirectory(prefix='roster-timing-') as directory:
     source = Path(directory) / 'Checks.swift'
     source.write_text(fixture)
     executable = Path(directory) / 'checks'
-    subprocess.run(['swiftc', '-parse-as-library', str(source), '-o', str(executable)], check=True)
+    subprocess.run(['swiftc', '-parse-as-library', str(root / 'RAIDORoster-Web2IPA/RAIDORoster/RosterTimestamp.swift'), str(source), '-o', str(executable)], check=True)
     subprocess.run([str(executable)], check=True)

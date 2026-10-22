@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import CoreMotion
 import CoreLocation
 import MapKit
@@ -47,8 +48,11 @@ struct RosterActivity: Codable, Equatable, Identifiable {
     let crew: [CrewMember]
     let rawText: String
 
+    // Earlier caches classified RLCN's "Hotel relocation" description as HOTEL.
+    var isHotelRelocation: Bool { code.uppercased() == "RLCN" || category.uppercased() == "RELOCATION" }
+
     var isAuxiliary: Bool {
-        ["HOTEL", "EXPENSE", "RELOCATION"].contains(category.uppercased())
+        isHotelRelocation || ["HOTEL", "EXPENSE", "RELOCATION"].contains(category.uppercased())
     }
 
     var isFlight: Bool { category.uppercased() == "FLIGHT" }
@@ -73,6 +77,31 @@ struct RosterActivity: Codable, Equatable, Identifiable {
         if !typeLabel.isEmpty { pieces.append(typeLabel) }
         if !aircraftVersion.isEmpty { pieces.append(aircraftVersion) }
         return pieces.joined(separator: " • ")
+    }
+}
+
+// A calendar day may contain several duty envelopes. Keep their timing separate,
+// but never silently discard the later envelopes from a day briefing.
+enum RosterDayPresentation {
+    static func duties(for item: RosterItem, among items: [RosterItem]) -> [RosterItem] {
+        guard let day = item.dateISO else { return [item] }
+        var ids = Set<String>()
+        let rows = (items + [item]).filter { $0.dateISO == day && ids.insert($0.id).inserted }
+            .sorted {
+                let lhs = $0.operationalActivities.first?.startUTC ?? ""
+                let rhs = $1.operationalActivities.first?.startUTC ?? ""
+                return lhs == rhs ? $0.index < $1.index : lhs < rhs
+            }
+        let operational = rows.filter { $0.isOperationalDuty && !$0.operationalActivities.isEmpty }
+        return operational.isEmpty ? [item] : operational
+    }
+
+    static func sectors(in items: [RosterItem]) -> [RosterActivity] {
+        var ids = Set<String>()
+        return items.flatMap(\.operationalActivities).filter {
+            ($0.isFlight || $0.category.uppercased() == "POSITIONING") &&
+            TodayGlobalAirportIndex.routeCodes($0.route).count >= 2 && ids.insert($0.id).inserted
+        }.sorted { $0.startUTC == $1.startUTC ? $0.id < $1.id : $0.startUTC < $1.startUTC }
     }
 }
 
@@ -119,6 +148,30 @@ struct RosterItem: Identifiable, Codable, Equatable {
 
     var hotelAssignments: [RosterActivity] {
         uniqueActivities((activeHotels ?? []) + activityList.filter { $0.category.uppercased() == "HOTEL" })
+            .filter { !$0.isHotelRelocation }
+    }
+
+    var relocationActivities: [RosterActivity] {
+        uniqueActivities(activityList + (activeHotels ?? [])).filter(\.isHotelRelocation)
+    }
+
+    var standbyCalendarLabel: String {
+        let periods = Set(operationalActivities.filter { $0.category.uppercased() == "STANDBY" }
+            .compactMap { rosterStandbyPeriod(code: $0.code, details: $0.title + " " + $0.description) })
+        let ordered = ["M", "A", "N"].filter { periods.contains($0) }
+        if !ordered.isEmpty { return "STB " + ordered.joined(separator: "/") }
+        return rosterStandbyPeriod(code: "", details: displayTitle).map { "STB " + $0 } ?? "STB"
+    }
+
+    var hasHotelRelocationOnRosterDate: Bool {
+        relocationActivities.contains { activity in
+            let localDay = String(activity.startLT.prefix(10))
+            // Hotel metadata can also be attached to adjacent days.
+            if localDay.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil {
+                return localDay == dateISO
+            }
+            return true
+        }
     }
 
     var reportLocal: String {
@@ -413,18 +466,42 @@ final class DutyReminderScheduler: ObservableObject {
 
     private let center = UNUserNotificationCenter.current()
     private let identifierPrefix = "RAIDO-ROSTER-"
+    private var reminderGeneration = UUID()
+    private struct AutomaticInputs: Equatable {
+        var items:[RosterItem]
+        var pickup:Int
+        var report:Int
+        var relocation:Bool
+        var alcohol:Int
+        var precaution:Bool
+        var zone:String
+    }
+    private var lastAutomaticInputs:AutomaticInputs?
+    private var lastAutomaticSync = Date.distantPast
+
+    private var relocationReminders: Bool { UserDefaults.standard.object(forKey: "RAIDORoster.RelocationReminders") as? Bool ?? true }
+    private var lockPrecaution: Bool { UserDefaults.standard.bool(forKey:LockScreenPolicy.precautionKey) }
+    private var alcoholLead: Int {
+        lockPrecaution ? 60 : UserDefaults.standard.integer(forKey: "RAIDORoster.AlcoholReminderLead")
+    }
+    private func remindersOff(pickup: Int, report: Int) -> Bool {
+        pickup <= 0 && report <= 0 && !relocationReminders && alcoholLead <= 0
+    }
 
     func requestAndSchedule(_ items: [RosterItem], pickupLead: Int, reportLead: Int) {
+        let ticket = UUID(); reminderGeneration = ticket
         isWorking = true
         Task { @MainActor in
-            defer { isWorking = false }
+            guard reminderGeneration == ticket else { return }
+            defer { if reminderGeneration == ticket { isWorking = false } }
             do {
-                if pickupLead <= 0 && reportLead <= 0 {
+                if remindersOff(pickup: pickupLead, report: reportLead) {
                     await clearPending()
                     message = "Duty reminders are off."
                     return
                 }
                 let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+                guard reminderGeneration == ticket else { return }
                 guard granted else {
                     message = "Notification access was not granted."
                     return
@@ -438,14 +515,21 @@ final class DutyReminderScheduler: ObservableObject {
     }
 
     func syncIfAuthorized(_ items: [RosterItem], pickupLead: Int, reportLead: Int, completion: @escaping (String) -> Void) {
+        let inputs = AutomaticInputs(items:items,pickup:pickupLead,report:reportLead,
+            relocation:relocationReminders,alcohol:alcoholLead,precaution:lockPrecaution,zone:TimeZone.current.identifier)
+        if inputs == lastAutomaticInputs,Date().timeIntervalSince(lastAutomaticSync) < 300 { return }
+        let ticket = UUID(); reminderGeneration = ticket
         Task { @MainActor in
-            if pickupLead <= 0 && reportLead <= 0 {
+            guard reminderGeneration == ticket else { return }
+            if remindersOff(pickup: pickupLead, report: reportLead) {
                 await clearPending()
+                lastAutomaticInputs = inputs;lastAutomaticSync = Date()
                 completion("Duty reminders off")
                 return
             }
 
             let settings = await center.notificationSettings()
+            guard reminderGeneration == ticket else { return }
             guard settings.authorizationStatus == .authorized ||
                     settings.authorizationStatus == .provisional ||
                     settings.authorizationStatus == .ephemeral else {
@@ -455,6 +539,7 @@ final class DutyReminderScheduler: ObservableObject {
 
             do {
                 let count = try await schedule(items, pickupLead: pickupLead, reportLead: reportLead)
+                lastAutomaticInputs = inputs;lastAutomaticSync = Date()
                 completion("Reminders refreshed • \(count) upcoming")
             } catch {
                 completion("Reminder refresh failed: \(error.localizedDescription)")
@@ -463,16 +548,20 @@ final class DutyReminderScheduler: ObservableObject {
     }
 
     func clearRosterReminders() {
+        lastAutomaticInputs = nil;lastAutomaticSync = .distantPast
+        reminderGeneration = UUID()
         Task { @MainActor in await clearPending() }
     }
 
     private func schedule(_ items: [RosterItem], pickupLead: Int, reportLead: Int) async throws -> Int {
-        await clearPending()
         let now = Date()
         var requests: [(Date, UNNotificationRequest)] = []
 
-        for item in items where item.isOperationalDuty {
-            if reportLead > 0, let report = item.dutyStartUTCDate {
+        let lower = EarningsMath.day(now.addingTimeInterval(-2 * 24 * 3600))
+        let upper = EarningsMath.day(now.addingTimeInterval(90 * 24 * 3600))
+        let priorityEventsByItem = Dictionary(grouping: TodayPriorityAdapter.events(sources: items.map { (item: $0, capturedAt: now) }), by: \.itemID)
+        for item in items where (item.dateISO ?? "") >= lower && (item.dateISO ?? "") <= upper {
+            if reportLead > 0, item.isOperationalDuty, !item.operationalActivities.isEmpty, let report = item.dutyStartUTCDate {
                 let fire = report.addingTimeInterval(TimeInterval(-reportLead * 60))
                 if fire > now.addingTimeInterval(2) {
                     let content = UNMutableNotificationContent()
@@ -489,18 +578,44 @@ final class DutyReminderScheduler: ObservableObject {
                 }
             }
 
-            if pickupLead > 0, let pickup = item.preDutyPickupUTCDate {
-                let fire = pickup.addingTimeInterval(TimeInterval(-pickupLead * 60))
-                if fire > now.addingTimeInterval(2) {
+            for event in priorityEventsByItem[item.id] ?? [] {
+                let activeFire = max(event.date, event.availableFrom ?? event.date)
+                if lockPrecaution && event.kind == .alcohol && activeFire > now {
                     let content = UNMutableNotificationContent()
-                    content.title = "Pickup in \(pickupLead) min"
-                    let pickupText = item.preDutyPickupDisplay
-                    let dutyText = reminderBody(item)
-                    content.body = pickupText.isEmpty ? dutyText : "\(pickupText) • \(dutyText)"
+                    content.title = "🔴 Alcohol precaution active"
+                    content.body = "Pre-duty precaution · " + (event.reference == "PU" ? "Pickup" : "Report") + " · " + TodayPriorityPolicy.localDayLabel(event.end,event:event,now:activeFire) + " · " + event.clock + " LT. Open RAIDO for details."
+                    content.userInfo = ["raidoPriorityID":event.id]
+                    content.sound = .default
+                    let trigger = UNTimeIntervalNotificationTrigger(timeInterval:max(1,activeFire.timeIntervalSinceNow),repeats:false)
+                    requests.append((activeFire,UNNotificationRequest(identifier:identifierPrefix + "PRECAUTION-ACTIVE-" + event.id,content:content,trigger:trigger)))
+                }
+                for (id, fire) in TodayPriorityPolicy.reminderDates(event, now: now, pickupLead: pickupLead,
+                    relocationEnabled: relocationReminders, alcoholLead: alcoholLead) {
+                    // A delayed pre-alert and active alert must not duplicate
+                    // one another at release when both options are enabled.
+                    if lockPrecaution && event.kind == .alcohol && fire == activeFire { continue }
+                    let content = UNMutableNotificationContent()
+                    switch event.kind {
+                    case .pickup: content.title = "Pickup in \(pickupLead) min"
+                    case .alcohol: content.title = fire >= event.date ? "Alcohol precaution active" : "🟡 Precaution starts in \(alcoholLead == 60 ? "1 hour" : "\(alcoholLead) min")"
+                    default: content.title = "Upcoming hotel relocation"
+                    }
+                    let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_GB")
+                    formatter.timeZone = TodayPriorityPolicy.calendar(for:event).timeZone; formatter.dateFormat = "d MMM"
+                    if event.kind == .alcohol {
+                        formatter.dateFormat = "d MMM · HH:mm"
+                        content.body = "Begins " + formatter.string(from:event.date) + " LT · " +
+                            (event.reference == "PU" ? "Pickup" : "Report") + " · " +
+                            TodayPriorityPolicy.localDayLabel(event.end,event:event,now:fire) + " · " + event.clock + " LT"
+                    } else {
+                        content.body = [formatter.string(from:event.date),event.clock,event.detail,event.notes,event.missing.joined(separator:" · ")]
+                            .filter { !$0.isEmpty }.joined(separator:" · ")
+                    }
+                    content.userInfo = ["raidoPriorityID":event.id]
                     content.sound = .default
                     let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, fire.timeIntervalSinceNow), repeats: false)
                     let request = UNNotificationRequest(
-                        identifier: identifierPrefix + "PICKUP-" + item.id,
+                        identifier: identifierPrefix + id,
                         content: content,
                         trigger: trigger
                     )
@@ -512,16 +627,12 @@ final class DutyReminderScheduler: ObservableObject {
         // Stay comfortably within iOS' finite pending-notification budget.
         // Nearest reminders are the ones that matter operationally.
         let selected = requests.sorted { $0.0 < $1.0 }.prefix(60)
-        for (_, request) in selected {
-            try await center.add(request)
-        }
-        return selected.count
+        return try await DutyNotificationQueue.shared.replace(selected.map { $0.1 }, prefix: identifierPrefix)
     }
 
     private func clearPending() async {
-        let pending = await center.pendingNotificationRequests()
-        let ids = pending.map(\.identifier).filter { $0.hasPrefix(identifierPrefix) }
-        if !ids.isEmpty { center.removePendingNotificationRequests(withIdentifiers: ids) }
+        do { _ = try await DutyNotificationQueue.shared.replace([], prefix: identifierPrefix) }
+        catch { DeviceCacheStorage.report("Clear duty reminders", error: error) }
     }
 
     private func reminderBody(_ item: RosterItem) -> String {
@@ -535,7 +646,7 @@ final class CalendarExporter: ObservableObject {
     @Published var message: String?
     @Published var isWorking = false
 
-    private let eventStore = EKEventStore()
+    private lazy var eventStore = EKEventStore()
     private let legacyMarkerPrefix = "[RAIDO-ROSTER-ID:"
     private let stableMarkerPrefix = "[RAIDO-CALENDAR-KEY:"
 
@@ -936,18 +1047,6 @@ final class CalendarExporter: ObservableObject {
 }
 
 
-@MainActor
-final class AppState: ObservableObject {
-    let rosterStore: RosterStore
-    let browser: RosterBrowserModel
-
-    init() {
-        let store = RosterStore()
-        rosterStore = store
-        browser = RosterBrowserModel(store: store)
-    }
-}
-
 enum MainTab: Hashable { case today, roster, fleet, more }
 
 struct ContentView: View {
@@ -957,6 +1056,7 @@ struct ContentView: View {
     @StateObject private var appState = AppState()
     @State private var selectedTab: MainTab = .today
     @State private var showPortal = false
+    @State private var flightServicesConfigured = false
 
     var body: some View {
         let _ = raidoColorPalette
@@ -964,7 +1064,13 @@ struct ContentView: View {
         let _ = raidoVisualTheme
 
         TabView(selection: $selectedTab) {
-            TodayView(store: appState.rosterStore) { showPortal = true }
+            Group {
+                if !appState.availability.hasCache {
+                    RaidoWelcomeView(isRestoring: appState.availability.isRestoring) { showPortal = true }
+                } else {
+                    TodayView(store: appState.rosterStore, tabActive: selectedTab == .today) { showPortal = true }
+                }
+            }
                 .tabItem { Label("Today", systemImage: "sun.max") }.tag(MainTab.today)
             RosterHomeView(store: appState.rosterStore, browser: appState.browser) { showPortal = true }
                 .tabItem { Label("Roster", systemImage: "calendar") }.tag(MainTab.roster)
@@ -976,26 +1082,85 @@ struct ContentView: View {
         .environmentObject(appState.rosterStore)
         .tint(MidnightTheme.accent)
         .foregroundStyle(MidnightTheme.ink)
+        .overlay(alignment:.top) { RaidoToastHost() }
         .sheet(isPresented: $showPortal) {
             PortalView(model: appState.browser, store: appState.rosterStore) { showPortal = false; selectedTab = .roster }
+                .onAppear { appState.browser.setPortalVisible(true) }
+                .onDisappear { appState.browser.setPortalVisible(false) }
         }
-        .onAppear { TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
-            appState.browser.resumeOfflineMonths()
-        }
-        .onChange(of: appState.rosterStore.snapshot) { _, _ in
-            TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
-        }
-        .onChange(of: raidoScenePhase) { _, phase in
-            if phase == .active {
-                TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: appState.rosterStore.items)
-                appState.browser.resumeOfflineMonths()
-            } else {
+        .task(id:raidoScenePhase) {
+            guard raidoScenePhase == .active else {
                 appState.browser.pauseOfflineMonths()
+                return
             }
+            // The tab shell can draw while disk decoding runs off the UI thread.
+            await appState.rosterStore.restoreSavedRoster()
+            guard !Task.isCancelled else { return }
+            guard appState.rosterStore.hasCache else { return }
+            TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from:appState.rosterStore.items)
+            flightServicesConfigured = true
+            appState.browser.resumeOfflineMonths()
+            appState.rosterStore.refreshDutyReminders()
+        }
+        .onReceive(appState.rosterStore.$snapshot.dropFirst()) { snapshot in
+            guard raidoScenePhase == .active, !appState.rosterStore.isRestoring,
+                  !(snapshot?.items.isEmpty ?? true) || flightServicesConfigured else { return }
+            // @Published emits before assignment; use the incoming payload.
+            TodayLiveFlightLocationManager.shared.configureAutomaticFlight(from: snapshot?.items ?? [])
+            flightServicesConfigured = true
+        }
+        .onOpenURL { url in
+            guard url.scheme == "raidoroster",url.host == "priority" else { return }
+            let id = URLComponents(url:url,resolvingAgainstBaseURL:false)?.queryItems?.first { $0.name == "id" }?.value
+            selectedTab = .today
+            TodayNotificationRouter.shared.pendingID = id == "lock-screen-preview" ? "today" : id
+        }
+        .onReceive(TodayNotificationRouter.shared.$pendingID) { value in
+            if value != nil { selectedTab = .today }
         }
     }
 }
 
+
+struct RaidoWelcomeView: View {
+    let isRestoring: Bool
+    let openPortal: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 22) {
+                Spacer(minLength: 24)
+                Image(systemName: "calendar.badge.clock")
+                    .font(.system(size: 54, weight: .light))
+                    .foregroundStyle(MidnightTheme.accent)
+                    .accessibilityHidden(true)
+                VStack(spacing: 10) {
+                    Text("Your day, ready to fly").font(.title2.weight(.semibold))
+                    Text("Connect your RAIDO roster to keep your duties and briefings close, even offline.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                if isRestoring {
+                    ProgressView("Loading saved roster…")
+                } else {
+                    Button(action: openPortal) {
+                        Label("Log in to RAIDO", systemImage: "arrow.right.circle.fill")
+                            .frame(maxWidth: .infinity, minHeight: 28)
+                    }
+                    .raidoPrimaryAction()
+                    .accessibilityIdentifier("raido-welcome-login")
+                    Text("Sign in securely through the RAIDO mobile portal.")
+                        .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                }
+                Spacer(minLength: 24)
+            }
+            .frame(maxWidth: 390, maxHeight: .infinity)
+            .padding(.horizontal, 28)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .midnightCanvas().toolbar(.hidden, for: .navigationBar)
+        }
+    }
+}
 
 struct SyncFreshnessStrip: View {
     @Environment(\.raidoPalette) private var raidoColorPalette
@@ -1127,9 +1292,16 @@ struct RosterHomeView: View {
                     .accessibilityLabel("Roster view")
 
                     if let status = browser.offlineMonthStatus {
-                        Label(status, systemImage: "icloud.and.arrow.down")
-                            .font(.caption).foregroundStyle(.secondary)
-                            .accessibilityIdentifier("offline-month-status")
+                        HStack {
+                            Label(status, systemImage: "icloud.and.arrow.down")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .accessibilityIdentifier("offline-month-status")
+                            Spacer(minLength: 8)
+                            if browser.offlineMonthNeedsRetry {
+                                Button("Retry") { browser.retryOfflineMonths() }.font(.caption.weight(.semibold))
+                            }
+                        }
+                        .contextMenu { Button("Copy history diagnostics") { browser.copyHistoryDiagnostics() } }
                     }
 
                     if let warning = store.portalFormatWarning {
@@ -1392,9 +1564,8 @@ struct RosterMonthCalendarView: View {
         }
     }
 
-    private var selectedItem: RosterItem? {
-        guard let selectedDateISO else { return nil }
-        return itemsByDate[selectedDateISO]
+    private var relocationDates: Set<String> {
+        Set(items.filter(\.hasHotelRelocationOnRosterDate).compactMap(\.dateISO))
     }
 
     private var monthTitle: String { store.rosterMonthTitle }
@@ -1424,6 +1595,12 @@ struct RosterMonthCalendarView: View {
         let _ = raidoColorPalette
 
         let _ = raidoVisualTheme
+
+        let byDate = itemsByDate
+        let moves = relocationDates
+        let days = slots
+        let today = rosterCalendarTodayISO()
+        let selection = selectedDateISO.flatMap { byDate[$0] }
 
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -1473,8 +1650,8 @@ struct RosterMonthCalendarView: View {
             }
 
             LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(Array(slots.enumerated()), id: \.offset) { _, iso in
-                    if let iso, let item = itemsByDate[iso] {
+                ForEach(Array(days.enumerated()), id: \.offset) { _, iso in
+                    if let iso, let item = byDate[iso] {
                         Button {
                             withAnimation(.snappy(duration: 0.18)) {
                                 selectedDateISO = iso
@@ -1483,18 +1660,19 @@ struct RosterMonthCalendarView: View {
                             RosterCalendarDayCell(
                                 item: item,
                                 day: Int(iso.suffix(2)) ?? 0,
-                                isToday: iso == rosterCalendarTodayISO(),
+                                isToday: iso == today,
                                 isChanged: changedDates.contains(iso),
-                                isSelected: selectedDateISO == iso
+                                isSelected: selectedDateISO == iso,
+                                hasHotelRelocation: moves.contains(iso)
                             )
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("\(item.dateText), \(item.displayTitle)")
+                        .accessibilityLabel("\(item.dateText), \(item.category.uppercased() == "STANDBY" ? item.standbyCalendarLabel : item.displayTitle)\(moves.contains(iso) ? ", hotel relocation" : "")")
                     } else if let iso {
                         RosterCalendarDayCell(
                             item: nil,
                             day: Int(iso.suffix(2)) ?? 0,
-                            isToday: iso == rosterCalendarTodayISO(),
+                            isToday: iso == today,
                             isChanged: false,
                             isSelected: false
                         )
@@ -1505,7 +1683,7 @@ struct RosterMonthCalendarView: View {
                 }
             }
             .overlay {
-                if MidnightTheme.isGetJet { GetJetCalendarDividers(rows: slots.count / 7) }
+                if MidnightTheme.isGetJet { GetJetCalendarDividers(rows: days.count / 7) }
             }
 
             ViewThatFits(in: .horizontal) {
@@ -1513,8 +1691,9 @@ struct RosterMonthCalendarView: View {
                 VStack(alignment: .leading, spacing: 8) { calendarLegend }
             }.padding(.vertical, 6)
 
-            if let selectedItem {
-                IceSelectedRosterDay(item: selectedItem, isChanged: selectedItem.dateISO.map(changedDates.contains) ?? false)
+            if let selectedItem = selection {
+                IceSelectedRosterDay(item: selectedItem, isChanged: selectedItem.dateISO.map(changedDates.contains) ?? false,
+                    dayItems: items.filter { $0.dateISO == selectedItem.dateISO })
                     .transition(.opacity)
             }
             if let month = store.selectedRosterMonth {
@@ -1528,12 +1707,12 @@ struct RosterMonthCalendarView: View {
         .onAppear {
             guard selectedDateISO == nil else { return }
             let today = rosterCalendarTodayISO()
-            selectedDateISO = itemsByDate[today] != nil ? today : items.compactMap(\.dateISO).first
+            selectedDateISO = byDate[today] != nil ? today : items.compactMap(\.dateISO).first
         }
         .onChange(of: items.map(\.dateISO)) { _, _ in
-            if let selectedDateISO, itemsByDate[selectedDateISO] != nil { return }
+            if let selectedDateISO, byDate[selectedDateISO] != nil { return }
             let today = rosterCalendarTodayISO()
-            selectedDateISO = itemsByDate[today] != nil ? today : items.compactMap(\.dateISO).first
+            selectedDateISO = byDate[today] != nil ? today : items.compactMap(\.dateISO).first
         }
         .sensoryFeedback(.selection, trigger: selectedDateISO)
     }
@@ -1544,6 +1723,12 @@ struct RosterMonthCalendarView: View {
                 Circle().fill(categoryColor(category)).frame(width: 5, height: 5)
                 Text(category == "FLIGHT" ? "Flight" : category == "STANDBY" ? "Standby" : category == "OFF" ? "Off" : "Positioning")
                     .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+        if !relocationDates.isEmpty {
+            HStack(spacing: 4) {
+                Circle().strokeBorder(MidnightTheme.accent, lineWidth: 1.2).frame(width: 6, height: 6)
+                Text("Hotel move").font(.caption2).foregroundStyle(.secondary)
             }
         }
     }
@@ -1568,6 +1753,7 @@ struct RosterCalendarDayCell: View {
     let isToday: Bool
     let isChanged: Bool
     let isSelected: Bool
+    var hasHotelRelocation: Bool = false
     var body: some View {
         let _ = raidoColorPalette
 
@@ -1579,6 +1765,13 @@ struct RosterCalendarDayCell: View {
                 .frame(width: 32, height: 32)
                 .background(isSelected ? MidnightTheme.highlight : .clear, in: Circle())
                 .overlay { if isToday && !isSelected { Circle().strokeBorder(MidnightTheme.accent.opacity(0.6), lineWidth: 1) } }
+                .overlay(alignment: .topTrailing) {
+                    if hasHotelRelocation {
+                        Circle().strokeBorder(MidnightTheme.accent, lineWidth: 1.3)
+                            .frame(width: 6, height: 6).offset(x: 7, y: 9)
+                            .accessibilityHidden(true)
+                    }
+                }
             if let item {
                 HStack(spacing: 3) {
                     Circle().fill(categoryColor(item.category)).frame(width: 4, height: 4)
@@ -1593,7 +1786,7 @@ struct RosterCalendarDayCell: View {
             Spacer(minLength: 0)
         }.padding(.horizontal, MidnightTheme.isGetJet ? 3 : 0).frame(maxWidth: .infinity, minHeight: MidnightTheme.isGetJet ? 80 : 64, alignment: .top).contentShape(Rectangle())
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(day), \(item?.displayTitle ?? "No roster data")\(isToday ? ", today" : "")\(isChanged ? ", changed" : "")")
+            .accessibilityLabel("\(day), \(item.map { $0.category.uppercased() == "STANDBY" ? $0.standbyCalendarLabel : $0.displayTitle } ?? "No roster data")\(hasHotelRelocation ? ", hotel relocation" : "")\(isToday ? ", today" : "")\(isChanged ? ", changed" : "")")
             .accessibilityValue(isSelected ? "Selected" : "")
     }
 }
@@ -1684,17 +1877,22 @@ private func calendarPickupCountdown(from now: Date, to pickup: Date) -> String 
     return hours == 0 ? "in \(days)d" : "in \(days)d \(hours)h"
 }
 
+func rosterStandbyPeriod(code: String, details: String) -> String? {
+    let evidence = (code + " " + details).uppercased()
+    for (period, word) in [("M", "MORNING"), ("A", "AFTERNOON"), ("N", "NIGHT")] {
+        let pattern = "\\b" + word + "(?=\\b|[0-9])|\\bSTB[ _-]*" + period + "(?=\\b|[0-9])"
+        if evidence.range(of: pattern, options: .regularExpression) != nil { return period }
+    }
+    return nil
+}
+
 private func calendarPrimaryLabel(_ item: RosterItem) -> String {
     switch item.category.uppercased() {
     case "FLIGHT":
         let codes = item.flightActivities.map(\.code).filter { !$0.isEmpty }
         return compactCalendarFlightCodes(codes)
     case "POSITIONING": return "POS"
-    case "STANDBY":
-        let title = item.displayTitle.uppercased()
-        if title.contains("MORNING") { return "STB M" }
-        if title.contains("AFTERNOON") { return "STB A" }
-        return "STB"
+    case "STANDBY": return item.standbyCalendarLabel
     case "RESERVE": return "RES"
     case "OFF": return "OFF"
     case "REST": return "REST"
@@ -1770,9 +1968,8 @@ struct CrewReadinessCard: View {
 
         TimelineView(.periodic(from: .now, by: 60)) { context in
             VStack(alignment: .leading, spacing: 12) {
-                if let reference = store.precautionReferenceDate(for: item),
-                   let cutoff = store.alcoholPrecautionCutoff(for: item),
-                   context.date < reference {
+                if let event = store.alcoholPrecautionEvent(for: item, at: context.date) {
+                    let reference = event.end, cutoff = event.date
                     awarenessRow(
                         icon: "wineglass",
                         title: context.date < cutoff ? "12H ALCOHOL PRECAUTION" : "ALCOHOL PRECAUTION WINDOW",
@@ -1926,7 +2123,7 @@ struct TodayPrimaryTimingRow: View {
 
 
 
-private struct TodayAirportMapPoint: Identifiable {
+struct TodayAirportMapPoint: Identifiable {
     let code: String
     let name: String
     let coordinate: CLLocationCoordinate2D
@@ -2082,24 +2279,32 @@ private enum OfflineAviationBasemap {
 }
 
 
+@MainActor
 private final class TodayMapConnectivityMonitor: ObservableObject {
     @Published private(set) var isConnected = false
-
-    private let monitor = NWPathMonitor()
+    private var monitor: NWPathMonitor?
     private let queue = DispatchQueue(label: "RAIDORoster.TodayMapConnectivity")
+    private var generation = UUID()
 
-    init() {
-        monitor.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async {
-                self?.isConnected = path.status == .satisfied
+    func setActive(_ active: Bool) {
+        guard active else {
+            generation = UUID(); monitor?.cancel(); monitor = nil
+            if isConnected { isConnected = false }
+            return
+        }
+        guard monitor == nil else { return }
+        let token = UUID(); generation = token
+        let value = NWPathMonitor()
+        value.pathUpdateHandler = { [weak self] path in
+            let connected = path.status == .satisfied
+            Task { @MainActor [weak self] in
+                guard let self, self.generation == token, self.isConnected != connected else { return }
+                self.isConnected = connected
             }
         }
-        monitor.start(queue: queue)
+        monitor = value; value.start(queue: queue)
     }
-
-    deinit {
-        monitor.cancel()
-    }
+    deinit { monitor?.cancel() }
 }
 
 private struct TodayOnlineRouteMap: View {
@@ -3825,7 +4030,7 @@ final class FlightCompanionV3Observer: ObservableObject {
     }
 }
 
-private enum TodayGlobalAirportIndex {
+enum TodayGlobalAirportIndex {
     private struct Entry: Decodable {
         let name: String
         let latitude: Double
@@ -3901,6 +4106,7 @@ struct TodayRouteMapCard: View {
     @Environment(\.raidoTheme) private var raidoVisualTheme
     let item: RosterItem
     var iceHeader = false
+    var tabActive = true
     @AppStorage("RAIDORoster.Map.PlaceLabels") private var showsPlaceLabels = true
     @State private var mapExpanded = false
 
@@ -3920,7 +4126,7 @@ struct TodayRouteMapCard: View {
     }
 
     private var useOfflineMap: Bool {
-        todayMapSource == "offline" || !connectivity.isConnected
+        (iceHeader && (!mapExpanded || !tabActive)) || todayMapSource == "offline" || !connectivity.isConnected
     }
 
     private var trackedAircraftRegistration: String? {
@@ -4228,9 +4434,20 @@ struct TodayRouteMapCard: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Flight route map " + points.map(\.code).joined(separator: " to "))
         .onAppear {
+            connectivity.setActive(tabActive && (!iceHeader || mapExpanded) && todayMapSource != "offline")
             gps.configureAircraftTracking(registration: trackedAircraftRegistration)
             gps.configureFlightRoute(coordinates: points.map(\.coordinate))
             gps.configureTrailPersistence(sessionKey: trackingSessionKey)
+        }
+        .onDisappear { connectivity.setActive(false) }
+        .onChange(of: mapExpanded) { _, expanded in
+            connectivity.setActive(tabActive && (!iceHeader || expanded) && todayMapSource != "offline")
+        }
+        .onChange(of: tabActive) { _, active in
+            connectivity.setActive(active && (!iceHeader || mapExpanded) && todayMapSource != "offline")
+        }
+        .onChange(of: todayMapSource) { _, source in
+            connectivity.setActive(tabActive && (!iceHeader || mapExpanded) && source != "offline")
         }
         .onChange(of: trackedAircraftRegistration) { _, value in
             gps.configureAircraftTracking(registration: value)
@@ -4398,12 +4615,8 @@ struct TodayRouteMapCard: View {
     private var iceMapHeader: some View {
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
-                // Both layers share the same projection. The blurred layer is
-                // passive local geography, even when Apple Maps is selected.
-                OfflineAviationMapCanvas(points: points, trail: gps.fusedTrail,
-                    liveLocation: gps.fusedLocation, isTracking: gps.isTracking,
-                    zoom: committedZoom, pan: committedPan, colorScheme: colorScheme)
-                    .blur(radius: 12).allowsHitTesting(false).accessibilityHidden(true)
+                // The collapsed header is one local map, with no hidden Apple
+                // Map or duplicate blurred canvas. Online maps are on demand.
                 mapSurface
                     .mask(LinearGradient(stops: [
                         .init(color: .clear, location: 0),
@@ -4657,7 +4870,7 @@ struct TodayRouteMapCard: View {
     }
 }
 
-private struct OfflineAviationMapCanvas: View {
+struct OfflineAviationMapCanvas: View {
     @Environment(\.raidoPalette) private var raidoColorPalette
     @Environment(\.raidoTheme) private var raidoVisualTheme
     @AppStorage("RAIDORoster.Map.PlaceLabels") private var showsPlaceLabels = true
@@ -4668,28 +4881,28 @@ private struct OfflineAviationMapCanvas: View {
     let zoom: CGFloat
     let pan: CGSize
     let colorScheme: ColorScheme
-
-    private var coordinates: [CLLocationCoordinate2D] {
-        points.map(\.coordinate)
-    }
-
-    private var viewport: OfflineAviationMapViewport {
-        .init(route: coordinates)
-    }
+    var routeSegments: [[CLLocationCoordinate2D]]? = nil
 
     var body: some View {
-        let _ = raidoColorPalette
+        // Capture one immutable render snapshot on the UI side. In particular,
+        // projection bounds must not be rebuilt for every coastline vertex.
+        let points = self.points, trail = self.trail, liveLocation = self.liveLocation
+        let isTracking = self.isTracking, zoom = self.zoom, pan = self.pan
+        let coordinates = points.map(\.coordinate)
+        let viewport = OfflineAviationMapViewport(route: coordinates)
+        let segments = routeSegments ?? [coordinates]
+        let showLabels = showsPlaceLabels
+        let outlines = OfflineAviationBasemap.outlines
+        let labels = showLabels ? OfflineMapPlaces.labels : []
+        let colors = raidoColorPalette.colors(dark: colorScheme == .dark)
+        let sea = Self.color(colors.mapSea), land = Self.color(colors.mapLand)
+        let border = Self.color(colors.mapBorder), labelInk = Self.color(colors.mapLabelInk)
+        let accent = Self.color(colors.accent), ink = Self.color(colors.ink)
 
-        let _ = raidoVisualTheme
-
-        Canvas(rendersAsynchronously: true) { context, size in
-            let sea = MidnightTheme.mapSea
-            let land = MidnightTheme.mapLand
-            let border = MidnightTheme.mapBorder
-
+        return Canvas(rendersAsynchronously: true) { context, size in
             context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(sea))
 
-            for outline in OfflineAviationBasemap.outlines
+            for outline in outlines
                 where outline.isVisible(viewport: viewport, size: size, zoom: zoom, pan: pan) {
                 let polygon = outline.coordinates
                 guard polygon.count >= 3 else { continue }
@@ -4710,15 +4923,15 @@ private struct OfflineAviationMapCanvas: View {
                 context.stroke(path, with: .color(border), lineWidth: 0.8)
             }
 
-            if showsPlaceLabels {
-                OfflineMapPlaces.draw(in: &context, size: size, viewport: viewport, zoom: zoom, pan: pan,
+            if showLabels {
+                OfflineMapPlaces.draw(labels: labels, ink: labelInk, in: &context, size: size, viewport: viewport, zoom: zoom, pan: pan,
                     airports: coordinates, aircraft: isTracking ? liveLocation?.coordinate : nil)
             }
 
-            if coordinates.count >= 2 {
+            for segment in segments where segment.count >= 2 {
                 var route = Path()
-                route.move(to: viewport.point(for: coordinates[0], in: size, zoom: zoom, pan: pan))
-                for coordinate in coordinates.dropFirst() {
+                route.move(to: viewport.point(for: segment[0], in: size, zoom: zoom, pan: pan))
+                for coordinate in segment.dropFirst() {
                     route.addLine(
                         to: viewport.point(
                             for: coordinate,
@@ -4730,7 +4943,7 @@ private struct OfflineAviationMapCanvas: View {
                 }
                 context.stroke(
                     route,
-                    with: .color(Color.accentColor),
+                    with: .color(accent),
                     style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [4, 5])
                 )
             }
@@ -4760,7 +4973,7 @@ private struct OfflineAviationMapCanvas: View {
 
                 context.fill(
                     Path(ellipseIn: CGRect(x: position.x - 5, y: position.y - 5, width: 10, height: 10)),
-                    with: .color(Color.accentColor)
+                    with: .color(accent)
                 )
                 context.stroke(
                     Path(ellipseIn: CGRect(x: position.x - 8, y: position.y - 8, width: 16, height: 16)),
@@ -4771,7 +4984,7 @@ private struct OfflineAviationMapCanvas: View {
                 context.draw(
                     Text(point.code)
                         .font(.caption2.bold())
-                        .foregroundStyle(.primary),
+                        .foregroundStyle(ink),
                     at: CGPoint(x: position.x, y: position.y + 17),
                     anchor: .center
                 )
@@ -4796,6 +5009,11 @@ private struct OfflineAviationMapCanvas: View {
             }
         }
         .background(Color.clear)
+    }
+    private static func color(_ value: UInt32) -> Color {
+        Color(red: Double((value >> 16) & 255) / 255,
+              green: Double((value >> 8) & 255) / 255,
+              blue: Double(value & 255) / 255)
     }
 }
 
@@ -5336,7 +5554,7 @@ struct DutyBriefingView: View {
 
     private var hasLogistics: Bool {
         !item.pickups.isEmpty || !item.transferNotes.isEmpty || !item.hotelAssignments.isEmpty ||
-        item.activityList.contains { $0.category.uppercased() == "RELOCATION" }
+        !item.relocationActivities.isEmpty
     }
 }
 
@@ -5701,7 +5919,7 @@ struct LogisticsCard: View {
                 )
             }
 
-            ForEach(item.activityList.filter { $0.category.uppercased() == "RELOCATION" }, id: \.id) { relocation in
+            ForEach(item.relocationActivities, id: \.id) { relocation in
                 InfoRow(icon: "arrow.left.arrow.right", title: "Hotel relocation", value: relocation.timeText)
             }
 
@@ -6071,13 +6289,17 @@ struct PortalView: View {
             ZStack {
                 RosterWebView(model: model).ignoresSafeArea(edges: .bottom)
 
+                if model.isLoading && model.loadError == nil {
+                    VStack { ProgressView("Opening RAIDO…").padding(12).midnightCard(radius: 12); Spacer() }
+                        .padding(.top, 8).allowsHitTesting(false)
+                }
                 if let error = model.loadError {
                     MidnightTheme.background.ignoresSafeArea()
                     VStack(spacing: 14) {
                         Image(systemName: "wifi.slash")
                             .font(.system(size: 42))
                             .foregroundStyle(.secondary)
-                        Text("RAIDO unavailable offline").font(.title3.bold())
+                        Text("RAIDO could not open").font(.title3.bold())
                         Text(error)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -6090,7 +6312,9 @@ struct PortalView: View {
                         if store.hasCache {
                             Button("View Offline Roster", action: openRoster).raidoPrimaryAction()
                         }
-                        Button("Try RAIDO Again") { model.reload() }.buttonStyle(.bordered)
+                        Button("Try RAIDO Again") { model.reload() }.raidoPrimaryAction()
+                            .accessibilityIdentifier("raido-portal-retry")
+                        Button("Open Mobile Login") { model.openStartPage() }.buttonStyle(.bordered)
                     }
                     .padding(28)
                 }
@@ -6103,6 +6327,7 @@ struct PortalView: View {
                     Button { model.goBack() } label: { Image(systemName: "chevron.backward") }
                         .disabled(!model.canGoBack)
                     Button { model.reload() } label: { Image(systemName: "arrow.clockwise") }
+                        .accessibilityLabel("Reload RAIDO")
                 }
             }
         }
@@ -7932,6 +8157,8 @@ struct SettingsView: View {
     @AppStorage("RAIDORoster.RestAwarenessHours") private var restAwarenessHours = 10
     @AppStorage("RAIDORoster.PickupReminderLead") private var pickupReminderLead = 0
     @AppStorage("RAIDORoster.ReportReminderLead") private var reportReminderLead = 0
+    @AppStorage("RAIDORoster.RelocationReminders") private var relocationReminders = true
+    @AppStorage("RAIDORoster.AlcoholReminderLead") private var alcoholReminderLead = 0
 
     @State private var showFleet = false
 
@@ -7978,6 +8205,11 @@ struct SettingsView: View {
                     }
                     Text("Configure basic salary, block-hour rates, duty-day supplements and daily-payment eligibility. Contract revisions keep historical months intact.")
                         .font(.caption).foregroundStyle(.secondary)
+                }.listRowBackground(MidnightTheme.surface)
+                Section("Lock Screen") {
+                    NavigationLink { LockScreenSettings(store:store) } label: {
+                        Label("Countdowns & precaution",systemImage:"lock.rectangle")
+                    }.accessibilityIdentifier("settings-lock-screen")
                 }.listRowBackground(MidnightTheme.surface)
                 Section("Offline roster") {
                     LabeledContent("Cached days", value: "\(store.items.count)")
@@ -8033,6 +8265,15 @@ struct SettingsView: View {
 
 
                 Section("Duty reminders") {
+                    Toggle("Hotel relocation reminders", isOn: $relocationReminders)
+                    Text("The evening before and on relocation day. Missing times are shown as missing, not midnight.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Picker("Alcohol precaution reminder", selection: $alcoholReminderLead) {
+                        Text("Off").tag(0)
+                        Text("15 min before it begins").tag(15)
+                        Text("30 min before it begins").tag(30)
+                        Text("1 hour before it begins").tag(60)
+                    }
                     Picker("Pickup reminder", selection: $pickupReminderLead) {
                         Text("Off").tag(0)
                         Text("15 min before").tag(15)
@@ -8050,7 +8291,7 @@ struct SettingsView: View {
 
                     Button {
                         reminderScheduler.requestAndSchedule(
-                            store.items,
+                            store.priorityRosterItems,
                             pickupLead: pickupReminderLead,
                             reportLead: reportReminderLead
                         )
@@ -8065,17 +8306,8 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Button {
-                        Task {
-                            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
-                        }
-                    } label: {
-                        Label("Enable roster change alerts", systemImage: "bell.and.waves.left.and.right")
-                    }
-
-                    Text("Reminders and roster-change alerts are local to this iPhone. Change alerts are generated only after a validated RAIDO refresh; there is no background roster polling.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    Text("Reminders are local to this iPhone. Roster changes appear in the app after a validated refresh; Outlook remains your email alert.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }.listRowBackground(MidnightTheme.surface)
 
 
@@ -8274,6 +8506,7 @@ struct RosterDetailView: View {
                 if let change = store.change(for: item.dateISO) {
                     RosterChangeDisclosure(change: change)
                 }
+                HistoricalFlightRouteCard(item: item)
                 DutyBriefingView(item: item, showTechnical: true)
                 BriefingSectionTitle("My note")
                 PersonalDutyNoteCard(item: item)
@@ -8348,6 +8581,7 @@ struct PersonalDutyNoteCard: View {
 
 
 struct RosterChangesView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.raidoPalette) private var raidoColorPalette
     @Environment(\.raidoTheme) private var raidoVisualTheme
     @EnvironmentObject private var store: RosterStore
@@ -8370,8 +8604,10 @@ struct RosterChangesView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Reviewed") {
+                Button("Mark as reviewed") {
                     store.dismissChangeNotice()
+                    dismiss()
+                    RaidoToastCenter.shared.present(.init(title:"Changes reviewed",message:"Your roster is up to date",symbol:"checkmark.circle"))
                 }
                 .font(.subheadline.weight(.semibold))
             }
@@ -8589,7 +8825,7 @@ private func parseNominalLocalStamp(_ value: String) -> Date? {
     return formatter.date(from: value)
 }
 
-private func pickupUTCDate(for activity: RosterActivity) -> Date? {
+func pickupUTCDate(for activity: RosterActivity) -> Date? {
     let pickup = activity.pickup.uppercased()
     guard let timeRange = pickup.range(of: #"\b([01]?\d|2[0-3]):[0-5]\d\b"#, options: .regularExpression) else { return nil }
     let time = String(pickup[timeRange])
@@ -8633,13 +8869,7 @@ private func pickupUTCDate(for activity: RosterActivity) -> Date? {
 }
 
 func parseUTCStamp(_ value: String) -> Date? {
-    guard !value.isEmpty else { return nil }
-    let formatter = DateFormatter()
-    formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.timeZone = TimeZone(secondsFromGMT: 0)
-    formatter.dateFormat = "yyyy-MM-dd HH:mm"
-    return formatter.date(from: value)
+    RosterTimestamp.parse(value)
 }
 
 func durationText(_ interval: TimeInterval) -> String {
@@ -8830,9 +9060,20 @@ enum MidnightTheme {
             ice: defaults.string(forKey: RaidoAppearancePreferences.icePaletteKey) ?? "iceBlue",
             getJet: defaults.string(forKey: RaidoAppearancePreferences.getJetPaletteKey) ?? "forestGreen")
     }
+    private static let toneCache: NSCache<NSString, UIColor> = {
+        let cache = NSCache<NSString, UIColor>(); cache.countLimit = 256; return cache
+    }()
     private static func tone(_ role: KeyPath<RaidoPaletteColors, UInt32>) -> UIColor {
         let palette = colorPalette
-        return adaptive(palette.colors(dark: true)[keyPath: role], palette.colors(dark: false)[keyPath: role])
+        let dark = palette.colors(dark: true)[keyPath: role]
+        let light = palette.colors(dark: false)[keyPath: role]
+        // Actual colour pairs form the key, so changing either theme's palette
+        // creates the right dynamic colour without recreating it for every row.
+        let key = "\(dark):\(light)" as NSString
+        if let cached = toneCache.object(forKey: key) { return cached }
+        let value = adaptive(dark, light)
+        toneCache.setObject(value, forKey: key)
+        return value
     }
     // V2.29.2 map polish: retain readable filled actions separately from links.
     static var actionFill: Color { Color(uiColor: tone(\.actionFill)) }
@@ -8893,13 +9134,41 @@ struct RaidoChromeRefresh: UIViewRepresentable {
     let theme: RaidoTheme
     let appearance: RaidoAppearance
     let palette: RaidoPalette
-    func makeUIView(context: Context) -> UIView { UIView(frame: .zero) }
-    func updateUIView(_ view: UIView, context: Context) {
-        MidnightTheme.configure()
-        DispatchQueue.main.async {
-            guard let window = view.window else { return }
+    final class ChromeView: UIView {
+        var refresh: (() -> Void)?
+        override func didMoveToWindow() { super.didMoveToWindow(); refresh?() }
+        override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+            super.traitCollectionDidChange(previousTraitCollection); refresh?()
+        }
+    }
+    final class Coordinator {
+        var appliedKey: String?
+        weak var appliedWindow: UIWindow?
+        var pending = false
+        var apply: (() -> Void)?
+    }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeUIView(context: Context) -> ChromeView { ChromeView(frame: .zero) }
+    func updateUIView(_ view: ChromeView, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.apply = { [weak view, weak coordinator] in
+            guard let view, let coordinator, let window = view.window else { return }
+            let key = "\(theme.rawValue)|\(appearance.rawValue)|\(palette.rawValue)|\(view.traitCollection.userInterfaceStyle.rawValue)"
+            guard coordinator.appliedKey != key || coordinator.appliedWindow !== window else { return }
+            coordinator.appliedKey = key; coordinator.appliedWindow = window
+            MidnightTheme.configure()
             updateChrome(window)
         }
+        view.refresh = { [weak coordinator] in
+            guard let coordinator, !coordinator.pending else { return }
+            coordinator.pending = true
+            DispatchQueue.main.async { [weak coordinator] in
+                guard let coordinator else { return }
+                coordinator.pending = false
+                coordinator.apply?()
+            }
+        }
+        view.refresh?()
     }
     private func updateChrome(_ view: UIView) {
         if let nav = view as? UINavigationBar {
@@ -8982,6 +9251,7 @@ private struct GetJetSectorCard: View {
         VStack(spacing: 17) {
             HStack {
                 Text(sector.code).font(.caption.weight(.semibold)).tracking(0.5).foregroundStyle(MidnightTheme.accent)
+                    .accessibilityIdentifier("duty-sector-code-" + sector.code)
                 Spacer(minLength: 5)
                 Text([sector.aircraftReg, sector.aircraftType].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.caption2).foregroundStyle(.secondary)
@@ -9007,7 +9277,7 @@ private struct GetJetSectorCard: View {
             }
             Rectangle().fill(MidnightTheme.border.opacity(0.45)).frame(height: 0.5)
             HStack {
-                Text("Flight sector").font(.caption2).foregroundStyle(.secondary)
+                Text(sector.category.uppercased() == "POSITIONING" ? "Positioning sector" : "Flight sector").font(.caption2).foregroundStyle(.secondary)
                 Spacer()
                 if !sector.crew.isEmpty {
                     Button(action: crewAction) { Label("Crew", systemImage: "person.2").font(.caption) }
@@ -9041,8 +9311,11 @@ private struct MidnightCard: ViewModifier {
         let _ = raidoVisualTheme
 
         return content
-            .background(MidnightTheme.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .shadow(color: .black.opacity(0.025), radius: 12, x: 0, y: 4)
+            .background {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(MidnightTheme.surface)
+                    .shadow(color: .black.opacity(0.025), radius: 12, x: 0, y: 4)
+            }
     }
 }
 
@@ -9363,7 +9636,7 @@ private struct IceToolRow: View {
     }
 }
 
-private enum IceAirportClock {
+enum IceAirportClock {
     private static let records: [String: [String]] = {
         guard let url = Bundle.main.url(forResource: "AirportTimeZones", withExtension: "json"),
               let data = try? Data(contentsOf: url),
@@ -9471,6 +9744,7 @@ private struct IceReadinessView: View {
     @Environment(\.raidoTheme) private var raidoVisualTheme
     let item: RosterItem
     @ObservedObject var store: RosterStore
+    var showsAlcohol = true
     @AppStorage("RAIDORoster.RestAwarenessHours") private var restAwarenessHours = 10
     var body: some View {
         let _ = raidoColorPalette
@@ -9479,8 +9753,8 @@ private struct IceReadinessView: View {
 
         TimelineView(.periodic(from: .now, by: 60)) { context in
             VStack(spacing: 9) {
-                if let reference = store.precautionReferenceDate(for: item),
-                   let cutoff = store.alcoholPrecautionCutoff(for: item), context.date < reference {
+                if showsAlcohol, let event = store.alcoholPrecautionEvent(for: item, at: context.date) {
+                    let reference = event.end, cutoff = event.date
                     let active = context.date >= cutoff
                     DisclosureGroup {
                         Text("12 hours before pickup, or report when pickup is unavailable. Company policy remains authoritative.")
@@ -9524,15 +9798,17 @@ private struct IceDutyAgenda: View {
     let item: RosterItem
     var onCalendarExport: (() -> Void)? = nil
     var canExport = true
+    var heading = "Your duty"
     @State private var crewSector: RosterActivity?
     var body: some View {
         let _ = raidoColorPalette
 
         let _ = raidoVisualTheme
 
+        let activities = item.operationalActivities
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Your duty").font(.headline)
+                Text(heading).font(.headline)
                 Spacer()
                 Text(item.aircraft.first?.aircraftType ?? prettyCategory(item.category))
                     .font(.caption).foregroundStyle(.secondary)
@@ -9544,12 +9820,12 @@ private struct IceDutyAgenda: View {
                         .accessibilityLabel("Duty options")
                 }
             }
-            if let first = item.operationalActivities.first, !first.localCheckInTime.isEmpty {
+            if let first = activities.first, !first.localCheckInTime.isEmpty {
                 agendaRow(time: first.localCheckInTime, title: "Report", detail: first.station, arrival: "", sector: nil)
             }
-            ForEach(item.operationalActivities) { activity in
+            ForEach(activities) { activity in
                 let codes = TodayGlobalAirportIndex.routeCodes(activity.route)
-                if MidnightTheme.isGetJet && activity.isFlight && codes.count >= 2 {
+                if MidnightTheme.isGetJet && (activity.isFlight || activity.category.uppercased() == "POSITIONING") && codes.count >= 2 {
                     GetJetSectorCard(sector: activity) { crewSector = activity }
                 } else {
                 agendaRow(time: activity.localStartTime,
@@ -9558,10 +9834,10 @@ private struct IceDutyAgenda: View {
                           arrival: activity.localEndTime, sector: activity.isFlight ? activity : nil)
                 }
             }
-            if let last = item.operationalActivities.last, !last.localCheckOutTime.isEmpty {
+            if let last = activities.last, !last.localCheckOutTime.isEmpty {
                 agendaRow(time: last.localCheckOutTime, title: "Release", detail: "Duty complete", arrival: "", sector: nil)
             }
-            if item.operationalActivities.isEmpty {
+            if activities.isEmpty {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(item.displayTitle).font(.subheadline.weight(.semibold))
                     if !item.timeText.isEmpty { Text(item.timeText).font(.caption).foregroundStyle(.secondary) }
@@ -9607,11 +9883,14 @@ private struct IceSelectedRosterDay: View {
     @Environment(\.raidoTheme) private var raidoVisualTheme
     let item: RosterItem
     let isChanged: Bool
+    var dayItems: [RosterItem] = []
     var body: some View {
         let _ = raidoColorPalette
 
         let _ = raidoVisualTheme
 
+        let duties = RosterDayPresentation.duties(for: item, among: dayItems)
+        let sectors = RosterDayPresentation.sectors(in: duties)
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -9620,13 +9899,19 @@ private struct IceSelectedRosterDay: View {
                     Text("Local times" + (isChanged ? " · Roster changed" : "")).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 4)
-                if item.sectorCount > 0 { Text("\(item.sectorCount) sectors").font(.caption).foregroundStyle(.secondary) }
+                if !sectors.isEmpty { Text("\(sectors.count) sectors").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("roster-day-sector-count") }
             }
-            IcePickupCard(item: item)
-            IceDutyAgenda(item: item)
-            NavigationLink { RosterDetailView(item: item) } label: {
-                Label("Full briefing & notes", systemImage: "doc.text").font(.caption.weight(.medium))
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            HistoricalFlightRouteCard(item: item, dayItems: dayItems).id(item.dateISO)
+            RosterRelocationSection(items: dayItems.isEmpty ? [item] : dayItems)
+            ForEach(Array(duties.enumerated()), id: \.element.id) { index, duty in
+                VStack(alignment: .leading, spacing: 14) {
+                    IcePickupCard(item: duty)
+                    IceDutyAgenda(item: duty, heading: duties.count > 1 ? "Duty \(index + 1) of \(duties.count)" : "Your duty")
+                    NavigationLink { RosterDetailView(item: duty) } label: {
+                        Label("Full briefing & notes", systemImage: "doc.text").font(.caption.weight(.medium))
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                }
             }
         }.padding(.top, 12)
     }
@@ -9636,6 +9921,7 @@ struct TodayView: View {
     @Environment(\.raidoPalette) private var raidoColorPalette
     @Environment(\.raidoTheme) private var raidoVisualTheme
     @ObservedObject var store: RosterStore
+    var tabActive = true
     let openPortal: () -> Void
     @StateObject private var calendarExporter = CalendarExporter()
     private enum CompanionSheet: String, Identifiable {
@@ -9643,18 +9929,20 @@ struct TodayView: View {
         var id: String { rawValue }
     }
     @State private var activeSheet: CompanionSheet?
+    @State private var activePriority: TodayPriorityEvent?
+    @State private var foregroundDate = Date.distantPast
     var body: some View {
         let _ = raidoColorPalette
-
         let _ = raidoVisualTheme
-
+        let now = max(Date(), foregroundDate)
+        let primaryItem = store.isCacheValidated ? store.todayPrimaryItem : nil
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if store.isCacheValidated, let item = store.todayPrimaryItem, TodayRouteMapCard.canDisplay(item) {
-                        TodayRouteMapCard(item: item, iceHeader: true)
+                    if let item = primaryItem, TodayRouteMapCard.canDisplay(item) {
+                        TodayRouteMapCard(item: item, iceHeader: true, tabActive: tabActive)
                     } else {
-                        IcePageHeading(title: "Today", subtitle: Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                        IcePageHeading(title: "Today", subtitle: now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
                             .padding(.horizontal, 18).padding(.top, 10).padding(.bottom, 22)
                     }
                     VStack(alignment: .leading, spacing: 12) {
@@ -9664,12 +9952,22 @@ struct TodayView: View {
                                 .padding(12).midnightCard(radius: 12)
                                 .accessibilityIdentifier("portal-format-warning")
                         }
-                        if store.isCacheValidated, let item = store.todayPrimaryItem {
-                            IcePickupCard(item: item)
-                            IceReadinessView(item: item, store: store)
-                            IceDutyAgenda(item: item, onCalendarExport: { calendarExporter.export(item) }, canExport: !calendarExporter.isWorking)
-                            TodayPersonalNoteDisclosure(item: item)
-                            if let sector = crewCompanionSector(item, at: Date()) {
+                        RosterChangeSummaryCard(store:store)
+                        TodayPriorityLiveContent(store: store, tabActive: tabActive) { activePriority = $0 }
+                        if let item = primaryItem {
+                            if item.isOperationalDuty, !item.operationalActivities.isEmpty {
+                                IceReadinessView(item: item, store: store, showsAlcohol: false)
+                            }
+                            let duties = RosterDayPresentation.duties(for: item, among: store.todayItems)
+                            ForEach(Array(duties.enumerated()), id: \.element.id) { index, duty in
+                                VStack(alignment: .leading, spacing: 12) {
+                                    IceDutyAgenda(item: duty, onCalendarExport: { calendarExporter.export(duty) },
+                                                  canExport: !calendarExporter.isWorking,
+                                                  heading: duties.count > 1 ? "Duty \(index + 1) of \(duties.count)" : "Your duty")
+                                    TodayPersonalNoteDisclosure(item: duty)
+                                }
+                            }
+                            if let sector = crewCompanionSector(item, at: now) {
                                 HStack { Text("My position").font(.caption).foregroundStyle(.secondary); Spacer()
                                     CrewCompanionRolePicker(dutyID: item.id, sectorID: sector.id).id(sector.id) }
                             }
@@ -9677,7 +9975,7 @@ struct TodayView: View {
                                 DisclosureGroup("Aircraft") { AircraftCard(item: item).padding(.top, 8) }
                                     .font(.subheadline).padding(13).midnightCard(radius: 13)
                             }
-                            if !item.hotelAssignments.isEmpty || !item.transferNotes.isEmpty {
+                            if !item.hotelAssignments.isEmpty || !item.transferNotes.isEmpty || !item.relocationActivities.isEmpty {
                                 DisclosureGroup("Hotel & transport") { LogisticsCard(item: item).padding(.top, 8) }
                                     .font(.subheadline).padding(13).midnightCard(radius: 13)
                             }
@@ -9685,9 +9983,11 @@ struct TodayView: View {
                                 DisclosureGroup("Duty notes") { NotesCard(item: item).padding(.top, 8) }
                                     .font(.subheadline).padding(13).midnightCard(radius: 13)
                             }
-                            if let next = store.nextOperationalDuty(after: item), let interval = store.restInterval(after: item, before: next) {
+                            if item.isOperationalDuty, let next = store.nextOperationalDuty(after: item), let interval = store.restInterval(after: item, before: next) {
                                 RestToNextDutyCard(next: next, interval: interval)
                             }
+                        } else if store.isRestoring {
+                            ProgressView("Loading saved roster…").frame(maxWidth:.infinity).padding(.vertical,24)
                         } else {
                             ContentUnavailableView(store.hasCache ? "Roster needs a resync" : "Import your roster", systemImage: "calendar.badge.exclamationmark",
                                 description: Text("Open Live RAIDO while online to save your duty briefing."))
@@ -9702,6 +10002,10 @@ struct TodayView: View {
                     }.padding(.horizontal, 18).padding(.bottom, 20)
                 }
             }.midnightCanvas().toolbar(.hidden, for: .navigationBar)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    TodayPriorityLiveContent(store: store, tabActive: tabActive, strip: true) { activePriority = $0 }
+                }
+                .sheet(item: $activePriority) { event in TodayPriorityDetails(event: event, store: store) }
                 .sheet(item: $activeSheet) { sheet in
                     switch sheet {
                     case .crewControl: CrewControlSheet(item: store.todayPrimaryItem ?? store.nextDuty)
@@ -9713,8 +10017,33 @@ struct TodayView: View {
                     Button("OK", role: .cancel) { calendarExporter.message = nil }
                 } message: { Text(calendarExporter.message ?? "") }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.NSCalendarDayChanged)) { _ in
+            foregroundDate = Date()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            foregroundDate = Date()
+        }
+        .onChange(of: store.monthSnapshots) { _, _ in
+            if let selected = activePriority { activePriority = store.priorityEvents(at: Date()).first { $0.id == selected.id } }
+        }
+        .onReceive(TodayNotificationRouter.shared.$pendingID) { id in
+            guard !store.isRestoring else { return }
+            openPendingPriority(id)
+        }
+        .onChange(of:store.isRestoring) { _,restoring in
+            if !restoring { openPendingPriority(TodayNotificationRouter.shared.pendingID) }
+        }
+    }
+    private func openPendingPriority(_ id:String?) {
+        guard let id else { return }
+        activePriority = store.priorityEvents(at:Date()).first { $0.id == id }
+        // A notification tapped during launch waits for cache restoration.
+        DispatchQueue.main.async {
+            if TodayNotificationRouter.shared.pendingID == id { TodayNotificationRouter.shared.pendingID = nil }
+        }
     }
 }
+
 
 private struct IceMoreView: View {
     @Environment(\.raidoPalette) private var raidoColorPalette
@@ -9745,7 +10074,7 @@ private struct IceMoreView: View {
                     tool("Manuals", "Access through the live company portal", "book.closed", .manuals)
                     tool("Crew Control", "Phone, WhatsApp & email", "headphones", .crew)
                     Text("Preferences").font(.headline).padding(.top, 15).padding(.bottom, 3)
-                    tool("Settings", "Appearance, reminders, units & diagnostics", "gearshape", .settings)
+                    tool("Settings", "Appearance, reminders, units & diagnostics", "gearshape", .settings).accessibilityIdentifier("more-settings")
                     SyncFreshnessStrip(store: store)
                 }.buttonStyle(.plain).padding(18)
             }.midnightCanvas().toolbar(.hidden, for: .navigationBar)
@@ -9792,7 +10121,7 @@ private enum OfflineMapPlaces {
         return catalogue.labels
     }()
 
-    static func draw(in context: inout GraphicsContext, size: CGSize,
+    static func draw(labels: [OfflinePlaceLabel], ink: Color, in context: inout GraphicsContext, size: CGSize,
                      viewport: OfflineAviationMapViewport, zoom: CGFloat, pan: CGSize,
                      airports: [CLLocationCoordinate2D], aircraft: CLLocationCoordinate2D?) {
         let screenRoute = airports.map { viewport.point(for: $0, in: size, zoom: zoom, pan: pan) }
@@ -9817,7 +10146,7 @@ private enum OfflineMapPlaces {
             case .city: title = "· " + place.name; priority = 4; font = .system(size: 10)
             }
             let text = context.resolve(Text(title).font(font).tracking(place.kind == .country ? 0.7 : 0)
-                .foregroundStyle(MidnightTheme.mapLabelInk))
+                .foregroundStyle(ink))
             let measure = text.measure(in: CGSize(width: 180, height: 30))
             let rect = CGRect(x: point.x - measure.width / 2, y: point.y - measure.height / 2, width: measure.width, height: measure.height)
             resolved[place.id] = text

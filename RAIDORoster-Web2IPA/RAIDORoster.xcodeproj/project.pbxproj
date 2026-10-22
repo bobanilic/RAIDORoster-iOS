@@ -46,6 +46,30 @@ A22920000000000000000002 /* OfflinePlaceLabels.json in Resources */ = {isa = PBX
 		A30500000000000000000002 = {isa = PBXBuildFile; fileRef = B30500000000000000000002; };
 		A30600000000000000000001 = {isa = PBXBuildFile; fileRef = B30600000000000000000001; };
 		A30600000000000000000002 = {isa = PBXBuildFile; fileRef = B30600000000000000000002; };
+		A30700000000000000000001 = {isa = PBXBuildFile; fileRef = B30700000000000000000001; };
+		A30700000000000000000002 = {isa = PBXBuildFile; fileRef = B30700000000000000000002; };
+		A30700000000000000000003 = {isa = PBXBuildFile; fileRef = B30700000000000000000003; };
+		A30700000000000000000004 = {isa = PBXBuildFile; fileRef = B30700000000000000000004; };
+		A30700000000000000000005 = {isa = PBXBuildFile; fileRef = B30700000000000000000005; };
+		A30700000000000000000006 = {isa = PBXBuildFile; fileRef = B30700000000000000000006; };
+		A30800000000000000000001 /* LockScreenPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30800000000000000000001; };
+		A30800000000000000000002 /* DutyActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30800000000000000000002; };
+		A30800000000000000000102 /* DutyActivityAttributes.swift in widget */ = {isa = PBXBuildFile; fileRef = B30800000000000000000002; };
+		A30800000000000000000003 /* DutyActivityPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30800000000000000000003; };
+		A30800000000000000000103 /* DutyActivityPresentation.swift in widget */ = {isa = PBXBuildFile; fileRef = B30800000000000000000003; };
+		A30800000000000000000004 /* LockScreenActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30800000000000000000004; };
+		A30800000000000000000005 /* LockScreenSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30800000000000000000005; };
+        A30800000000000000000010 = {isa = PBXBuildFile; fileRef = B30800000000000000000010; };
+        A30800000000000000000012 = {isa = PBXBuildFile; fileRef = B30800000000000000000012; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy); }; };
+		A30900000000000000000001 = {isa = PBXBuildFile; fileRef = B30900000000000000000001; };
+		A30900000000000000000002 = {isa = PBXBuildFile; fileRef = B30900000000000000000002; };
+		A30900000000000000000003 = {isa = PBXBuildFile; fileRef = B30900000000000000000003; };
+		A30900000000000000000004 = {isa = PBXBuildFile; fileRef = B30900000000000000000004; };
+		A30900000000000000000005 = {isa = PBXBuildFile; fileRef = B30900000000000000000005; };
+		A31000000000000000000001 /* RosterTimestamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B31000000000000000000001 /* RosterTimestamp.swift */; };
+		A31000000000000000000002 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B31000000000000000000002 /* AppState.swift */; };
+		A31000000000000000000003 /* DutyActivityAppearancePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B31000000000000000000003 /* DutyActivityAppearancePolicy.swift */; };
+		A31000000000000000000004 /* DutyActivityAppearancePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B31000000000000000000003 /* DutyActivityAppearancePolicy.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -93,18 +117,47 @@ B22920000000000000000002 /* OfflinePlaceLabels.json */ = {isa = PBXFileReference
 		B30500000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../tests/Native/FlightRequestSlotTests.swift; sourceTree = SOURCE_ROOT; };
 		B30600000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RosterMonthCache.swift; sourceTree = "<group>"; };
 		B30600000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../tests/Native/RosterMonthCacheTests.swift; sourceTree = SOURCE_ROOT; };
+		B30700000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayPriorityPolicy.swift; sourceTree = "<group>"; };
+		B30700000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayPriorityViews.swift; sourceTree = "<group>"; };
+		B30700000000000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalFlightRoute.swift; sourceTree = "<group>"; };
+		B30700000000000000000004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DutyNotificationQueue.swift; sourceTree = "<group>"; };
+		B30700000000000000000005 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../tests/Native/TodayPriorityTests.swift; sourceTree = SOURCE_ROOT; };
+		B30700000000000000000006 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayNotificationRouter.swift; sourceTree = "<group>"; };
+		B30800000000000000000001 /* LockScreenPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockScreenPolicy.swift; sourceTree = "<group>"; };
+		B30800000000000000000002 /* DutyActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DutyActivityAttributes.swift; sourceTree = "<group>"; };
+		B30800000000000000000003 /* DutyActivityPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DutyActivityPresentation.swift; sourceTree = "<group>"; };
+		B30800000000000000000004 /* LockScreenActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockScreenActivityController.swift; sourceTree = "<group>"; };
+		B30800000000000000000005 /* LockScreenSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockScreenSettings.swift; sourceTree = "<group>"; };
+        B30800000000000000000010 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RAIDODutyWidget.swift; sourceTree = "<group>"; };
+        B30800000000000000000011 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+        B30800000000000000000012 = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; path = RAIDODutyWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B30900000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ThirdParty/AlertToast.swift"; sourceTree = "<group>"; };
+		B30900000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RaidoToast.swift"; sourceTree = "<group>"; };
+		B30900000000000000000003 = {isa = PBXFileReference; lastKnownFileType = text; path = "ThirdPartyNotices.txt"; sourceTree = "<group>"; };
+		B30900000000000000000004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ThirdParty/ActivityIndicator.swift"; sourceTree = "<group>"; };
+		B30900000000000000000005 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ThirdParty/BlurView.swift"; sourceTree = "<group>"; };
+		B31000000000000000000001 /* RosterTimestamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RosterTimestamp.swift; sourceTree = "<group>"; };
+		B31000000000000000000002 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		B31000000000000000000003 /* DutyActivityAppearancePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DutyActivityAppearancePolicy.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		C00000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		C30000000000000000000002 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        C30800000000000000000002 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+        C30800000000000000000004 = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (A30800000000000000000012); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
 /* Begin PBXGroup section */
+        D30800000000000000000001 = {isa = PBXGroup; path = RAIDODutyWidget; sourceTree = "<group>"; children = (B30800000000000000000010, B30800000000000000000011); };
+
 		D00000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				D00000000000000000000002 /* RAIDORoster */,
+				D30800000000000000000001,
+                D00000000000000000000002 /* RAIDORoster */,
 				D30000000000000000000001 /* Native tests */,
 				B00000000000000000000005 /* README.md */,
 				D00000000000000000000003 /* Products */,
@@ -116,6 +169,9 @@ B22920000000000000000002 /* OfflinePlaceLabels.json */ = {isa = PBXFileReference
 			children = (
 				B00000000000000000000001 /* RAIDORosterApp.swift */,
 				B00000000000000000000002 /* ContentView.swift */,
+                B31000000000000000000003,
+				B31000000000000000000002 /* AppState.swift */,
+				B31000000000000000000001 /* RosterTimestamp.swift */,
 				B22990000000000000000001 /* Info.plist */,
 				B30000000000000000000001 /* PortalBridgePolicy.swift */,
 				B30100000000000000000001 /* ProtectedJSONFile.swift */,
@@ -124,6 +180,22 @@ B22920000000000000000002 /* OfflinePlaceLabels.json */ = {isa = PBXFileReference
 				B30400000000000000000001 /* AircraftHTTPClient.swift */,
 				B30500000000000000000001 /* FlightRequestSlot.swift */,
 				B30600000000000000000001 /* RosterMonthCache.swift */,
+				B30700000000000000000001,
+				B30700000000000000000002,
+				B30700000000000000000003,
+				B30700000000000000000004, B30700000000000000000006,
+                B30800000000000000000001,
+                B30800000000000000000002,
+                B30800000000000000000003,
+                B30800000000000000000004,
+                B30900000000000000000001,
+                B30900000000000000000002,
+                B30900000000000000000003,
+                B30900000000000000000004,
+                B30900000000000000000005,
+                B30800000000000000000005,
+
+
 B22920000000000000000002 /* OfflinePlaceLabels.json */,
 B22920000000000000000001 /* MapPresentationPolicy.swift */,
 				B22910000000000000000001 /* FlightTrackingStatus.swift */,
@@ -152,11 +224,11 @@ B22920000000000000000001 /* MapPresentationPolicy.swift */,
 		};
 		D00000000000000000000003 /* Products */ = {
 			isa = PBXGroup;
-			children = (B00000000000000000000006 /* RAIDORoster.app */, B30000000000000000000006 /* RAIDORosterTests.xctest */,);
+			children = (B30800000000000000000012, B00000000000000000000006 /* RAIDORoster.app */, B30000000000000000000006 /* RAIDORosterTests.xctest */,);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		D30000000000000000000001 /* Native tests */ = {isa = PBXGroup; name = "Native tests"; sourceTree = "<group>"; children = (B30600000000000000000002, B30500000000000000000002, B30400000000000000000002, B30300000000000000000002, B30100000000000000000002, B30000000000000000000002, B30000000000000000000003, B30000000000000000000004, B30000000000000000000005); };
+		D30000000000000000000001 /* Native tests */ = {isa = PBXGroup; name = "Native tests"; sourceTree = "<group>"; children = (B30700000000000000000005, B30600000000000000000002, B30500000000000000000002, B30400000000000000000002, B30300000000000000000002, B30100000000000000000002, B30000000000000000000002, B30000000000000000000003, B30000000000000000000004, B30000000000000000000005); };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -166,23 +238,26 @@ B22920000000000000000001 /* MapPresentationPolicy.swift */,
 			buildPhases = (
 				C00000000000000000000002 /* Sources */,
 				C00000000000000000000001 /* Frameworks */,
-				C00000000000000000000003 /* Resources */,
+				C00000000000000000000003 /* Resources */, C30800000000000000000004,
 			);
 			buildRules = ();
-			dependencies = ();
+			dependencies = (E30800000000000000000003);
 			name = RAIDORoster;
 			productName = RAIDORoster;
 			productReference = B00000000000000000000006 /* RAIDORoster.app */;
 			productType = "com.apple.product-type.application";
 		};
 		E30000000000000000000001 /* RAIDORosterTests */ = {isa = PBXNativeTarget; buildConfigurationList = F30000000000000000000001; buildPhases = (C30000000000000000000001, C30000000000000000000002, C30000000000000000000003); buildRules = (); dependencies = (E30000000000000000000003); name = RAIDORosterTests; productName = RAIDORosterTests; productReference = B30000000000000000000006; productType = "com.apple.product-type.bundle.unit-test"; };
+        E30800000000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = F30800000000000000000001; buildPhases = (C30800000000000000000001,C30800000000000000000002,C30800000000000000000003); buildRules = (); dependencies = (); name = RAIDODutyWidget; productName = RAIDODutyWidget; productReference = B30800000000000000000012; productType = "com.apple.product-type.app-extension"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXContainerItemProxy section */
 		E30000000000000000000002 = {isa = PBXContainerItemProxy; containerPortal = E00000000000000000000002; proxyType = 1; remoteGlobalIDString = E00000000000000000000001; remoteInfo = RAIDORoster; };
+        E30800000000000000000002 = {isa = PBXContainerItemProxy; containerPortal = E00000000000000000000002; proxyType = 1; remoteGlobalIDString = E30800000000000000000001; remoteInfo = RAIDODutyWidget; };
 /* End PBXContainerItemProxy section */
 /* Begin PBXTargetDependency section */
 		E30000000000000000000003 = {isa = PBXTargetDependency; target = E00000000000000000000001; targetProxy = E30000000000000000000002; };
+        E30800000000000000000003 = {isa = PBXTargetDependency; target = E30800000000000000000001; targetProxy = E30800000000000000000002; };
 /* End PBXTargetDependency section */
 /* Begin PBXProject section */
 		E00000000000000000000002 /* Project object */ = {
@@ -202,18 +277,20 @@ B22920000000000000000001 /* MapPresentationPolicy.swift */,
 			productRefGroup = D00000000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			targets = (E00000000000000000000001 /* RAIDORoster */, E30000000000000000000001 /* RAIDORosterTests */,);
+			targets = (E30800000000000000000001, E00000000000000000000001 /* RAIDORoster */, E30000000000000000000001 /* RAIDORosterTests */,);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		C00000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000004 /* RosterEnhancements.js in Resources */, A22920000000000000000002 /* OfflinePlaceLabels.json in Resources */, A22800000000000000000002 /* OfflineLand.json in Resources */, A22800000000000000000001 /* AirportTimeZones.json in Resources */, A22500000000000000000001 /* GlobalAirportIndex.json in Resources */, A19900000000000000000003 /* GetJetAnnouncements.json in Resources */, A00000000000000000000005 /* Assets.xcassets in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
+		C00000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A30900000000000000000003, A00000000000000000000004 /* RosterEnhancements.js in Resources */, A22920000000000000000002 /* OfflinePlaceLabels.json in Resources */, A22800000000000000000002 /* OfflineLand.json in Resources */, A22800000000000000000001 /* AirportTimeZones.json in Resources */, A22500000000000000000001 /* GlobalAirportIndex.json in Resources */, A19900000000000000000003 /* GetJetAnnouncements.json in Resources */, A00000000000000000000005 /* Assets.xcassets in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
 		C30000000000000000000003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A30000000000000000000003, A30000000000000000000004, A30000000000000000000005); runOnlyForDeploymentPostprocessing = 0; };
+        C30800000000000000000003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		C00000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A30600000000000000000001, A30500000000000000000001 /* FlightRequestSlot.swift in Sources */, A30400000000000000000001 /* AircraftHTTPClient.swift in Sources */, A30300000000000000000001 /* FlightPowerPolicy.swift in Sources */, A30200000000000000000001 /* RosterStore.swift in Sources */, A30100000000000000000001 /* ProtectedJSONFile.swift in Sources */, A30000000000000000000001 /* PortalBridgePolicy.swift in Sources */, A00000000000000000000001 /* RAIDORosterApp.swift in Sources */, A00000000000000000000002 /* ContentView.swift in Sources */, A22920000000000000000001 /* MapPresentationPolicy.swift in Sources */, A22910000000000000000001 /* FlightTrackingStatus.swift in Sources */, A22900000000000000000001 /* AppearanceModels.swift in Sources */, A22700000000000000000001 /* FleetRefreshPolicy.swift in Sources */, A22600000000000000000001 /* FlightSensorPolicy.swift in Sources */, A222000000000000000001 /* PayProfileModels.swift in Sources */, A22100000000000000000003 /* CrewDocumentsView.swift in Sources */, A22100000000000000000002 /* CrewDocumentServices.swift in Sources */, A22100000000000000000001 /* CrewDocumentVault.swift in Sources */, A22000000000000000000002 /* EarningsView.swift in Sources */, A22000000000000000000001 /* EarningsModels.swift in Sources */, A19900000000000000000002 /* AnnouncementsView.swift in Sources */, A19900000000000000000001 /* AnnouncementModels.swift in Sources */, A19800000000000000000001 /* FleetTrackingPolicy.swift in Sources */, A00000000000000000000003 /* RosterWebView.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
-		C30000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A30600000000000000000002, A30500000000000000000002, A30400000000000000000002, A30300000000000000000002, A30100000000000000000002, A30000000000000000000002); runOnlyForDeploymentPostprocessing = 0; };
+		C00000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A31000000000000000000003, A31000000000000000000002, A31000000000000000000001, A30900000000000000000005, A30900000000000000000004, A30900000000000000000002, A30900000000000000000001, A30800000000000000000001, A30800000000000000000002, A30800000000000000000003, A30800000000000000000004, A30800000000000000000005, A30700000000000000000006, A30700000000000000000001, A30700000000000000000002, A30700000000000000000003, A30700000000000000000004, A30600000000000000000001, A30500000000000000000001 /* FlightRequestSlot.swift in Sources */, A30400000000000000000001 /* AircraftHTTPClient.swift in Sources */, A30300000000000000000001 /* FlightPowerPolicy.swift in Sources */, A30200000000000000000001 /* RosterStore.swift in Sources */, A30100000000000000000001 /* ProtectedJSONFile.swift in Sources */, A30000000000000000000001 /* PortalBridgePolicy.swift in Sources */, A00000000000000000000001 /* RAIDORosterApp.swift in Sources */, A00000000000000000000002 /* ContentView.swift in Sources */, A22920000000000000000001 /* MapPresentationPolicy.swift in Sources */, A22910000000000000000001 /* FlightTrackingStatus.swift in Sources */, A22900000000000000000001 /* AppearanceModels.swift in Sources */, A22700000000000000000001 /* FleetRefreshPolicy.swift in Sources */, A22600000000000000000001 /* FlightSensorPolicy.swift in Sources */, A222000000000000000001 /* PayProfileModels.swift in Sources */, A22100000000000000000003 /* CrewDocumentsView.swift in Sources */, A22100000000000000000002 /* CrewDocumentServices.swift in Sources */, A22100000000000000000001 /* CrewDocumentVault.swift in Sources */, A22000000000000000000002 /* EarningsView.swift in Sources */, A22000000000000000000001 /* EarningsModels.swift in Sources */, A19900000000000000000002 /* AnnouncementsView.swift in Sources */, A19900000000000000000001 /* AnnouncementModels.swift in Sources */, A19800000000000000000001 /* FleetTrackingPolicy.swift in Sources */, A00000000000000000000003 /* RosterWebView.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		C30000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A30700000000000000000005, A30600000000000000000002, A30500000000000000000002, A30400000000000000000002, A30300000000000000000002, A30100000000000000000002, A30000000000000000000002); runOnlyForDeploymentPostprocessing = 0; };
+        C30800000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A31000000000000000000004, A30800000000000000000010, A30800000000000000000102, A30800000000000000000103); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -222,7 +299,7 @@ B22920000000000000000001 /* MapPresentationPolicy.swift */,
 		F10000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
 			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 			CODE_SIGN_STYLE = Automatic;
-			CURRENT_PROJECT_VERSION = 22916;
+			CURRENT_PROJECT_VERSION = 22931;
 			DEVELOPMENT_TEAM = "";
 			GENERATE_INFOPLIST_FILE = YES;
 			INFOPLIST_FILE = RAIDORoster/Info.plist;
@@ -235,7 +312,7 @@ B22920000000000000000001 /* MapPresentationPolicy.swift */,
 			INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 			INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 			IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-			MARKETING_VERSION = 2.29.16;
+			MARKETING_VERSION = 2.29.31;
 			PRODUCT_BUNDLE_IDENTIFIER = com.bobanilic.raidoroster;
 			PRODUCT_NAME = "$(TARGET_NAME)";
 			SWIFT_EMIT_LOC_STRINGS = YES;
@@ -247,7 +324,7 @@ B22920000000000000000001 /* MapPresentationPolicy.swift */,
 		F10000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
 			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 			CODE_SIGN_STYLE = Automatic;
-			CURRENT_PROJECT_VERSION = 22916;
+			CURRENT_PROJECT_VERSION = 22931;
 			DEVELOPMENT_TEAM = "";
 			GENERATE_INFOPLIST_FILE = YES;
 			INFOPLIST_FILE = RAIDORoster/Info.plist;
@@ -260,7 +337,7 @@ B22920000000000000000001 /* MapPresentationPolicy.swift */,
 			INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 			INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 			IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-			MARKETING_VERSION = 2.29.16;
+			MARKETING_VERSION = 2.29.31;
 			PRODUCT_BUNDLE_IDENTIFIER = com.bobanilic.raidoroster;
 			PRODUCT_NAME = "$(TARGET_NAME)";
 			SWIFT_EMIT_LOC_STRINGS = YES;
@@ -269,12 +346,31 @@ B22920000000000000000001 /* MapPresentationPolicy.swift */,
 		}; name = Release; };
 		F30000000000000000000002 = {isa = XCBuildConfiguration; buildSettings = { BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; SWIFT_STRICT_CONCURRENCY = targeted; TARGETED_DEVICE_FAMILY = 1; PRODUCT_BUNDLE_IDENTIFIER = com.bobanilic.raidoroster.tests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RAIDORoster.app/RAIDORoster"; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks"); }; name = Debug; };
 		F30000000000000000000003 = {isa = XCBuildConfiguration; buildSettings = { BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; SWIFT_STRICT_CONCURRENCY = targeted; TARGETED_DEVICE_FAMILY = 1; PRODUCT_BUNDLE_IDENTIFIER = com.bobanilic.raidoroster.tests; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RAIDORoster.app/RAIDORoster"; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks"); }; name = Release; };
+        F30800000000000000000002 = {isa = XCBuildConfiguration; buildSettings = {
+            APPLICATION_EXTENSION_API_ONLY = YES; CLANG_ENABLE_MODULES = YES; CODE_SIGN_STYLE = Automatic;
+            CURRENT_PROJECT_VERSION = 22931; MARKETING_VERSION = 2.29.31; DEVELOPMENT_TEAM = "";
+            GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = RAIDODutyWidget/Info.plist;
+            IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SKIP_INSTALL = YES;
+            PRODUCT_BUNDLE_IDENTIFIER = com.bobanilic.raidoroster.DutyWidget; PRODUCT_NAME = "$(TARGET_NAME)";
+            SWIFT_VERSION = 5.0; SWIFT_STRICT_CONCURRENCY = targeted; TARGETED_DEVICE_FAMILY = 1;
+            LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks");
+        }; name = Debug; };
+        F30800000000000000000003 = {isa = XCBuildConfiguration; buildSettings = {
+            APPLICATION_EXTENSION_API_ONLY = YES; CLANG_ENABLE_MODULES = YES; CODE_SIGN_STYLE = Automatic;
+            CURRENT_PROJECT_VERSION = 22931; MARKETING_VERSION = 2.29.31; DEVELOPMENT_TEAM = "";
+            GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = RAIDODutyWidget/Info.plist;
+            IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SKIP_INSTALL = YES;
+            PRODUCT_BUNDLE_IDENTIFIER = com.bobanilic.raidoroster.DutyWidget; PRODUCT_NAME = "$(TARGET_NAME)";
+            SWIFT_VERSION = 5.0; SWIFT_STRICT_CONCURRENCY = targeted; TARGETED_DEVICE_FAMILY = 1;
+            LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks");
+        }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
 		F00000000000000000000001 /* Build configuration list for PBXProject "RAIDORoster" */ = {isa = XCConfigurationList; buildConfigurations = (F10000000000000000000001 /* Debug */, F10000000000000000000002 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		F00000000000000000000002 /* Build configuration list for PBXNativeTarget "RAIDORoster" */ = {isa = XCConfigurationList; buildConfigurations = (F10000000000000000000003 /* Debug */, F10000000000000000000004 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		F30000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (F30000000000000000000002, F30000000000000000000003); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+        F30800000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (F30800000000000000000002,F30800000000000000000003); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = E00000000000000000000002 /* Project object */;

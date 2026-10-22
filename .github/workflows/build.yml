@@ -9,14 +9,15 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: raido-${{ github.workflow }}-${{ github.ref }}
+  # A wedged simulator cancellation must not serialize newer source builds.
+  group: raido-login-${{ github.workflow }}-${{ github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 jobs:
   release:
     runs-on: macos-15-intel
     timeout-minutes: 25
     env:
-      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -39,17 +40,18 @@ jobs:
     runs-on: macos-15-intel
     timeout-minutes: 30
     env:
-      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: RAIDO-${{ needs.release.outputs.version }}-IPA
           path: RAIDORoster-Web2IPA
-      - name: Check approved themes and map gestures
-        run: bash tools/ci.sh preview
+      - name: Check production launch and tab responsiveness
+        run: bash tools/ci.sh startup
       - name: Shut down simulator before runner cleanup
         if: always()
+        timeout-minutes: 1
         run: xcrun simctl shutdown all || true
       - uses: actions/upload-artifact@v4
         if: always()
@@ -63,15 +65,16 @@ jobs:
           retention-days: 7
   native-tests:
     runs-on: macos-15-intel
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
-      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
-      - name: Test roster ingestion and the actual web extractor
+      - name: Test startup cache, login bridge and Today priorities
         run: bash tools/ci.sh native-tests
       - name: Shut down simulator before runner cleanup
         if: always()
+        timeout-minutes: 1
         run: xcrun simctl shutdown all || true
       - uses: actions/upload-artifact@v4
         if: always()

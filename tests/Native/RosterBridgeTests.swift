@@ -39,7 +39,33 @@ final class RosterBridgeTests: XCTestCase {
         XCTAssertEqual(PortalBridgePolicy.navigation(external, userTapped: true, popup: false), .external)
         XCTAssertEqual(PortalBridgePolicy.navigation(URL(string: "javascript:alert(1)")!, userTapped: true, popup: false), .blocked)
         XCTAssertEqual(PortalBridgePolicy.navigation(URL(string: "mailto:crew@example.invalid")!, userTapped: true, popup: false), .external)
-        XCTAssertEqual(PortalBridgePolicy.navigation(URL(string: "https://\(PortalBridgePolicy.portalHost)/")!, userTapped: true, popup: true), .external)
+        XCTAssertEqual(PortalBridgePolicy.navigation(URL(string: "https://\(PortalBridgePolicy.portalHost)/")!, userTapped: true, popup: true), .portal)
+    }
+    func testMobileEntryAndRecoveryStates() async throws {
+        let defaults = UserDefaults.standard
+        let key = "RAIDORoster.LastPortalURL", previous = defaults.object(forKey: "RAIDORoster.LastPortalURL")
+        defer { if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) } }
+        defaults.removeObject(forKey: key)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let model = RosterBrowserModel(store: RosterStore(storageFolderURL: folder, automaticSideEffects: false))
+        XCTAssertEqual(model.preferredStartURL.absoluteString, "https://gjt.noc.vmc.navblue.cloud/raidomobile/")
+        defaults.set("https://gjt.noc.vmc.navblue.cloud/", forKey: key)
+        XCTAssertEqual(model.preferredStartURL, RosterBrowserModel.startURL, "Discard the legacy chooser preference")
+        defaults.set("https://example.invalid/HumanResourceRoster.aspx", forKey: key)
+        XCTAssertEqual(model.preferredStartURL, RosterBrowserModel.startURL)
+        model.navigationStarted(timeout: .milliseconds(20))
+        XCTAssertTrue(model.isLoading)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertFalse(model.isLoading); XCTAssertNotNil(model.loadError)
+        model.navigationStarted(timeout: .milliseconds(20)); model.navigationFinished()
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertNil(model.loadError, "Finished navigation cancels its timeout")
+        let coordinator = RosterWebView.Coordinator(model: model)
+        coordinator.webViewWebContentProcessDidTerminate(WKWebView())
+        XCTAssertNotNil(model.loadError)
+        model.navigationStarted(); model.navigationFinished()
+        XCTAssertNil(model.loadError, "Retry clears the terminated-page failure")
     }
     func testDatesCountsFieldsAndSizeAreCheckedNatively() throws {
         XCTAssertFalse(PortalBridgePolicy.day("2026-02-30"))
@@ -132,11 +158,74 @@ final class RosterBridgeTests: XCTestCase {
             XCTFail("A different returned month must be rejected")
         } catch { /* expected: requested month was not returned */ }
     }
+    func testActualRelocationHTMLReachesUpcomingPriorities() async throws {
+        let ready = expectation(description:"Roster fixture ready")
+        try loadFixture("roster",path:"HumanResourceRoster.aspx",expectation:ready)
+        defer {
+            webView?.configuration.userContentController.removeAllScriptMessageHandlers()
+            webView = nil; recorder = nil; fixtureWindow?.isHidden = true; fixtureWindow = nil
+        }
+        await fulfillment(of:[ready],timeout:60)
+        let view = try XCTUnwrap(webView)
+        let url = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"roster",withExtension:"html"))
+        var html = try String(contentsOf:url,encoding:.utf8)
+        let tableStart = try XCTUnwrap(html.range(of:"<table"))
+        let tableEnd = try XCTUnwrap(html.range(of:"</table>",range:tableStart.lowerBound..<html.endIndex))
+        // Real portal wording matters: HOTEL used to match before RLCN, and
+        // grouping then dropped relocation metadata on days with standby.
+        let first = """
+        <table class="activity-table"><tr><td>
+        Activity STA32,STB Afternoon320 ADHOC Station VNO - EYVI - VILNIUS
+        CheckIn 23OCT26 11:00 (LT) / 23OCT26 08:00 (UTC)
+        Start 23OCT26 11:00 (LT) / 23OCT26 08:00 (UTC)
+        End 23OCT26 21:00 (LT) / 23OCT26 18:00 (UTC)
+        CheckOut 23OCT26 21:00 (LT) / 23OCT26 18:00 (UTC)
+        </td></tr><tr><td>
+        Activity RLCN,Hotel relocation Station VNO - EYVI - VILNIUS
+        Start 23OCT26 12:00 (LT) / 23OCT26 09:00 (UTC)
+        End 23OCT26 13:00 (LT) / 23OCT26 10:00 (UTC)
+        Activity Note Please use Bolt for the relocation
+        </td></tr></table>
+        """
+        html.replaceSubrange(tableStart.lowerBound..<tableEnd.upperBound,with:first)
+        let payload = try await view.callAsyncJavaScript("return window.RAIDOPlus.extractHTML(html,url,month)",
+            arguments:["html":html,"url":"https://gjt.noc.vmc.navblue.cloud/RaidoMobile/HumanResourceRoster.aspx","month":"2026-10"],in:nil,contentWorld:.page)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:folder) }
+        let store = RosterStore(storageFolderURL:folder,automaticSideEffects:false)
+        XCTAssertTrue(store.ingest(messageBody:try XCTUnwrap(payload),archiveOnly:true,expectedMonth:"2026-10"))
+        let now = ISO8601DateFormatter().date(from:"2026-10-19T08:00:00Z")!
+        let move = try XCTUnwrap(store.priorityEvents(at:now).first { $0.kind == .relocation })
+        XCTAssertEqual(move.title,"Hotel relocation")
+        XCTAssertEqual(TodayPriorityPolicy.status(move,now:now),"In 4 days")
+        XCTAssertEqual(move.clock,"12:00"); XCTAssertEqual(move.endClock,"13:00")
+        XCTAssertTrue(move.notes.contains("Please use Bolt"))
+        XCTAssertFalse(move.missing.contains("Transport details not provided"))
+        let day = try XCTUnwrap(store.priorityRosterItems.first { $0.dateISO == "2026-10-23" })
+        XCTAssertEqual(day.operationalActivities.map(\.category),["STANDBY"])
+        XCTAssertEqual(day.relocationActivities.count,1)
+    }
     func testLoginPageDoesNotReportParserFailure() async throws {
         let expectation = expectation(description: "No roster error on login")
         expectation.isInverted = true
+        let ready = self.expectation(description: "Login document loaded")
         try loadFixture("login", path: "Login.aspx", expectation: expectation)
-        await fulfillment(of: [expectation], timeout: 2)
+        recorder?.navigationFinished = ready
+        await fulfillment(of: [ready], timeout: 60)
+        await fulfillment(of: [expectation], timeout: 0.3)
+        let view = try XCTUnwrap(webView)
+        let auth = try await view.evaluateJavaScript("window.RAIDOPlus.history.inspect().kind")
+        XCTAssertEqual(auth as? String, "auth", "History worker still detects sign-in pages")
+        let interactive = try await view.evaluateJavaScript("""
+            (() => {
+              const field = document.querySelector('input[type=text]');
+              field.focus();
+              return document.activeElement === field && !field.disabled && !document.querySelector('button').disabled;
+            })()
+            """)
+        XCTAssertEqual(interactive as? Bool, true)
+        let observers = try await view.evaluateJavaScript("window.testRosterObservers || 0")
+        XCTAssertEqual(observers as? Int, 0, "No roster mutation observation on login")
         webView?.configuration.userContentController.removeAllScriptMessageHandlers()
         webView = nil; recorder = nil
         fixtureWindow?.isHidden = true; fixtureWindow = nil
@@ -174,8 +263,10 @@ final class RosterBridgeTests: XCTestCase {
 @MainActor private final class Recorder: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     let expectation: XCTestExpectation
     var body: [String: Any]?
+    var navigationFinished: XCTestExpectation?
     init(expectation: XCTestExpectation) { self.expectation = expectation }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        navigationFinished?.fulfill(); navigationFinished = nil
         // Trigger after document-end injection; do not depend on the startup timer.
         webView.evaluateJavaScript("window.RAIDOPlus?.extractNow()", completionHandler: nil)
     }

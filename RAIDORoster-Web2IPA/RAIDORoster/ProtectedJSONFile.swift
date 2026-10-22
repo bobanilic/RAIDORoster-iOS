@@ -46,7 +46,7 @@ struct ProtectedJSONFile<Value: Codable> {
     }
 
     /// Existing unwrapped roster JSON is decoded and migrated without deleting it first.
-    func load(legacyDatesISO8601: Bool = true) throws -> Value? {
+    func load(legacyDatesISO8601: Bool = true, migrateLegacy: Bool = true) throws -> Value? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         let data = try Data(contentsOf: url)
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
@@ -59,7 +59,7 @@ struct ProtectedJSONFile<Value: Codable> {
         }
         if !legacyDatesISO8601 { decoder.dateDecodingStrategy = .deferredToDate }
         let value = try decoder.decode(Value.self, from: data)
-        try save(value)
+        if migrateLegacy { try save(value) }
         return value
     }
 

@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct RAIDORosterApp: App {
+    @UIApplicationDelegateAdaptor(RaidoNotificationDelegate.self) private var notificationDelegate
     @AppStorage("RAIDORoster.Theme") private var themeRaw = "ice"
     @AppStorage("RAIDORoster.Appearance.Ice") private var iceAppearance = "system"
     @AppStorage("RAIDORoster.Appearance.GetJet") private var getJetAppearance = "system"

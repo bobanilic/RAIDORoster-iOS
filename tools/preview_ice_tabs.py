@@ -7,6 +7,7 @@ from pathlib import Path
 import hashlib
 import json
 import plistlib
+import platform
 import subprocess
 import time
 import shutil
@@ -28,23 +29,26 @@ original_announcements = announcement_view.read_text()
 project = root / 'RAIDORoster.xcodeproj'
 original_project = (project / 'project.pbxproj').read_bytes()
 test_scheme = None
+ephemeral_simulator = None
 preview = r'''
 extension RosterStore {
     func installIceFixture() {
         let today = Date(), calendar = Calendar.current
+        let todayReturn = ProcessInfo.processInfo.arguments.contains("--today-return")
+        let origin = todayReturn ? "VNO" : "TLV", destination = todayReturn ? "LEJ" : "PFO"
         let year = calendar.component(.year, from: today), month = calendar.component(.month, from: today)
         let currentDay = calendar.component(.day, from: today)
         let start = calendar.date(from: DateComponents(year: year, month: month, day: 1))!
         let days = calendar.range(of: .day, in: .month, for: start)!
         let members = [CrewMember(role: "SCCM", code: "AAA", name: "Alex Morgan", country: nil, phone: nil),
                        CrewMember(role: "CCM", code: "BBB", name: "Jamie Taylor", country: nil, phone: nil)]
-        let items = days.map { day -> RosterItem in
+        var items = days.map { day -> RosterItem in
             let iso = String(format: "%04d-%02d-%02d", year, month, day)
             let fly = day == currentDay || day % 3 == 0
             let category = fly ? "FLIGHT" : day % 4 == 0 ? "STANDBY" : "OFF"
             func sector(_ inbound: Bool) -> RosterActivity {
                 RosterActivity(id: iso + (inbound ? "-b" : "-a"), code: inbound ? "GJT102" : "GJT101", category: "FLIGHT", title: "Flight",
-                    description: "Sample flight", route: inbound ? "PFO-TLV" : "TLV-PFO", station: inbound ? "PFO" : "TLV",
+                    description: "Sample flight", route: inbound ? destination+"-"+origin : origin+"-"+destination, station: inbound ? destination : origin,
                     checkInLT: inbound ? "" : iso + " 11:30", checkInUTC: inbound ? "" : iso + " 08:30",
                     startLT: iso + (inbound ? " 14:10" : " 12:15"), startUTC: iso + (inbound ? " 11:10" : " 09:15"),
                     endLT: iso + (inbound ? " 15:10" : " 13:15"), endUTC: iso + (inbound ? " 12:10" : " 10:15"),
@@ -53,13 +57,80 @@ extension RosterStore {
                     aircraftReg: ProcessInfo.processInfo.arguments.contains("--airhub") ? "9HGTS" : "LYTEN", aircraftType: "A320", aircraftVersion: "", aircraftPhone: "", crew: members, rawText: "Sample duty")
             }
             return RosterItem(id: iso, index: day, dateISO: iso, dateText: iso, category: category,
-                title: fly ? "Flight duty" : category.capitalized, route: fly ? "TLV-PFO-TLV" : "", timeText: fly ? "11:30–15:40" : "",
+                title: fly ? "Flight duty" : category.capitalized, route: fly ? origin+"-"+destination+"-"+origin : "", timeText: fly ? "11:30–15:40" : "",
                 rawText: "Sample roster", cells: [], activities: fly ? [sector(false), sector(true)] : [], activeHotels: nil)
+        }
+        if ProcessInfo.processInfo.arguments.contains("--priorities") {
+            let off = ProcessInfo.processInfo.arguments.contains("--off-day")
+            let model = items.flatMap(\.flightActivities).first!
+            func stamp(_ date: Date, zone: TimeZone) -> String {
+                let f = DateFormatter(); f.locale = Locale(identifier:"en_US_POSIX"); f.timeZone = zone; f.dateFormat="yyyy-MM-dd HH:mm"
+                return f.string(from:date)
+            }
+            let utc = TimeZone(secondsFromGMT:0)!, local = TimeZone(identifier:"Asia/Jerusalem")!
+            func revised(_ values: [String:String]) -> RosterActivity {
+                var raw = try! JSONSerialization.jsonObject(with:JSONEncoder().encode(model)) as! [String:Any]
+                for (key,value) in values { raw[key]=value }
+                return try! JSONDecoder().decode(RosterActivity.self,from:JSONSerialization.data(withJSONObject:raw))
+            }
+            let todayISO = EarningsMath.day(today)
+            if off, let index = items.firstIndex(where:{$0.dateISO == todayISO}) {
+                items[index] = RosterItem(id:todayISO,index:currentDay,dateISO:todayISO,dateText:todayISO,
+                    category:"OFF",title:"Day off",route:"",timeText:"",rawText:"Sample day off",cells:[],activities:[],activeHotels:nil)
+            }
+            if !off {
+                let pickup=today.addingTimeInterval(45*60), report=today.addingTimeInterval(60*60)
+                let start=today.addingTimeInterval(90*60), end=start.addingTimeInterval(3600)
+                let iso=EarningsMath.day(start)
+                let f=DateFormatter(); f.locale=Locale(identifier:"en_US_POSIX"); f.timeZone=local; f.dateFormat="d MMM HH:mm"
+                let flight=revised(["id":"priority-flight","pickup":f.string(from:pickup)+" LT","checkInUTC":stamp(report,zone:utc),"checkInLT":stamp(report,zone:local),
+                    "startUTC":stamp(start,zone:utc),"startLT":stamp(start,zone:local),"endUTC":stamp(end,zone:utc),"endLT":stamp(end,zone:local)])
+                items.removeAll {$0.dateISO == iso}
+                items.append(RosterItem(id:iso,index:currentDay,dateISO:iso,dateText:iso,category:"FLIGHT",title:"Flight duty",route:flight.route,timeText:flight.timeText,
+                    rawText:"Sample priority flight",cells:[],activities:[flight],activeHotels:nil))
+            }
+            let moveDate=calendar.date(byAdding:.day,value:4,to:today)!, moveISO=EarningsMath.day(moveDate)
+            let move=revised(["id":"priority-move","code":"RLCN","category":"RELOCATION","title":"Hotel relocation","description":"Sample hotel change",
+                "route":"","station":"VNO","startLT":"","startUTC":"","endLT":"","endUTC":"","checkInLT":"","checkInUTC":"","checkOutLT":"","checkOutUTC":"",
+                "pickup":"","transferNote":"","hotelName":"Hotel Central","aircraftReg":""])
+            items.removeAll {$0.dateISO == moveISO}
+            items.append(RosterItem(id:moveISO,index:currentDay+4,dateISO:moveISO,dateText:moveISO,category:"OFF",title:"Day off",route:"",timeText:"",
+                rawText:"Sample relocation",cells:[],activities:[move],activeHotels:nil))
+            items.sort {($0.dateISO ?? "") < ($1.dateISO ?? "")}
+        }
+        if ProcessInfo.processInfo.arguments.contains("--split-duty") {
+            let iso = EarningsMath.day(today), model = items.flatMap(\.flightActivities).first!
+            func flight(_ code: String, _ route: String, _ start: String, _ end: String) -> RosterActivity {
+                var raw = try! JSONSerialization.jsonObject(with: JSONEncoder().encode(model)) as! [String: Any]
+                for (key, value) in ["id":code,"code":code,"route":route,"startLT":iso+" "+start,"startUTC":iso+" "+start,
+                    "endLT":iso+" "+end,"endUTC":iso+" "+end,"checkInLT":"","checkInUTC":"","checkOutLT":"","checkOutUTC":"","pickup":""] { raw[key]=value }
+                return try! JSONDecoder().decode(RosterActivity.self, from: JSONSerialization.data(withJSONObject: raw))
+            }
+            let flights = [flight("DI9003","VNO-LEJ","06:00","07:10"),flight("DI6656","LEJ-RHO","08:00","12:05"),
+                flight("DI6657","RHO-LEJ","12:55","15:05"),flight("DI9004","LEJ-VNO","19:10","22:05")]
+            items.removeAll { $0.dateISO == iso }
+            for (index, activities) in [Array(flights.prefix(3)), [flights[3]]].enumerated() {
+                items.append(RosterItem(id:iso+"-duty-\(index)",index:currentDay*10+index,dateISO:iso,dateText:iso,
+                    category:"FLIGHT",title:"Flight duty",route:activities.map(\.route).joined(separator:" · "),timeText:"",
+                    rawText:"Synthetic split duty",cells:[],activities:activities,activeHotels:nil))
+            }
         }
         let monthKey = String(format: "%04d-%02d", year, month)
         let value = RosterSnapshot(capturedAt: today, sourceURL: "https://example.invalid/preview", pageTitle: "Sample roster", items: items,
             validation: RosterValidation(isValid: true, parser: "preview", month: monthKey, datedRows: items.count, message: "Sample data"), monthlyBLH: "40:00")
         snapshot = value; monthSnapshots = [monthKey: value]; selectedRosterMonthKey = monthKey
+        for (key,rows) in Dictionary(grouping:items,by:{String(($0.dateISO ?? "").prefix(7))}) where key != monthKey {
+            monthSnapshots[key]=RosterSnapshot(capturedAt:today,sourceURL:value.sourceURL,pageTitle:value.pageTitle,items:rows,
+                validation:RosterValidation(isValid:true,parser:"preview",month:key,datedRows:rows.count,message:"Sample data"),monthlyBLH:nil)
+        }
+
+    }
+}
+
+extension RosterStore {
+    func persistStartupFixture() {
+        if let snapshot { save(snapshot) }
+        saveMonthSnapshots()
     }
 }
 
@@ -122,13 +193,14 @@ try:
     generated = original_content.replace('@State private var mapExpanded = false',
         '@State private var mapExpanded = ProcessInfo.processInfo.arguments.contains("--expanded")')
     # Force the local basemap in the disposable preview, independent of network.
-    generated = generated.replace('private var todayMapSource = "auto"', 'private var todayMapSource = "offline"')
+    if '--startup-only' not in sys.argv:
+        generated = generated.replace('private var todayMapSource = "auto"', 'private var todayMapSource = "offline"')
     # Display all Fleet definitions immediately, without polling or network data.
     generated = generated.replace('@State private var showOtherFleet = false', '@State private var showOtherFleet = true')
     fixture, preview_views = preview.split('struct IcePreviewRoot: View {', 1)
     store_source.write_text(original_store + fixture)
     content.write_text(generated + 'struct IcePreviewRoot: View {' + preview_views)
-    host = original_app.replace('ContentView()', 'IcePreviewRoot()')
+    host = original_app.replace('ContentView()', 'Group { if ProcessInfo.processInfo.arguments.contains("--startup") { ContentView() } else { IcePreviewRoot() } }')
     host = host.replace('        RaidoAppearancePreferences.migrate(.standard)', '''
         let args = ProcessInfo.processInfo.arguments
         let rawTheme = args.first(where: { $0.hasPrefix("--theme=") }).map { String($0.dropFirst(8)) } ?? "ice"
@@ -139,7 +211,23 @@ try:
         if let chosen = args.first(where: { $0.hasPrefix("--palette=") }).map({ String($0.dropFirst(10)) }) {
             UserDefaults.standard.set(chosen, forKey: rawTheme == "getJet" ? RaidoAppearancePreferences.getJetPaletteKey : RaidoAppearancePreferences.icePaletteKey)
         }
-        RaidoAppearancePreferences.migrate(.standard)''')
+        RaidoAppearancePreferences.migrate(.standard)
+        if args.contains("--today-return") {
+            UserDefaults.standard.set("auto", forKey: "RAIDORoster.TodayMapSource")
+            UserDefaults.standard.set(false, forKey: LockScreenPolicy.pickupKey)
+            UserDefaults.standard.set(false, forKey: LockScreenPolicy.precautionKey)
+            UserDefaults.standard.set(0, forKey: "RAIDORoster.PickupReminderLead")
+            UserDefaults.standard.set(0, forKey: "RAIDORoster.ReportReminderLead")
+        }
+        if args.contains("--startup") {
+            let fixture = RosterStore(automaticSideEffects:false)
+            if args.contains("--clean-install") {
+                fixture.clearCache()
+                UserDefaults.standard.removeObject(forKey: "RAIDORoster.LastPortalURL")
+            } else if !args.contains("--reuse-startup-cache") {
+                fixture.installIceFixture();fixture.persistStartupFixture()
+            }
+        }''')
     app.write_text(host)
     with zipfile.ZipFile(ipa) as archive:
         packaged = plistlib.loads(archive.read('Payload/RAIDORoster.app/Info.plist'))
@@ -148,31 +236,55 @@ try:
         try:
             run(['xcodebuild', '-project', str(root / 'RAIDORoster.xcodeproj'), '-scheme', 'RAIDOMapChecks', '-configuration', 'Debug',
                  '-sdk', 'iphonesimulator', '-destination', 'generic/platform=iOS Simulator', '-derivedDataPath', '/tmp/raido-ice-preview',
-                 'CODE_SIGNING_ALLOWED=NO', 'build-for-testing'], stdout=log, stderr=subprocess.STDOUT)
+                 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGNING_REQUIRED=NO', 'CODE_SIGN_STYLE=Manual',
+                 'CODE_SIGN_IDENTITY=-', 'AD_HOC_CODE_SIGNING_ALLOWED=YES',
+                 'ONLY_ACTIVE_ARCH=YES', 'ARCHS=' + platform.machine(), 'build-for-testing'], stdout=log, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError:
             print('\n'.join(line for line in Path(log.name).read_text().splitlines() if 'error:' in line))
             raise
     product = Path('/tmp/raido-ice-preview/Build/Products/Debug-iphonesimulator/RAIDORoster.app')
     plist_path = product / 'Info.plist'
     info = plistlib.loads(plist_path.read_bytes())
-    # The release packaging script adds these keys after xcodebuild. Mirror the
-    # packaged configuration in the simulator too: CLLocationManager asserts
-    # when background updates are enabled without the location background mode.
-    with zipfile.ZipFile(ipa) as archive:
-        packaged = plistlib.loads(archive.read('Payload/RAIDORoster.app/Info.plist'))
+    # The real Info.plist now owns these keys. Verify parity without mutating
+    # the built bundle and invalidating its simulator code signature.
     for key, value in packaged.items():
         if key == 'UIBackgroundModes' or (key.startswith('NS') and key.endswith('UsageDescription')):
-            info[key] = value
-    plist_path.write_bytes(plistlib.dumps(info))
+            assert info.get(key) == value, f'Simulator privacy configuration differs: {key}'
     bundle = info['CFBundleIdentifier']
     devices = json.loads(run(['xcrun', 'simctl', 'list', 'devices', 'available', '-j'], capture_output=True, text=True).stdout)
-    choices = [d for group in devices['devices'].values() for d in group if d['name'].startswith('iPhone')]
-    device = next((d for d in choices if d['name'] == 'iPhone 16 Pro'), choices[0])
+    choices = [(runtime, d) for runtime, group in devices['devices'].items() for d in group if d['name'].startswith('iPhone')]
+    runtime, device = next(((r, d) for r, d in choices if d['name'] == 'iPhone 16 Pro'), choices[0])
     udid = device['udid']
-    if device['state'] != 'Booted': run(['xcrun', 'simctl', 'boot', udid])
-    run(['xcrun', 'simctl', 'bootstatus', udid, '-b'])
-    run(['xcrun', 'simctl', 'install', udid, str(product)])
-    run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '06:44', '--batteryState', 'charged', '--batteryLevel', '100'])
+    if '--startup-only' in sys.argv:
+        # A fresh device has no app to uninstall. Avoid an unrelated stale
+        # simulator/uninstall blocking the clean-install tests before launch.
+        udid = run(['xcrun', 'simctl', 'create', 'RAIDO-startup-checks', device['deviceTypeIdentifier'], runtime],
+                   capture_output=True, text=True, timeout=60).stdout.strip()
+        ephemeral_simulator = udid
+    if '--startup-only' not in sys.argv:
+        if device['state'] != 'Booted': run(['xcrun', 'simctl', 'boot', udid], timeout=60)
+        run(['xcrun', 'simctl', 'bootstatus', udid, '-b'], timeout=240)
+        run(['xcrun', 'simctl', 'install', udid, str(product)], timeout=90)
+        run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '06:44', '--batteryState', 'charged', '--batteryLevel', '100'])
+    # For startup checks XCTest installs/boots the app and runner together, as
+    # in the passing native suite. A separate simctl install was hanging before
+    # any UI test ran. The test command and job retain their existing limits.
+    if '--startup-only' in sys.argv:
+        with open('/tmp/raido-startup-ui-tests.log','w') as log:
+            try:
+                run(['xcodebuild','-project',str(project),'-scheme','RAIDOMapChecks','-configuration','Debug',
+                    '-destination','platform=iOS Simulator,id='+udid,'-derivedDataPath','/tmp/raido-ice-preview',
+                    '-parallel-testing-enabled','NO','CODE_SIGNING_ALLOWED=YES','CODE_SIGNING_REQUIRED=NO',
+                    'CODE_SIGN_STYLE=Manual','CODE_SIGN_IDENTITY=-','AD_HOC_CODE_SIGNING_ALLOWED=YES',
+                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testFourSectorsAcrossTwoDutyGroups',
+                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testCleanInstallMobileLoginAndReturnToTabs',
+                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testProductionLaunchAndTabResponsiveness',
+                    '-only-testing:RAIDOMapChecks/MapGestureUITests/testTodayReturnWithAutomaticMapAndNotificationsDisabled',
+                    'test-without-building'],stdout=log,stderr=subprocess.STDOUT,timeout=900)
+            except (subprocess.CalledProcessError,subprocess.TimeoutExpired):
+                print(Path(log.name).read_text()[-12000:]);raise
+        print('Passed clean-install mobile login, production launch, tab taps, foreground return and toast dismissal',flush=True)
+        sys.exit(0)
     combinations = [(theme, palette, mode, tab)
         for theme in ['ice', 'getJet'] for palette in ['iceBlue', 'forestGreen', 'midnightChampagne', 'burgundyRose', 'espressoBronze']
         for mode in ['light', 'dark'] for tab in (['roster', 'settings'] if palette == 'forestGreen' else ['roster'])]
@@ -209,6 +321,13 @@ try:
                         run(['xcrun', 'simctl', 'terminate', udid, bundle])
     # Change theme inside the same running view hierarchy, exercising palette
     # invalidation and UIKit chrome refresh rather than only cold starts.
+    for theme in ['ice', 'getJet']:
+        for mode in ['light', 'dark']:
+            run(['xcrun','simctl','ui',udid,'appearance',mode])
+            run(['xcrun','simctl','launch',udid,bundle,'--theme='+theme,'--mode='+mode,'--tab=today','--priorities'])
+            time.sleep(3)
+            run(['xcrun','simctl','io',udid,'screenshot',f'/tmp/raido-priorities-{theme}-{mode}.png'])
+            run(['xcrun','simctl','terminate',udid,bundle])
     for target in ['getJet', 'ice']:
         origin = 'ice' if target == 'getJet' else 'getJet'
         print('Rendering live theme switch', origin, target, flush=True)
@@ -223,7 +342,9 @@ try:
         try:
             run(['xcodebuild', '-project', str(project), '-scheme', 'RAIDOMapChecks', '-configuration', 'Debug',
                  '-destination', 'platform=iOS Simulator,id=' + udid, '-derivedDataPath', '/tmp/raido-ice-preview',
-                 '-parallel-testing-enabled', 'NO', 'CODE_SIGNING_ALLOWED=NO', 'test-without-building'], stdout=log, stderr=subprocess.STDOUT)
+                 '-parallel-testing-enabled', 'NO', 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGNING_REQUIRED=NO',
+                 'CODE_SIGN_STYLE=Manual', 'CODE_SIGN_IDENTITY=-', 'AD_HOC_CODE_SIGNING_ALLOWED=YES',
+                 'test-without-building'], stdout=log, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError:
             print(Path(log.name).read_text()[-12000:])
             raise
@@ -238,6 +359,12 @@ try:
     Path('/tmp/raido-theme-size.json').write_text(json.dumps(report, indent=2) + '\n')
     print('Release size:', json.dumps(report), flush=True)
 finally:
+    if ephemeral_simulator:
+        for action in ['shutdown', 'delete']:
+            try:
+                subprocess.run(['xcrun', 'simctl', action, ephemeral_simulator], check=False, timeout=30)
+            except subprocess.TimeoutExpired:
+                print('Temporary simulator ' + action + ' timed out; runner cleanup will finish it', file=sys.stderr)
     for report in (Path.home() / 'Library/Logs/DiagnosticReports').glob('RAIDORoster*'):
         if report.is_file(): shutil.copy(report, Path('/tmp') / ('raido-ice-crash-' + report.name))
     stderr = Path('/tmp/raido-ice-app-stderr.log')

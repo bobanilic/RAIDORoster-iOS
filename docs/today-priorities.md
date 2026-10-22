@@ -1,0 +1,70 @@
+# Calendar clarity — 2.29.20
+
+The calendar resolves morning, afternoon and night standby from activity codes
+and descriptions, including previously cached generic STANDBY day titles.
+Unknown periods remain STB. A small hollow accent marker beside the day number
+identifies hotel relocation dates; the existing orange roster-change dot retains
+its separate meaning. Markers include relocations stored in legacy hotel metadata
+and rows separate from the day's primary duty.
+
+Lock Screen options, the removal of the duplicate alcohol strip, contextual
+future-move cards, note cleanup and in-app change review are included in 2.29.20.
+See [Lock Screen duty countdowns](lock-screen.md) for scheduling and installation
+requirements.
+
+# Today priorities and historical route previews — 2.29.19
+
+The 2.29.19 follow-up recognizes RLCN before generic hotel descriptions and keeps
+relocations in the day record when standby or flight duties are present. Native
+views recover older misclassified RLCN entries from cached hotel metadata, exclude
+them from hotel-stay lists, and show a separate relocation card on the selected
+calendar day. Activity instructions such as using Bolt appear on the card,
+details and reminders. Duty report/release times remain independent of relocation.
+
+The precaution sheet uses compact themed cards without Crew Control/briefing
+shortcuts. Start and report/pickup dates are labeled separately in roster local
+time, including an explicit Tomorrow label for overnight references.
+
+Today has an urgency-sorted priority area and a compact pickup/alcohol strip
+above the tab bar. Both use the same minute-aligned timestamp and refresh on
+foreground activation. Pickup becomes "Pickup due" at its scheduled time;
+the app does not infer that transport occurred. Pre-duty alcohol timing retains
+the existing 12-hour rule and pickup/report reference. It does not declare that
+drinking is permitted after the pre-duty window.
+
+The feed chooses the newest validated snapshot per month, independently of the
+selected calendar month. Future relocations remain visible on OFF days and
+across month boundaries. Current-day relocations and imminent pickups are more
+prominent than distant arrangements. Date-only relocations have no invented
+midnight countdown. Missing hotel, time or transport details are shown for review;
+a missing pickup is flagged for duties only when transport is actually mentioned.
+Cards identify saved roster information older than 24 hours.
+
+Settings includes relocation reminders (evening before and morning of the move)
+and an optional reminder before the alcohol precaution starts. Existing pickup
+and report lead-time preferences are preserved. Morning reminders use local wall
+time across daylight-saving changes; a known early move gets an earlier alert.
+The scheduler uses all authoritative saved upcoming months, replaces superseded
+requests and serializes Settings/automatic writes within the existing 60-request
+budget. Notifications work offline once scheduled; updated times require a roster
+refresh. Tapping a duty reminder opens Today and its current details when present.
+
+Selecting a calendar date shows its scheduled sectors on the bundled offline map.
+Multiple duty rows on the same date contribute sectors. Unknown airports do not
+produce invented connecting segments. Expanding opens a separate map for pan/zoom;
+the compact preview allows normal roster scrolling. Saved GPS points appear only
+when an exact session key matches the selected sector. Dashed scheduled routes
+and saved GPS are labeled separately; historical previews start no tracking session.
+
+Both themes, all palettes and light/dark/system appearance remain supported.
+No new map assets or external map service are required. Hotel lookup opens Maps
+only on the user's explicit tap. Automatic history downloading is unchanged and
+remains outside this update's scope.
+
+Validation includes native policy/ingestion tests for urgency, overdue pickup,
+midnight, DST, OFF-day logistics, cross-month pickups, missing details, deleted
+relocations, date-only events and recorded-session matching. The real JavaScript
+extractor is exercised with an RLCN HTML fixture. Simulator UI checks cover the
+persistent strip, detail sheets, OFF-day relocation, route expansion and the
+existing map gestures/palette settings. Synthetic fixtures cannot establish which
+details exist in the owner's current GetJet roster.

@@ -17,7 +17,7 @@ enum PortalBridgePolicy {
         mainFrame && scheme.lowercased() == "https" && host.lowercased() == portalHost && (port == 0 || port == 443)
     }
     static func navigation(_ url: URL, userTapped: Bool, popup: Bool) -> Navigation {
-        if isPortal(url), !popup { return .portal }
+        if isPortal(url) { return .portal }
         guard userTapped, let scheme = url.scheme?.lowercased(), url.user == nil, url.password == nil else { return .blocked }
         if scheme == "https", let host = url.host, !host.isEmpty { return .external }
         if ["mailto", "tel"].contains(scheme), !url.absoluteString.dropFirst(scheme.count + 1).isEmpty { return .external }

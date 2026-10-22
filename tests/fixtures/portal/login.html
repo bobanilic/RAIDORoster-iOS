@@ -1,1 +1,10 @@
-<!DOCTYPE html><html><body><form><label>Sign in</label></form></body></html>
+<!DOCTYPE html><html><body>
+<script>
+const OriginalObserver = window.MutationObserver;
+window.MutationObserver = class extends OriginalObserver {
+  constructor(callback) { super(callback); window.testRosterObservers = (window.testRosterObservers || 0) + 1; }
+};
+</script>
+<form><label>Username<input type="text" autocomplete="off"></label>
+<label>Password<input type="password" autocomplete="off"></label><button type="button">Login</button></form>
+</body></html>

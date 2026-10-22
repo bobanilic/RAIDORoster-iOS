@@ -6,13 +6,21 @@ import os
 
 @MainActor
 final class RosterStore: ObservableObject {
-    @Published private(set) var snapshot: RosterSnapshot?
-    @Published private(set) var monthSnapshots: [String: RosterSnapshot] = [:]
+    @Published private(set) var snapshot: RosterSnapshot? {
+        didSet { priorityEventCache = nil }
+    }
+    @Published private(set) var monthSnapshots: [String: RosterSnapshot] = [:] {
+        didSet { priorityEventCache = nil }
+    }
+    // Derived dates are reused across view updates, never across roster changes.
+    var priorityEventCache: (lower: String, upper: String, zone: String, events: [TodayPriorityEvent])?
     @Published var selectedRosterMonthKey: String?
     @Published var changeNotice: String?
     @Published private(set) var portalFormatWarning: String?
     @Published private(set) var rosterSourceURL: URL?
     private(set) var cacheGeneration = UUID()
+    @Published private(set) var isRestoring = false
+    private var restoration: Task<RosterDiskState,Never>?
 
     private func reportPortalFormatFailure(_ error: Error) {
         portalFormatWarning = hasCache
@@ -39,18 +47,46 @@ final class RosterStore: ObservableObject {
         return formatter
     }()
 
-    init(storageFolderURL: URL? = nil, automaticSideEffects: Bool = true) {
+    init(storageFolderURL: URL? = nil, automaticSideEffects: Bool = true, deferLoading: Bool = false) {
         storageFolderOverride = storageFolderURL
         self.automaticSideEffects = automaticSideEffects
-        load()
-        loadChangeState()
-        do {
-            if let value = try ProtectedJSONFile<String>(url: rosterSourceCacheURL).load(),
-               let url = URL(string: value), RosterMonthCachePolicy.isRosterURL(url) { rosterSourceURL = url }
-        } catch { DeviceCacheStorage.report("Load roster source", error: error) }
-        try? FileManager.default.removeItem(at: self.storageFolderURL.appendingPathComponent("crew-history.json"))
-        // V2.11.3 retires historical crew counting and removes any previously
-        // generated archive from this device.
+        isRestoring = deferLoading
+        if !deferLoading { applySavedRoster(RosterDiskState.read(from:self.storageFolderURL)) }
+    }
+
+    /// Production launch restores on a worker; synchronous initialization remains
+    /// available to callers that explicitly need an already-loaded store.
+    func restoreSavedRoster() async {
+        guard isRestoring else { return }
+        let ticket = cacheGeneration
+        let work:Task<RosterDiskState,Never>
+        if let restoration { work = restoration }
+        else {
+            let folder = storageFolderURL
+            work = Task.detached(priority:.userInitiated) { RosterDiskState.read(from:folder) }
+            restoration = work
+        }
+        let saved = await work.value
+        guard isRestoring,cacheGeneration == ticket else { return }
+        // A manual import or clear performed while reading always wins.
+        if snapshot == nil && monthSnapshots.isEmpty { applySavedRoster(saved) }
+        isRestoring = false
+        restoration = nil
+    }
+
+    private func applySavedRoster(_ saved:RosterDiskState) {
+        monthSnapshots = saved.months
+        snapshot = saved.snapshot
+        if let latest = saved.snapshot {
+            let key = monthKey(for:latest)
+            monthSnapshots[key] = latest;selectedRosterMonthKey = key
+        }
+        if snapshot == nil,let key = monthSnapshots.keys.sorted().last {
+            snapshot = monthSnapshots[key];selectedRosterMonthKey = key
+        }
+        normalizeMonthArchive()
+        if let bundle = saved.changes { applyChangeState(bundle) }
+        rosterSourceURL = saved.source
     }
 
     var items: [RosterItem] { snapshot?.items ?? [] }
@@ -397,6 +433,7 @@ final class RosterStore: ObservableObject {
 
         guard parsed.count >= (archiveOnly && expectedMonth != nil ? 1 : 5),
               parsed.count == validation.datedRows,
+              parsed.contains(where: { $0.dateISO?.hasPrefix(validation.month + "-") == true }),
               parsed.allSatisfy({ $0.dateISO != nil }) else { return false }
 
         let old = archiveOnly ? monthSnapshots[validation.month] : snapshot
@@ -409,6 +446,15 @@ final class RosterStore: ObservableObject {
             monthlyBLH: (payload["monthlyBLH"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         )
 
+        // A downloader acknowledgement means the archive actually reached disk.
+        // Persist before publishing or reporting changes so a failed write is retryable.
+        if archiveOnly {
+            var next = monthSnapshots
+            next[validation.month] = newSnapshot
+            do { try ProtectedJSONFile<[String: RosterSnapshot]>(url: monthCacheURL).save(next) }
+            catch { DeviceCacheStorage.report("Save downloaded roster month", error: error); return false }
+        }
+
         if (!archiveOnly || validation.month == currentRosterMonthKey()),
            let old,
            old.validation?.month == validation.month,
@@ -420,7 +466,10 @@ final class RosterStore: ObservableObject {
                 let changed = changes.count
                 changeNotice = "Roster changed • \(changed) day\(changed == 1 ? "" : "s")"
                 saveChangeState()
-                if automaticSideEffects { notifyRosterChanges(changes) }
+                if automaticSideEffects {
+                    RaidoToastCenter.shared.present(.init(title:"Roster updated",
+                        message:"\(changed) day\(changed == 1 ? "" : "s") changed · Review in Roster",symbol:"calendar.badge.clock"))
+                }
             }
         }
 
@@ -431,7 +480,7 @@ final class RosterStore: ObservableObject {
                 snapshot = newSnapshot
                 save(newSnapshot)
             }
-            saveMonthSnapshots()
+            refreshDutyReminders()
             return true
         }
 
@@ -452,12 +501,30 @@ final class RosterStore: ObservableObject {
             }
         }
 
+        refreshDutyReminders()
+        return true
+    }
+
+    func refreshDutyReminders(forceLockScreen: Bool = false) {
+        guard automaticSideEffects else { return }
+        refreshLockScreenActivities(force: forceLockScreen)
         let pickupLead = UserDefaults.standard.integer(forKey: "RAIDORoster.PickupReminderLead")
         let reportLead = UserDefaults.standard.integer(forKey: "RAIDORoster.ReportReminderLead")
-        automaticReminderScheduler.syncIfAuthorized(parsed, pickupLead: pickupLead, reportLead: reportLead) { [weak self] status in
+        let now = Date()
+        let reminderItems = prioritySources(from:EarningsMath.day(now.addingTimeInterval(-2 * 24 * 3600)),
+            through:EarningsMath.day(now.addingTimeInterval(90 * 24 * 3600))).map(\.item)
+        automaticReminderScheduler.syncIfAuthorized(reminderItems, pickupLead: pickupLead, reportLead: reportLead) { [weak self] status in
             self?.reminderSyncStatus = status
         }
-        return true
+    }
+
+    func refreshLockScreenActivities(force: Bool = false) {
+        guard automaticSideEffects else { return }
+        let defaults = UserDefaults.standard
+        let enabled = defaults.bool(forKey:LockScreenPolicy.pickupKey) || defaults.bool(forKey:LockScreenPolicy.precautionKey)
+        // Disabled options still reconcile existing cards, without parsing history.
+        let events = enabled ? priorityEventCandidates(at:Date()) : []
+        LockScreenActivityController.shared.refresh(events:events,force:force)
     }
 
     func rememberRosterSourceURL(_ url: URL) {
@@ -657,6 +724,8 @@ final class RosterStore: ObservableObject {
 
     func clearCache() {
         cacheGeneration = UUID()
+        isRestoring = false
+        restoration?.cancel();restoration = nil
         rosterSourceURL = nil
         snapshot = nil
         monthSnapshots = [:]
@@ -667,10 +736,12 @@ final class RosterStore: ObservableObject {
         calendarSyncStatus = nil
         reminderSyncStatus = nil
         automaticReminderScheduler.clearRosterReminders()
+        refreshLockScreenActivities(force:true)
         try? FileManager.default.removeItem(at: cacheURL)
         try? FileManager.default.removeItem(at: monthCacheURL)
         try? FileManager.default.removeItem(at: changeStateURL)
         try? FileManager.default.removeItem(at: rosterSourceCacheURL)
+        try? FileManager.default.removeItem(at: offlineHistoryStateURL)
     }
 
     private func parseActivity(_ raw: [String: Any], fallbackID: String) -> RosterActivity? {
@@ -842,47 +913,6 @@ final class RosterStore: ObservableObject {
         return String(value.prefix(217)) + "…"
     }
 
-    private func notifyRosterChanges(_ changes: [RosterDayChange]) {
-        guard !changes.isEmpty else { return }
-        Task {
-            let center = UNUserNotificationCenter.current()
-            let settings = await center.notificationSettings()
-            guard settings.authorizationStatus == .authorized ||
-                    settings.authorizationStatus == .provisional ||
-                    settings.authorizationStatus == .ephemeral else { return }
-
-            let content = UNMutableNotificationContent()
-            content.title = changes.count == 1
-                ? "Roster changed • \(changes[0].dateText)"
-                : "Roster changed • \(changes.count) days"
-            content.body = rosterChangeNotificationBody(changes)
-            content.sound = .default
-            content.userInfo = ["raidoRosterChanges": true]
-            let request = UNNotificationRequest(
-                identifier: "RAIDO-CHANGE-" + UUID().uuidString,
-                content: content,
-                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-            )
-            try? await center.add(request)
-        }
-    }
-
-    private func rosterChangeNotificationBody(_ changes: [RosterDayChange]) -> String {
-        guard let first = changes.first else { return "Open RAIDO Roster to review the changes." }
-        let priority = ["Duty", "CI", "Pickup", "Aircraft", "Route", "Schedule", "Release", "Hotel", "Crew"]
-        let ordered = first.fields.sorted {
-            (priority.firstIndex(of: $0.label) ?? 99) < (priority.firstIndex(of: $1.label) ?? 99)
-        }
-        var pieces: [String] = []
-        for field in ordered.prefix(3) {
-            pieces.append("\(field.label): \(field.oldValue) → \(field.newValue)")
-        }
-        var body = pieces.joined(separator: " • ")
-        if changes.count > 1 { body += " • +\(changes.count - 1) more day\(changes.count == 2 ? "" : "s")" }
-        if body.count > 300 { body = String(body.prefix(297)) + "…" }
-        return body.isEmpty ? "Open RAIDO Roster to review the changes." : body
-    }
-
     private func currentMonthKey() -> String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
@@ -913,11 +943,8 @@ final class RosterStore: ObservableObject {
         catch { DeviceCacheStorage.report("Save roster changes", error: error) }
     }
 
-    private func loadChangeState() {
-        let loaded: RosterChangeBundle?
-        do { loaded = try ProtectedJSONFile<RosterChangeBundle>(url: changeStateURL).load() }
-        catch { DeviceCacheStorage.report("Load roster changes", error: error); return }
-        guard let bundle = loaded, !bundle.changes.isEmpty else { return }
+    private func applyChangeState(_ bundle:RosterChangeBundle) {
+        guard !bundle.changes.isEmpty else { return }
         let migrated = bundle.changes.map { change in
             RosterDayChange(
                 dateISO: change.dateISO,
@@ -934,7 +961,6 @@ final class RosterStore: ObservableObject {
         changedDates = Set(migrated.map(\.dateISO))
         let count = migrated.count
         changeNotice = "Roster changed • \(count) day\(count == 1 ? "" : "s")"
-        if migrated != bundle.changes { saveChangeState() }
     }
 
     private var cacheURL: URL {
@@ -946,6 +972,8 @@ final class RosterStore: ObservableObject {
     }
 
     private var rosterSourceCacheURL: URL { storageFolderURL.appendingPathComponent("roster-source.json") }
+
+    var offlineHistoryStateURL: URL { storageFolderURL.appendingPathComponent("roster-history-progress.json") }
 
     private func normalizeMonthArchive() {
         guard !monthSnapshots.isEmpty else { return }
@@ -975,25 +1003,24 @@ final class RosterStore: ObservableObject {
         catch { DeviceCacheStorage.report("Save roster", error: error) }
     }
 
-    private func load() {
-        var archiveReadable = true
-        do { monthSnapshots = try ProtectedJSONFile<[String: RosterSnapshot]>(url: monthCacheURL).load() ?? [:] }
-        catch { archiveReadable = false; DeviceCacheStorage.report("Load roster months", error: error) }
-        do {
-            if let latest = try ProtectedJSONFile<RosterSnapshot>(url: cacheURL).load() {
-                snapshot = latest
-                let key = monthKey(for: latest)
-                monthSnapshots[key] = latest
-                selectedRosterMonthKey = key
-            }
-        } catch { DeviceCacheStorage.report("Load roster", error: error) }
-        if snapshot == nil, let key = monthSnapshots.keys.sorted().last {
-            snapshot = monthSnapshots[key]
-            selectedRosterMonthKey = key
-        }
-        normalizeMonthArchive()
-        // An unreadable archive must never be replaced with a partial or empty one.
-        if archiveReadable { saveMonthSnapshots() }
-    }
+}
 
+/// Read-only at launch: an interrupted/cleared restoration cannot recreate a
+/// cache file, and an unchanged archive is never decoded again just to rewrite it.
+private struct RosterDiskState {
+    var snapshot:RosterSnapshot?
+    var months:[String:RosterSnapshot] = [:]
+    var changes:RosterChangeBundle?
+    var source:URL?
+    static func read(from folder:URL) -> Self {
+        func read<Value:Codable>(_ name:String,as type:Value.Type) -> Value? {
+            do { return try ProtectedJSONFile<Value>(url:folder.appendingPathComponent(name)).load(migrateLegacy:false) }
+            catch { DeviceCacheStorage.report("Restore " + name,error:error);return nil }
+        }
+        let source = read("roster-source.json",as:String.self).flatMap(URL.init(string:))
+        return Self(snapshot:read("roster-cache.json",as:RosterSnapshot.self),
+            months:read("roster-months.json",as:[String:RosterSnapshot].self) ?? [:],
+            changes:read("roster-changes.json",as:RosterChangeBundle.self),
+            source:source.flatMap { RosterMonthCachePolicy.isRosterURL($0) ? $0 : nil })
+    }
 }
