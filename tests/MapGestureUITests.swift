@@ -79,6 +79,7 @@ import XCTest
         XCTAssertEqual(app.maps.count, 0, "A compact route must not construct Apple Maps, even with Auto selected")
         let requestedCycles = Int(ProcessInfo.processInfo.environment["RAIDO_UI_TRANSITION_CYCLES"] ?? "3") ?? 3
         let cycles = min(6, max(3, requestedCycles))
+        print("RAIDO_UI_TRANSITION CONFIG cycles=\(cycles)")
         for cycle in 0..<cycles {
             tabs.buttons["Roster"].tap(); XCTAssertTrue(tabs.buttons["Roster"].isSelected)
             tabs.buttons["Today"].tap(); XCTAssertTrue(tabs.buttons["Today"].isSelected)

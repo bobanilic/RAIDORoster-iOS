@@ -6,7 +6,7 @@ There is no captured stack identifying the cause. XCTest's remote spindump reque
 
 ## Bounded diagnostic change
 
-The test now prints begin/end markers around More and subsequent Today selection, including restored-cache navigation. All existing selected-state, scroll, map, countdown, details and cache assertions remain. It still fails immediately after an assertion failure. The test supports three to six transition cycles (minimum three); CI requests six to exercise the sequence more thoroughly. This is additional navigation coverage, not a test retry.
+The test now prints begin/end markers around More and subsequent Today selection, including restored-cache navigation. All existing selected-state, scroll, map, countdown, details and cache assertions remain. It still fails immediately after an assertion failure. The test supports three to six transition cycles (minimum three); CI requests six through `TEST_RUNNER_RAIDO_UI_TRANSITION_CYCLES` (xcodebuild strips the prefix for the test runner). The test logs its effective count so forwarding is verified in the artifact. This exercises the sequence more thoroughly. This is additional navigation coverage, not a test retry.
 
 A host-side watcher reads the existing xcodebuild log once per second. It requests at most one stack sample per command when a marked transition has not ended after 15 s, or XCTest reports a missing event-loop idle notification after a test has entered. It never sends accessibility queries or changes the app. Pre-test AX failures do not trigger sampling.
 
