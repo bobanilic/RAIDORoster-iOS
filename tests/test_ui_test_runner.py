@@ -96,6 +96,10 @@ class UIHangDiagnosticChecks(unittest.TestCase):
     UDID = '7D0F1BB7-39B3-41B5-AF87-732C7FAA5D45'
     START = "Test Case '-[Suite.Class testToday]' started.\n"
 
+    def app_path(self, udid=None):
+        return ('/Users/CI Runner/Library/Developer/CoreSimulator/Devices/' + (udid or self.UDID)
+                + '/data/Containers/Bundle/Application/ABC/RAIDORoster.app/RAIDORoster')
+
     def observer(self, root):
         return module.UIHangDiagnostics(['xcodebuild', '-destination', 'platform=iOS Simulator,id=' + self.UDID], root/'attempt.log')
 
@@ -136,26 +140,28 @@ class UIHangDiagnosticChecks(unittest.TestCase):
             self.assertIn('restored-more', observer.observe('', 15))
 
     def test_process_discovery_is_scoped_and_does_not_sample_the_runner(self):
-        listing = ('PID Status Label\n'
-                   '10 0 UIKitApplication:other.app[ABC]\n'
-                   '20 0 UIKitApplication:com.bobanilic.raidoroster.mapchecks.xctrunner[DEF]\n'
-                   '32148 0 UIKitApplication:com.bobanilic.raidoroster[GHI]\n')
+        listing = ('10 /other/RAIDORoster.app/RAIDORoster\n'
+                   '20 ' + self.app_path().replace('RAIDORoster.app/RAIDORoster', 'RAIDOMapChecks-Runner.app/RAIDOMapChecks-Runner') + '\n'
+                   '21 ' + self.app_path('00000000-0000-0000-0000-000000000000') + '\n'
+                   '32148 ' + self.app_path() + '\n')
         with tempfile.TemporaryDirectory() as d:
             root=Path(d); observer=self.observer(root); calls=[]
             def run(command, **kwargs):
                 calls.append((command, kwargs['timeout']))
-                if command[0]=='xcrun': return subprocess.CompletedProcess(command, 0, listing)
-                if command[0]=='ps': return subprocess.CompletedProcess(command, 0, '/simulator/RAIDORoster.app/RAIDORoster\n')
+                if command == ['ps', '-ww', '-axo', 'pid=,comm=']:
+                    return subprocess.CompletedProcess(command, 0, listing)
+                if command[0]=='ps': return subprocess.CompletedProcess(command, 0, self.app_path() + '\n')
                 self.assertEqual(command[:3], ['sample', '32148', '5'])
                 Path(command[-1]).write_text('Main thread stack: fixture')
                 return subprocess.CompletedProcess(command, 0)
             with patch.object(module.subprocess, 'run', side_effect=run): observer.capture('Fixture transition timeout')
             self.assertEqual([c[1] for c in calls], [5, 5, 20])
-            self.assertEqual(calls[0][0][3], self.UDID)
+            self.assertFalse(any(c[0][0] == 'xcrun' for c in calls), 'Discovery must not depend on simulator IPC')
             self.assertIn('nonempty sample=True', observer.log_path.read_text())
 
     def test_ambiguous_or_missing_app_pid_refuses_to_sample(self):
-        for listing in ['', '1 0 UIKitApplication:com.bobanilic.raidoroster[A]\n2 0 UIKitApplication:com.bobanilic.raidoroster[B]\n']:
+        for listing in ['', '1 ' + self.app_path() + '\n2 ' + self.app_path().replace('/ABC/', '/DEF/') + '\n',
+                        '1 ' + self.app_path('00000000-0000-0000-0000-000000000000') + '\n']:
             with self.subTest(listing=listing), tempfile.TemporaryDirectory() as d:
                 observer=self.observer(Path(d))
                 with patch.object(module.subprocess, 'run', return_value=subprocess.CompletedProcess('list',0,listing)) as run:
@@ -167,11 +173,12 @@ class UIHangDiagnosticChecks(unittest.TestCase):
     def test_pid_reuse_or_wrong_executable_refuses_to_sample(self):
         with tempfile.TemporaryDirectory() as d:
             observer=self.observer(Path(d))
-            responses=[subprocess.CompletedProcess('list',0,'123 0 UIKitApplication:com.bobanilic.raidoroster[A]\n'),
-                       subprocess.CompletedProcess('ps',0,'/other/TestRunner\n')]
-            with patch.object(module.subprocess, 'run',side_effect=responses) as run:observer.capture('Fixture')
-            self.assertEqual(run.call_count,2)
-            self.assertIn('refusing to sample',observer.log_path.read_text())
+            for executable in ['/other/TestRunner', self.app_path('00000000-0000-0000-0000-000000000000')]:
+                responses=[subprocess.CompletedProcess('list',0,'123 ' + self.app_path() + '\n'),
+                           subprocess.CompletedProcess('ps',0,executable + '\n')]
+                with patch.object(module.subprocess, 'run',side_effect=responses) as run:observer.capture('Fixture')
+                self.assertEqual(run.call_count,2)
+                self.assertIn('refusing to sample',observer.log_path.read_text())
 
     def test_sample_timeout_is_retained_and_does_not_propagate(self):
         with tempfile.TemporaryDirectory() as d:
@@ -179,6 +186,17 @@ class UIHangDiagnosticChecks(unittest.TestCase):
             with patch.object(observer,'app_pid',return_value='123'), patch.object(module.subprocess,'run',side_effect=subprocess.TimeoutExpired('sample',20)):
                 observer.capture('Fixture')
             self.assertIn('Stack capture unavailable',observer.log_path.read_text())
+
+    def test_host_discovery_timeout_is_bounded_without_simulator_fallback(self):
+        with tempfile.TemporaryDirectory() as d:
+            observer=self.observer(Path(d))
+            with patch.object(module.subprocess,'run',side_effect=subprocess.TimeoutExpired('ps',5)) as run:
+                observer.capture('Fixture')
+            self.assertEqual(run.call_count,1)
+            self.assertEqual(run.call_args.args[0],['ps','-ww','-axo','pid=,comm='])
+            self.assertEqual(run.call_args.kwargs['timeout'],5)
+            self.assertIn('Stack capture unavailable',observer.log_path.read_text())
+            self.assertFalse(observer.sample_path.exists())
 
     def test_failed_or_empty_sample_is_never_labeled_successful(self):
         with tempfile.TemporaryDirectory() as d:

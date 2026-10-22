@@ -54,20 +54,25 @@ class UIHangDiagnostics:
         return None
 
     def app_pid(self):
-        listing = subprocess.run(['xcrun', 'simctl', 'spawn', self.udid, 'launchctl', 'list'],
+        # Simulator IPC can itself hang with the app (observed in CI). Match
+        # the installed executable's full device-specific host path instead.
+        listing = subprocess.run(['ps', '-ww', '-axo', 'pid=,comm='],
                                  check=True, capture_output=True, text=True, timeout=5)
+        executable_pattern = (r'/.*?/CoreSimulator/Devices/' + re.escape(self.udid)
+                              + r'/data/Containers/Bundle/Application/[^/]+'
+                              + r'/RAIDORoster\.app/RAIDORoster')
         candidates = []
         for line in listing.stdout.splitlines():
-            fields = line.split()
-            if (len(fields) == 3 and fields[0].isdigit()
-                    and re.match(r'UIKitApplication:com\.bobanilic\.raidoroster(?:\[|$)', fields[2])):
+            fields = line.strip().split(None, 1)
+            if (len(fields) == 2 and fields[0].isdigit()
+                    and re.fullmatch(executable_pattern, fields[1])):
                 candidates.append(fields[0])
         if len(candidates) != 1:
             raise RuntimeError('Expected exactly one RAIDO app in the selected simulator; found ' + str(len(candidates)))
         pid = candidates[0]
         executable = subprocess.run(['ps', '-ww', '-p', pid, '-o', 'comm='], check=True,
                                     capture_output=True, text=True, timeout=5).stdout.strip()
-        if Path(executable).name != 'RAIDORoster':
+        if not re.fullmatch(executable_pattern, executable):
             raise RuntimeError('Resolved PID is not the RAIDO app; refusing to sample it')
         return pid
 
