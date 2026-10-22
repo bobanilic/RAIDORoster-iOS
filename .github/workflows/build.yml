@@ -43,9 +43,10 @@ jobs:
       fail-fast: false
       matrix:
         scenario: [four-sectors, login, responsiveness, today-return]
-    # Controlled runner comparison: the Today scenario also stalled host-side
-    # process discovery on Intel. Keep its test/toolchain/bounds unchanged.
-    runs-on: ${{ matrix.scenario == 'today-return' && 'macos-15' || 'macos-15-intel' }}
+    # Use the validated ARM host for latency-sensitive UI/AX interactions.
+    # Keep four sectors on Intel as cross-architecture coverage; test/toolchain
+    # and execution/result bounds remain identical on both hosts.
+    runs-on: ${{ matrix.scenario == 'four-sectors' && 'macos-15-intel' || 'macos-15' }}
     # Two bounded 15 min UI attempts (only one AX setup recovery), plus
     # build/boot, result inspection, simulator deletion and artifact upload.
     timeout-minutes: 50
