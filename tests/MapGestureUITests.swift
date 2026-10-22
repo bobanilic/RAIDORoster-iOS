@@ -17,6 +17,18 @@ import XCTest
                 "The location prompt must close before testing native navigation")
         }
     }
+    private func waitForMobileLoginReady(_ app: XCUIApplication, username: XCUIElement) {
+        // WebKit can expose the form to AX before its navigation has finished
+        // and before it is painted. Tapping that early can lose focus while
+        // the public login page is still replacing its document.
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            !app.staticTexts["Opening RAIDO…"].exists && username.exists && username.isHittable
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 40), .completed,
+                       "Public login must finish loading and become tappable before interaction")
+        XCTAssertFalse(app.staticTexts["RAIDO could not open"].exists)
+        print("RAIDO_UI_LOGIN READY")
+    }
     func testFourSectorsAcrossTwoDutyGroups() {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier: "com.bobanilic.raidoroster")
@@ -54,17 +66,20 @@ import XCTest
         let password = app.webViews.secureTextFields.firstMatch
         XCTAssertTrue(username.waitForExistence(timeout: 40), "Public mobile login form must load without credentials")
         XCTAssertTrue(password.exists)
+        waitForMobileLoginReady(app, username: username)
         username.tap(); XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
         password.tap(); XCTAssertTrue(app.keyboards.firstMatch.exists)
         XCTAssertTrue(app.webViews.buttons["Login"].exists)
         app.buttons["Reload RAIDO"].tap()
         XCTAssertTrue(username.waitForExistence(timeout: 40))
+        waitForMobileLoginReady(app, username: username)
         app.buttons["Done"].firstMatch.tap()
         let tabs = app.tabBars.firstMatch
         XCTAssertTrue(tabs.waitForExistence(timeout: 5))
         tabs.buttons["Roster"].tap(); XCTAssertTrue(tabs.buttons["Roster"].isSelected)
         tabs.buttons["Today"].tap(); XCTAssertTrue(login.waitForExistence(timeout: 5))
         login.tap(); XCTAssertTrue(username.waitForExistence(timeout: 40))
+        waitForMobileLoginReady(app, username: username)
         app.buttons["Done"].firstMatch.tap()
         XCTAssertTrue(tabs.waitForExistence(timeout: 5))
         app.terminate()
