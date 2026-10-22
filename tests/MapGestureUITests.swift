@@ -77,7 +77,9 @@ import XCTest
         let pickup = app.buttons["today-pickup-countdown"]
         XCTAssertTrue(pickup.waitForExistence(timeout: 5), "Exercise the priority interface, not an empty Today shell")
         XCTAssertEqual(app.maps.count, 0, "A compact route must not construct Apple Maps, even with Auto selected")
-        for _ in 0..<3 {
+        let requestedCycles = Int(ProcessInfo.processInfo.environment["RAIDO_UI_TRANSITION_CYCLES"] ?? "3") ?? 3
+        let cycles = min(6, max(3, requestedCycles))
+        for cycle in 0..<cycles {
             tabs.buttons["Roster"].tap(); XCTAssertTrue(tabs.buttons["Roster"].isSelected)
             tabs.buttons["Today"].tap(); XCTAssertTrue(tabs.buttons["Today"].isSelected)
             XCTAssertTrue(handle.waitForExistence(timeout: 5))
@@ -87,8 +89,12 @@ import XCTest
             app.scrollViews.firstMatch.swipeUp()
             XCTAssertLessThan(handle.frame.minY, before - 20, "Today must scroll after returning from Roster")
             XCTAssertEqual(app.maps.count, 0)
+            print("RAIDO_UI_TRANSITION BEGIN cycle-\(cycle)-more uptime=\(ProcessInfo.processInfo.systemUptime)")
             tabs.buttons["More"].tap(); XCTAssertTrue(tabs.buttons["More"].isSelected)
+            print("RAIDO_UI_TRANSITION END cycle-\(cycle)-more uptime=\(ProcessInfo.processInfo.systemUptime)")
+            print("RAIDO_UI_TRANSITION BEGIN cycle-\(cycle)-today uptime=\(ProcessInfo.processInfo.systemUptime)")
             tabs.buttons["Today"].tap(); XCTAssertTrue(tabs.buttons["Today"].isSelected)
+            print("RAIDO_UI_TRANSITION END cycle-\(cycle)-today uptime=\(ProcessInfo.processInfo.systemUptime)")
             app.scrollViews.firstMatch.swipeDown()
         }
         let previousLabel = pickup.label
@@ -114,7 +120,9 @@ import XCTest
         XCTAssertFalse(app.staticTexts["Loading saved roster…"].exists)
         XCTAssertEqual(app.webViews.count, 0)
         app.scrollViews.firstMatch.swipeUp()
+        print("RAIDO_UI_TRANSITION BEGIN restored-more uptime=\(ProcessInfo.processInfo.systemUptime)")
         tabs.buttons["More"].tap(); XCTAssertTrue(tabs.buttons["More"].isSelected)
+        print("RAIDO_UI_TRANSITION END restored-more uptime=\(ProcessInfo.processInfo.systemUptime)")
         app.terminate()
     }
     func testProductionLaunchAndTabResponsiveness() {

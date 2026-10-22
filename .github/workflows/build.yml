@@ -58,6 +58,10 @@ jobs:
           name: RAIDO-${{ needs.release.outputs.version }}-IPA
           path: RAIDORoster-Web2IPA
       - name: Check production launch and tab responsiveness
+        env:
+          # Double the existing Today transition coverage without retries or
+          # changing the selected-state, scrolling and cache assertions.
+          RAIDO_UI_TRANSITION_CYCLES: '6'
         run: bash tools/ci.sh startup --startup-case ${{ matrix.scenario }}
       - name: Shut down simulator before runner cleanup
         if: always()
