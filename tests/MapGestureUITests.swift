@@ -1,11 +1,28 @@
 import XCTest
 
 @MainActor final class MapGestureUITests: XCTestCase {
+    private func dismissInitialLocationPromptIfPresent() {
+        // Cached-roster scenarios do not require GPS permission. Do not let
+        // XCTest's generic interruption handler race the first tab action.
+        let systemAlert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        if systemAlert.waitForExistence(timeout: 5) {
+            XCTAssertTrue(systemAlert.staticTexts.matching(NSPredicate(format:
+                "label CONTAINS[c] %@", "use your location")).firstMatch.exists,
+                "Only the expected location prompt may be dismissed")
+            let deny = systemAlert.buttons.matching(NSPredicate(format:
+                "label IN %@", ["Don’t Allow", "Don't Allow"])).firstMatch
+            XCTAssertTrue(deny.exists)
+            deny.tap()
+            XCTAssertTrue(systemAlert.waitForNonExistence(timeout: 5),
+                "The location prompt must close before testing native navigation")
+        }
+    }
     func testFourSectorsAcrossTwoDutyGroups() {
         continueAfterFailure = false
         let app = XCUIApplication(bundleIdentifier: "com.bobanilic.raidoroster")
         app.launchArguments = ["--startup", "--split-duty", "--theme=getJet", "--mode=dark"]
         app.launch()
+        dismissInitialLocationPromptIfPresent()
         let tabs = app.tabBars.firstMatch
         XCTAssertTrue(tabs.waitForExistence(timeout: 15))
         for tab in ["Roster", "Today"] {
@@ -60,16 +77,7 @@ import XCTest
         // A first-run Flight Companion location prompt makes scenePhase
         // inactive. This scenario exercises cached UI without GPS permission;
         // answer the system prompt before asserting the active priority leaf.
-        let systemAlert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
-        if systemAlert.waitForExistence(timeout: 5) {
-            XCTAssertTrue(systemAlert.staticTexts.matching(NSPredicate(format:
-                "label CONTAINS[c] %@", "use your location")).firstMatch.exists,
-                "Only the expected location prompt may be dismissed")
-            let deny = systemAlert.buttons.matching(NSPredicate(format:
-                "label IN %@", ["Don’t Allow", "Don't Allow"])).firstMatch
-            XCTAssertTrue(deny.exists)
-            deny.tap()
-        }
+        dismissInitialLocationPromptIfPresent()
         let tabs = app.tabBars.firstMatch
         let handle = app.buttons["today-map-handle"]
         XCTAssertTrue(handle.waitForExistence(timeout: 15))
