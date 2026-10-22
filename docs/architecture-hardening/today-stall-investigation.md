@@ -20,3 +20,9 @@ The existing artifact glob retains `*-diagnostics.log` and any `*-mainthread.log
 - If the run passes without a captured stall, report a passing stronger regression scenario, not an established root cause or proven stall fix.
 - If collection is unavailable, report the exact discovery/tool failure; do not classify the original stall as infrastructure-only.
 - Do not suppress quiescence, remove assertions, use passing log messages to override process failure, increase retries or merge either PR.
+
+## Separate native fixture race
+
+The `c305f3c` [native job](https://github.com/bobanilic/RAIDORoster-iOS/actions/runs/39707090684/job/119589565872) compiled and executed all 75 cases, but `testMobileEntryAndRecoveryStates` failed its two watchdog-state assertions. The same fixture passed on `7e16314`. It slept for 100 ms instead of synchronizing with the main-actor watchdog's published failure. Under load, the test's continuation can run before that watchdog has completed; a nominal 20 ms sleep is not a scheduling guarantee.
+
+The fixture now subscribes to the actual non-nil error publication before starting navigation and awaits that expectation with a five-second bound. The original loading/error assertions remain. Cancellation uses an inverted publication expectation over 200 ms, retaining the original nil-error assertion and detecting transient errors during that window. This changes only test synchronization, with no production watchdog or timeout changes. Native compilation/execution must still pass in Xcode; local Python checks do not establish that result. This is independent of the unresolved Today UI stall.
