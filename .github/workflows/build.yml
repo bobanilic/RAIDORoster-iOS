@@ -45,7 +45,7 @@ jobs:
         scenario: [four-sectors, login, responsiveness, today-return]
     # Use the validated ARM host for all simulator UI/AX interactions. Intel
     # also failed to boot the four-sector device before any test could begin.
-    # Release and native jobs retain Intel coverage with the same Xcode.
+    # The release job retains Intel coverage with the same Xcode.
     runs-on: macos-15
     # Two bounded 15 min UI attempts (only one AX setup recovery), plus
     # build/boot, result inspection, simulator deletion and artifact upload.
@@ -87,7 +87,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
   native-tests:
-    runs-on: macos-15-intel
+    # Native fixtures also use CoreSimulator/WebKit, which stalled on Intel.
+    runs-on: macos-15
     timeout-minutes: 35
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer

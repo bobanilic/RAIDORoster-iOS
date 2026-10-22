@@ -131,3 +131,42 @@ Require a full green workflow on this configuration before merging. The
 automatic post-merge workflow supplies the independent fresh-run confirmation
 for all UI scenarios, avoiding separate serialized reruns of the same jobs.
 No production files or version/build metadata change.
+
+## Native WebKit fixtures hit the same Intel service failures
+
+At `1e473b4`, [run 39817533573](https://github.com/bobanilic/RAIDORoster-iOS/actions/runs/39817533573)
+passed release verification and all four ARM UI jobs on their first commands:
+four sectors 226.452 s, login 354.820 s, responsiveness 296.577 s and Today
+367.270 s. All four result bundles finalized and verified, and all four
+simulators shut down and deleted successfully. Downloaded four-sector and
+login bundles independently confirm Passed 1 / Failed 0 / Skipped 0 and no
+missing-idle warnings. Login completed all three readiness gates.
+
+The [native Intel job 119959844986](https://github.com/bobanilic/RAIDORoster-iOS/actions/runs/39817533573/job/119959844986)
+compiled and ran all 75 cases but correctly failed with three assertions across
+two WebKit fixture tests. The full log is retained in artifact 12443588913:
+
+- `testActualJavaScriptExtractsSanitizedHTML`: the 60 s script-payload
+  expectation was unfulfilled, followed by a nil-payload unwrap failure
+  (RosterBridgeTests lines 247–248); case duration 107.962 s.
+- `testActualRelocationHTMLReachesUpcomingPriorities`: the 60 s fixture-ready
+  expectation was unfulfilled (line 179); case duration 70.931 s.
+- At 17:10:08 UTC WebKit reported its networking process took 19.892908 s to
+  launch. At 17:11:29 UTC it reported `gpuProcessExited: reason=Unresponsive`.
+  These are callback/readiness timeouts, not incorrect parser output. The
+  remaining tests continued, including the other WebKit/cache fixtures. The
+  full run reports 75 tests / 3 failures in 290.990 s; it is not a green run.
+
+Native tests use CoreSimulator and WebKit too. Move that job to `macos-15` ARM
+with the existing dynamic `ARCHS=platform.machine()` setup, unchanged Xcode
+26.3, all 75 test selections and existing deadlines. The native source and
+assertions are unchanged. The release job remains on Intel and verifies real
+ARM64 iPhoneOS app/widget binaries, retaining Intel compiler-host coverage.
+The final configuration uses one host architecture for all simulator work.
+
+This is an evidence-based environment correction. It does not establish a
+definitive root cause inside Intel WebKit or claim the prior native failures
+passed. Require a fresh full workflow, including all 75 native tests on ARM,
+before merging, and use the automatic post-merge workflow for independent
+confirmation. No parser changes, larger callback timeouts or failure retries
+are introduced.
