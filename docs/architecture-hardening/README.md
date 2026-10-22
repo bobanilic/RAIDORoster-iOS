@@ -93,3 +93,26 @@ Post-extraction native compilation at 3e4bb12 succeeded, but execution never beg
 Additional evidence recovered from completed jobs: the roster-extraction native target passed all 75 cases (38.696 s execution), run 39626076266, job 119311556659. The fixture-only 0c475cb run passed production startup/tab responsiveness and four-sector UI. Today-return failed a real assertion in both pre-extraction runs: the map appeared but the pickup strip was absent (line 65); subsequent tab/minute-tick/offline-relaunch assertions did not execute. This is not labeled an infrastructure pass or an introduced refactoring regression. The disposable simulator host now checks that its synthetic pickup survives disk restoration and records event counts / leaf lifecycle state in xcresult. Production data and release sources receive no diagnostic logging.
 
 Today-return root cause confirmed by inspecting the xcresult screen recording (artifact 12360725116): the first-run location-permission dialog remained unanswered. The OS kept the scene inactive, so TodayPriorityLiveContent intentionally rendered no live leaf. The UI scenario now explicitly denies the expected location prompt through SpringBoard before its existing assertions. It continues testing cached navigation with GPS permission denied; it does not grant permissions, mock authentication, bypass production lifecycle guards, remove assertions or change company precaution rules. The earlier failed assertions remain in the evidence history. No production permission behavior changed.
+
+## Four-sector CI deadline follow-up (22 October 2026)
+
+The follow-up to `c5b4ac0` changes only simulator validation infrastructure. Production sources, test assertions, version 2.29.32/build 22932 and PR base branches are unchanged.
+
+Evidence: [run 39634220089, four-sector job 119526919814](https://github.com/bobanilic/RAIDORoster-iOS/actions/runs/39634220089/job/119526919814), including the uploaded attempt logs and both result bundles:
+
+| Stage | Evidence (UTC, 21 October) |
+| --- | --- |
+| Build/provisioning | Startup step began 22:39:21; boot command output began 22:46:37. These older logs do not isolate build, device creation and boot invocation durations. |
+| Simulator boot | `bootstatus` reported approximately 233 seconds to finish; provisioning is outside the UI command budget. |
+| First UI command | Consumed approximately 657.706 s, inferred from the retry's `TimeoutExpired` allowance of 242.294 s out of 900 s. |
+| First runner initialization | Runner announced tests at 22:57:23.413; AX notification timeout at 22:58:35.632. No test case entered. Xcode reported its failed test session completed at 23:01:40.694; retry was announced at 23:01:53.809. |
+| Recovered runner | Announced tests at 23:02:26.917; selected case began at 23:02:36.113. Installation and runner launch were not individually timed in the old stdout. |
+| Four-sector case | Passed in 198.881 s; selected suite passed at 23:05:54.998. All four sectors were checked in Roster and Today. |
+| Process/result completion | Remaining 242.294 s command deadline expired. No `TEST EXECUTE SUCCEEDED`; retry bundle has no final `Info.plist`. This is **not** a completed successful test run. Buffered CI log receipt times must not be treated as test execution times. |
+| Cleanup | Workflow shutdown step began 23:06:15.995; job cleanup began 23:06:32.658. Old logs do not separately time ephemeral simulator shutdown/deletion. |
+
+The confirmed infrastructure defect is sharing one 900 s budget across an AX initialization failure and recovery. The recovered case used almost all of its remaining command allowance before Xcode could finalize its result. The logs do not prove an indefinite Xcode hang or the underlying cause of the AX failure. For comparison, the successful Today-return case in the same run passed at 22:56:32.696 and Xcode completed its test session at 22:56:33.583; the enclosing helper reported success at 22:56:35.327. Finalization overhead varies and must remain bounded and observed.
+
+The single initialization-only retry now receives the same 900 s command bound as the first attempt (at most 1,800 s total). Assertion failures, other setup failures and command timeouts do not retry. A successful process must still report every selected test passed, have a finalized bundle, and have `xcresulttool get test-results summary` confirm the exact selected count passed with zero failed/skipped tests. Result inspection has a separate 60 s limit; summaries, original/retry bundles and logs are retained. No test messages can override a nonzero exit or timeout.
+
+The simulator job's outer bound is 50 minutes to accommodate the two bounded commands, the observed approximately seven-minute build/provisioning stage, separately bounded simulator boot, result inspection, cleanup and artifact upload. This supersedes the shared-budget policy described above, without adding more retries. Phase logs now record command start/end, elapsed time, exit status and explicit UI attempt budgets, including simulator shutdown/deletion. These changes require macOS/Xcode CI verification; Linux unit tests cover budget recovery and rejection of false successes.

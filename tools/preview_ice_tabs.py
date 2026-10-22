@@ -192,7 +192,30 @@ struct IcePreviewRoot: View {
 '''
 
 def run(args, **kwargs):
-    return subprocess.run(args, check=True, **kwargs)
+    # Keep provisioning/build/cleanup timestamps separate from buffered XCTest
+    # output, whose CI upload timestamp is not its execution timestamp.
+    label = ' '.join(str(value) for value in args[:4])
+    started = time.monotonic()
+    def phase(message):
+        line = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()) + ' ' + message
+        print(line, flush=True)
+        with Path('/tmp/raido-simulator-phases.log').open('a') as log:
+            log.write(line + '\n')
+    phase('Started: ' + label)
+    kwargs.setdefault('check', True)
+    outcome = 'interrupted'
+    try:
+        result = subprocess.run(args, **kwargs)
+        outcome = 'exit=' + str(result.returncode)
+        return result
+    except subprocess.CalledProcessError as error:
+        outcome = 'exit=' + str(error.returncode)
+        raise
+    except subprocess.TimeoutExpired:
+        outcome = 'timed out'
+        raise
+    finally:
+        phase(f'Ended: {label}; {outcome}; elapsed={time.monotonic() - started:.3f}s')
 
 try:
     # Exercise the same selectSector action used by the actual Flight picker.
@@ -306,7 +329,7 @@ try:
         run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '06:44', '--batteryState', 'charged', '--batteryLevel', '100'])
     # For startup checks XCTest installs/boots the app and runner together, as
     # in the passing native suite. A separate simctl install was hanging before
-    # any UI test ran. The test command and job retain their existing limits.
+    # any UI test ran. UI execution and its one AX recovery have separate bounds.
     if '--startup-only' in sys.argv:
         cases = [startup_cases[options.startup_case]] if options.startup_case else list(startup_cases.values())
         result = '/tmp/raido-startup-' + (options.startup_case or 'all') + '.xcresult'
@@ -316,7 +339,7 @@ try:
                 '-destination','platform=iOS Simulator,id='+udid,'-derivedDataPath','/tmp/raido-ice-preview',
                 '-parallel-testing-enabled','NO','CODE_SIGNING_ALLOWED=YES','CODE_SIGNING_REQUIRED=NO',
                 'CODE_SIGN_STYLE=Manual','CODE_SIGN_IDENTITY=-','AD_HOC_CODE_SIGNING_ALLOWED=YES',
-                *['-only-testing:RAIDOMapChecks/MapGestureUITests/' + case for case in cases]], log, result, budget=900)
+                *['-only-testing:RAIDOMapChecks/MapGestureUITests/' + case for case in cases]], log, result)
         except (subprocess.CalledProcessError,subprocess.TimeoutExpired,RuntimeError):
             print(log.read_text()[-12000:]);raise
         print('Passed startup scenarios: ' + ', '.join(cases),flush=True)
@@ -398,7 +421,7 @@ finally:
     if ephemeral_simulator:
         for action in ['shutdown', 'delete']:
             try:
-                subprocess.run(['xcrun', 'simctl', action, ephemeral_simulator], check=False, timeout=30)
+                run(['xcrun', 'simctl', action, ephemeral_simulator], check=False, timeout=30)
             except subprocess.TimeoutExpired:
                 print('Temporary simulator ' + action + ' timed out; runner cleanup will finish it', file=sys.stderr)
     for report in (Path.home() / 'Library/Logs/DiagnosticReports').glob('RAIDORoster*'):

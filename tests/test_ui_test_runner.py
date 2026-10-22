@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -10,25 +11,46 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 AX_FAILURE = 'The test runner failed to initialize for UI testing. Timed out waiting for AX loaded notification'
 PASS = "Test Case '-[RAIDOMapChecks.MapGestureUITests testExample]' passed (1.0 seconds)."
+SUMMARY = dict(result='Passed', totalTestCount=1, passedTests=1, failedTests=0, skippedTests=0)
 
 
 class UITestRunnerChecks(unittest.TestCase):
-    def exercise(self, outputs, clock=(0, 0, 100, 100)):
+    def exercise(self, outputs, summary=None, finalized=True):
         calls = []
+        inspections = []
         def run(command, stdout, **kwargs):
+            if command[0] == 'xcrun':
+                inspections.append(command)
+                self.assertTrue(kwargs['check'])
+                self.assertEqual(kwargs['timeout'], 60)
+                stdout.write(json.dumps(SUMMARY if summary is None else summary))
+                return subprocess.CompletedProcess(command, 0)
             index = len(calls); calls.append((command, kwargs['timeout']))
             code, log = outputs[index]; stdout.write(log)
+            if isinstance(code, Exception):
+                raise code
+            if finalized:
+                result = Path(command[-2]); result.mkdir(); (result/'Info.plist').touch()
             return subprocess.CompletedProcess(command, code)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            with patch.object(module.subprocess, 'run', side_effect=run), patch.object(module.time, 'monotonic', side_effect=clock):
-                module.run_startup_tests(['xcodebuild', '-only-testing:Suite/Class/testExample'], root/'run.log', root/'run.xcresult')
+            # The observed AX failure took ~658 s; retry completion at ~900 s
+            # must retain its own finalization allowance rather than 242 s.
+            with patch.object(module.subprocess, 'run', side_effect=run), patch.object(module.time, 'monotonic', side_effect=[0, 658, 658, 900]):
+                try:
+                    module.run_startup_tests(['xcodebuild', '-only-testing:Suite/Class/testExample'], root/'run.log', root/'run.xcresult')
+                except Exception:
+                    self.assertLessEqual(len(calls), 2)
+                    self.assertIn(outputs[-1][1], (root/'run.log').read_text())
+                    raise
             logs = [path.read_text() for path in sorted(root.glob('run-attempt-*.log'))]
+            self.assertEqual(len(inspections), 1)
+            self.assertTrue(list(root.glob('*.summary.log')))
         return calls, logs
 
-    def test_setup_recovery_keeps_results_and_original_total_budget(self):
+    def test_setup_recovery_keeps_results_and_fresh_bounded_budget(self):
         calls, logs = self.exercise([(65, AX_FAILURE), (0, PASS)])
-        self.assertEqual([call[1] for call in calls], [900, 800])
+        self.assertEqual([call[1] for call in calls], [900, 900])
         self.assertTrue(calls[0][0][-2].endswith('run.xcresult'))
         self.assertTrue(calls[1][0][-2].endswith('run-retry.xcresult'))
         self.assertEqual(logs, [AX_FAILURE, PASS])
@@ -40,6 +62,31 @@ class UITestRunnerChecks(unittest.TestCase):
     def test_other_setup_failures_are_not_retried(self):
         with self.assertRaises(subprocess.CalledProcessError): self.exercise([(65, 'Installation failed')])
 
+    def test_second_initialization_failure_is_not_retried(self):
+        with self.assertRaises(subprocess.CalledProcessError): self.exercise([(65, AX_FAILURE), (65, AX_FAILURE)])
+
     def test_zero_or_wrong_tests_cannot_be_reported_as_passed(self):
         for log in ['', PASS.replace('testExample', 'testOther')]:
             with self.subTest(log=log), self.assertRaises(RuntimeError): self.exercise([(0, log)])
+
+    def test_passing_messages_do_not_override_process_timeout_or_failure(self):
+        for code in [65, subprocess.TimeoutExpired('xcodebuild', 900)]:
+            with self.subTest(code=code), self.assertRaises((subprocess.CalledProcessError, subprocess.TimeoutExpired)):
+                self.exercise([(code, PASS)])
+
+    def test_unfinalized_bundle_is_not_a_pass(self):
+        with self.assertRaisesRegex(RuntimeError, 'not finalized'): self.exercise([(0, PASS)], finalized=False)
+
+    def test_incomplete_failed_skipped_or_wrong_count_bundle_is_not_a_pass(self):
+        for changed in [dict(result='Failed'), dict(result='Unknown'), dict(passedTests=0),
+                        dict(totalTestCount=0), dict(totalTestCount=2), dict(failedTests=1), dict(skippedTests=1)]:
+            with self.subTest(changed=changed), self.assertRaisesRegex(RuntimeError, 'does not confirm'):
+                self.exercise([(0, PASS)], summary=SUMMARY | changed)
+
+    def test_unreadable_result_is_not_a_pass(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = Path(directory)/'run.xcresult'; result.mkdir(); (result/'Info.plist').touch()
+            with patch.object(module.subprocess, 'run', side_effect=subprocess.CalledProcessError(1, 'xcresulttool')):
+                with self.assertRaises(subprocess.CalledProcessError): module.verify_result_bundle(result, {'testExample'})
+            with patch.object(module.subprocess, 'run', side_effect=subprocess.TimeoutExpired('xcresulttool', 60)):
+                with self.assertRaises(subprocess.TimeoutExpired): module.verify_result_bundle(result, {'testExample'})
