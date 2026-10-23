@@ -27,7 +27,7 @@ This runs Python and executable Swift policy/integration checks, builds the unsi
 
 UI scenarios use disposable simulator fixtures. Public login interaction does not establish successful account authentication or session persistence on a phone.
 
-GitHub Actions validates pull requests and pushes to `main` that touch the application, tools, tests or workflows. Documentation-only changes are currently excluded by path filters. Artifacts include the IPA, version/build/commit/hash verification receipt and simulator evidence; IPA artifacts expire after 14 days and test evidence after 7 days. The optional Codemagic runner calls the same scripts. Neither runner commits receipts to the repository. See [repository maintenance](docs/repository-maintenance.md) for branch cleanup, required-check considerations and durable release handling.
+GitHub Actions runs all six validation jobs for every pull request, including documentation-only PRs, so required checks cannot remain pending because of a PR path filter. Pushes to `main` run validation when they touch the application, tools, tests or workflows. Artifacts include the IPA, version/build/commit/hash verification receipt and simulator evidence; IPA artifacts expire after 14 days and test evidence after 7 days. The optional Codemagic runner calls the same scripts. Neither runner commits receipts to the repository. See [repository maintenance](docs/repository-maintenance.md) for branch cleanup, required-check considerations and durable release handling.
 
 ## Install
 
