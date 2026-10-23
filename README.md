@@ -6,15 +6,28 @@ A native companion for the GetJet RAIDO crew portal: offline roster and pickup d
 
 Open `RAIDORoster-Web2IPA/RAIDORoster.xcodeproj` in Xcode. The committed Swift, JavaScript, asset catalogue and project are the real app source; no patch generation is needed. Privacy descriptions and background-location configuration are in `RAIDORoster/Info.plist` and apply to Debug and Release.
 
-The deployment target is iOS 17. CI pins Xcode 16.4 to preserve the validated SDK and appearance. On macOS:
+The deployment target is iOS 17. Both configured CI runners pin Xcode 26.3. GitHub Actions builds the device release on `macos-15-intel` and runs native XCTest and simulator UI jobs on ARM `macos-15`. On a supported Mac with Xcode 26.3:
 
 ```sh
 bash tools/ci.sh all
 ```
 
-This runs Python and native policy/integration checks, builds the unsigned device app and verifies the IPA against the project version, privacy configuration and committed resources. The output is `RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa`. `tools/ci.sh checks`, `build` and `preview` run the individual stages. Simulator previews use synthetic data.
+This runs Python and executable Swift policy/integration checks, builds the unsigned device app and verifies the IPA against the project version, privacy configuration and committed resources. The output is `RAIDORoster-Web2IPA/RAIDORoster-unsigned.ipa`. Despite its name, `all` does not run native XCTest or startup UI scenarios; GitHub Actions runs those in separate jobs.
 
-GitHub Actions validates pull requests and pushes to `main`. Artifacts include the IPA, version/build/commit/hash verification receipt and simulator evidence. The optional Codemagic runner calls the same script. Neither runner commits receipts to the repository.
+| Command | Validation |
+| --- | --- |
+| `bash tools/ci.sh checks` | Python and executable Swift policy/integration checks |
+| `bash tools/ci.sh build` | Device release build, unsigned packaging and artifact verification |
+| `bash tools/ci.sh native-tests` | Full native XCTest target |
+| `bash tools/ci.sh startup --startup-case four-sectors` | Four sectors across two duty groups in Roster and Today |
+| `bash tools/ci.sh startup --startup-case login` | Public mobile login interaction and return to native tabs |
+| `bash tools/ci.sh startup --startup-case responsiveness` | Production startup, navigation and reminder preview |
+| `bash tools/ci.sh startup --startup-case today-return` | Cached Today navigation, deferred map and countdown updates |
+| `bash tools/ci.sh preview` | Synthetic palette previews and map checks |
+
+UI scenarios use disposable simulator fixtures. Public login interaction does not establish successful account authentication or session persistence on a phone.
+
+GitHub Actions validates pull requests and pushes to `main` that touch the application, tools, tests or workflows. Documentation-only changes are currently excluded by path filters. Artifacts include the IPA, version/build/commit/hash verification receipt and simulator evidence; IPA artifacts expire after 14 days and test evidence after 7 days. The optional Codemagic runner calls the same scripts. Neither runner commits receipts to the repository. See [repository maintenance](docs/repository-maintenance.md) for branch cleanup, required-check considerations and durable release handling.
 
 ## Install
 
@@ -22,7 +35,9 @@ The IPA is unsigned. Sign it with your chosen sideloading setup before installin
 
 ## Architecture
 
-- `ContentView.swift`: roster models, navigation, native roster/Today views, Fleet and Flight Companion integration. It is being split incrementally.
+- `ContentView.swift`: application navigation, native roster/Today views, maps, settings and Flight Companion integration. It is being split incrementally.
+- `RosterModels.swift`, `RosterFormatting.swift` and `RosterDayPresentation.swift`: roster values, shared formatting and same-day duty-envelope aggregation. `RosterStore.swift` owns ingestion, persistence, month archives and change tracking.
+- `FleetModels.swift`, `FleetLiveStore.swift` and `FleetView.swift`: aircraft/observation values, Fleet refresh/cache ownership and Fleet presentation.
 - `RosterWebView.swift` and `RosterEnhancements.js`: authenticated portal, extraction and calendar-feed bridge.
 - Separate policy/model files: flight sensor evidence, Fleet fusion/refresh, map presentation, appearance, announcements, earnings and Pay Profiles.
 - `CrewDocumentVault.swift` and related services/views: encrypted document storage and access.
@@ -40,4 +55,4 @@ See `docs/` for feature notes and [the source migration record](docs/source-buil
 
 Native XCTest coverage for roster ingestion, bridge validation and the actual web extractor can be run from the shared `RAIDORosterTests` scheme in Xcode, or with `bash tools/ci.sh native-tests` on macOS. Portal fixtures contain synthetic duties only.
 
-`RosterStore.swift` owns roster ingestion, month archives and change tracking. Views remain in `ContentView.swift`; the native test target exercises the store independently using a temporary cache directory and disabled calendar/notification side effects.
+The native test target exercises `RosterStore` independently using a temporary cache directory and disabled calendar/notification side effects. Fleet presentation has its own file; much of the roster/Today presentation remains in `ContentView.swift`.

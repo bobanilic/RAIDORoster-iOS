@@ -1,5 +1,7 @@
 # Post-merge simulator follow-up
 
+> Historical chronology with the [final validation and merge](#final-validation-and-merge) recorded below. Intermediate Intel/ARM choices and failed runs are preserved as evidence; the active workflow uses ARM for all simulator jobs and Intel for the device release build.
+
 Base: `649b638b3e82fa424d19a06b53668fe1ef06c3b1` (main, 2.29.32 / 22932).
 The merged source tree is identical to the validated `ff8e907` source tree.
 No production source, existing test assertion, fixture, version, existing
@@ -170,3 +172,40 @@ passed. Require a fresh full workflow, including all 75 native tests on ARM,
 before merging, and use the automatic post-merge workflow for independent
 confirmation. No parser changes, larger callback timeouts or failure retries
 are introduced.
+
+
+## Final validation and merge
+
+PR [#13](https://github.com/bobanilic/RAIDORoster-iOS/pull/13) merged at
+`33c72551d5d8ecd1cbe8dc6364f1924cd7ebdd36` on 22 October 2026.
+Its tree equals the tested head `91467eb7014d0260741a4dee08657fead850aa20`.
+Both the [pre-merge workflow 39822207285](https://github.com/bobanilic/RAIDORoster-iOS/actions/runs/39822207285)
+and independent [post-merge workflow 39825182354](https://github.com/bobanilic/RAIDORoster-iOS/actions/runs/39825182354)
+passed all six jobs on their first full attempts.
+
+| Post-merge job | Verified result |
+| --- | --- |
+| Release | Python/Swift checks, app/widget build and unsigned ARM64 iPhoneOS IPA/resource verification passed; version 2.29.32/build 22932 |
+| Native XCTest | All 75 tests passed with zero failures; case execution 31.681 s |
+| Four sectors | First UI command exited 0 in 272.932 s; finalized result verified |
+| Public login | First UI command exited 0 in 315.469 s; finalized result verified |
+| Responsiveness | First UI command exited 0 in 267.382 s; finalized result verified |
+| Today-return | First UI command exited 0 in 438.714 s; finalized result verified |
+
+All four UI jobs uploaded their result bundles. Each simulator shutdown and
+deletion exited 0. These are completed processes and validated result bundles,
+not passing assertion messages inside timed-out commands. Earlier failures
+remain failures and are not superseded as historical evidence.
+
+The final configuration uses ARM `macos-15` for native and all four UI jobs,
+Intel `macos-15-intel` for the device release build, and pinned Xcode 26.3.
+Production app/widget code and version were unchanged by PR #13. Every original
+UI test line was retained; the public-login test additionally synchronizes on
+visible, tappable readiness before interaction.
+
+The exact underlying Intel simulator/service fault and blocked Today stack
+remain unconfirmed. The watcher still has a known collection limitation:
+its bounded host `ps` lookup timed out during recorded stalls. A future change
+should validate stack capture against a deliberately stalled disposable test
+app before claiming improved diagnosis. These simulator passes do not establish
+account authentication/session persistence or duty-length device battery use.

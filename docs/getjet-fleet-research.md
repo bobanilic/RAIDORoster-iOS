@@ -2,6 +2,8 @@
 
 Research and repository audit • 5 September 2026
 
+> Historical research, not current build or provider instructions. This report describes the September baseline, including its retired source-generation pipeline and then-current fleet/provider evidence. Since 2.29.8 the app builds committed Swift and JavaScript directly; do not run or append legacy patches. Use the [current README](../README.md), [source migration record](source-build.md) and [Fleet benchmark guidance](fleet-benchmark.md). Aircraft membership, provider terms and prices below require re-verification before a new integration or release relies on them.
+
 ## Decision
 
 Use a shared, continuously running service with three separate data lanes: aircraft observations, flight operations, and company technical status. Keep every approved fleet member visible even when its transponder is silent. Show the age and provenance of each fact. A public tracker cannot establish that an aircraft is serviceable, in maintenance, or AOG.
@@ -16,7 +18,7 @@ No provider was live-benchmarked across GetJet aircraft in this research. The re
 
 Inspected repository: `bobanilic/RAIDORoster-iOS`, main commit `4dacf80a9b9731c29f179ae4805059183c437aec`. The latest inspected release is 2.19.7. Its GitHub Actions build succeeded on 4 September 2026. [Repository at inspected commit](https://github.com/bobanilic/RAIDORoster-iOS/tree/4dacf80a9b9731c29f179ae4805059183c437aec), [successful build](https://github.com/bobanilic/RAIDORoster-iOS/actions/runs/33824196024)
 
-The checked-in `ContentView.swift` is not the final application. `build-unsigned-ipa.sh` runs 60 Python patches before Xcode compiles it. I reconstructed that generated source before auditing Fleet. Editing only the old Swift file would miss or conflict with later patches.
+At the inspected September commit, the checked-in `ContentView.swift` was not the final application: `build-unsigned-ipa.sh` ran 60 Python patches before compilation. The audit reconstructed that generated source. This historical constraint no longer applies; current production changes belong in the canonical committed source and Xcode project.
 
 | Existing behavior | Reliability consequence | Proposed PR treatment |
 |---|---|---|
@@ -34,7 +36,7 @@ The checked-in `ContentView.swift` is not the final application. `build-unsigned
 | Detail view receives value snapshots | Open detail can stop reflecting refreshes | Observe the live store and tick age labels |
 | Today uses message age and can extrapolate 120 seconds | Smooth motion can hide old coordinates | Use position age; limit projection to 20 seconds; reset on tail switch |
 
-The existing UI correctly says that no ADS-B signal does not prove AOG. Preserve that distinction. The new patch is appended to the current build pipeline to minimize disruption; replacing the entire patch architecture is a separate project.
+The UI correctly says that no ADS-B signal does not prove AOG. Preserve that distinction. The September proposal appended a patch to the then-current pipeline. That pipeline was subsequently retired; this is not an instruction to restore it.
 
 ## 2. Define “all GetJet aircraft” before tracking
 
