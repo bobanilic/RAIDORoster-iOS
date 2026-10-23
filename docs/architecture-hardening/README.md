@@ -1,5 +1,7 @@
 # Controlled architecture hardening
 
+> Historical implementation record. PRs #11, #12 and #13 were merged into `main` on 22 October 2026; references below to unmerged PRs, development branches, Intel simulator jobs and superseded budgets describe earlier stages. The [final simulator outcome](postmerge-ui-reliability.md#final-validation-and-merge) records successful pre-merge and post-merge workflows. For active commands and source ownership, use the [current README](../../README.md).
+
 ## Baseline and scope
 
 Development base: `eef8c96e81734368fac41d38a320d164926ed5f8`, `codex/today-priorities`, version 2.29.31 / 22931. Remote references were fetched on 21 October 2026; this was still the development head. Work is isolated on `codex/architecture-hardening`, targeting the development branch in PR #12. PR #11 and main are not modified.
