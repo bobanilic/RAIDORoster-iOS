@@ -1,8 +1,8 @@
 name: RAIDO validation and unsigned IPA
 on:
   workflow_dispatch:
+  # Required checks must be emitted for documentation-only PRs too.
   pull_request:
-    paths: ['RAIDORoster-Web2IPA/**', 'tools/**', 'tests/**', '.github/workflows/**']
   push:
     branches: [main]
     paths: ['RAIDORoster-Web2IPA/**', 'tools/**', 'tests/**', '.github/workflows/**']

@@ -6,17 +6,18 @@ Audit date: 23 October 2026. Default branch: `main`, at
 `33c72551d5d8ecd1cbe8dc6364f1924cd7ebdd36`. PRs #1 through #13 are merged.
 The [latest application-source workflow](https://github.com/bobanilic/RAIDORoster-iOS/actions/runs/39825182354)
 passed release verification, all 75 native tests and all four UI scenarios.
-This document does not change application source, version, workflow behavior or repository settings.
+The application remains version 2.29.32/build 22932. Housekeeping changes documentation, PR validation triggers and repository settings; it does not change application behavior.
 
 ## Merged branch cleanup inventory
 
 All 17 branch tips below were checked against the full, non-shallow Git history.
 Each tip is an ancestor of the baseline main commit: there are zero commits
 reachable from that tip but not from main. Removing these refs preserves their
-commits through main. This inventory records cleanup candidates, not completed
-deletions. Before deletion, fetch again and verify each remote tip still equals
-the recorded SHA and remains an ancestor of current main; retain any branch
-that has acquired new work. Never delete main or force-update another branch.
+commits through main. On 23 October the 17 refs below and the subsequently merged
+`codex/repository-housekeeping` ref were deleted after a fresh ancestry/tip check
+against main `2eb1ab72aacfa52c126e4f8ffd5e817808de97a8`. Their commits remain in
+main. For future cleanup, fetch again and retain any branch with new work. Never
+delete main or force-update another branch.
 
 | Branch | Audited tip |
 | --- | --- |
@@ -47,21 +48,19 @@ Retain historical commits, test evidence and the source-migration provenance.
 At the audit, GitHub reported automatic merged-branch deletion disabled and
 main unprotected. The available GitHub connector has file/PR write operations,
 but no branch deletion, repository-administration or release-publication tools.
-These settings are recommendations until separately applied and verified:
+Automatic head-branch deletion was enabled through the authenticated GitHub UI
+on 23 October 2026. Main protection is configured through that UI; the protection/trigger PR records
+its final verification. The intended rule is:
 
-- Enable automatic deletion of merged PR branches.
 - Require changes to main through pull requests and block force-pushes and main deletion.
 - Require release, native-tests, simulator (four-sectors), simulator (login),
-  simulator (responsiveness) and simulator (today-return) checks after addressing
-  the workflow path-filter interaction below. Preserve all assertion/result checks.
+  simulator (responsiveness) and simulator (today-return) checks. Preserve all assertion/result checks.
 
-The current workflow filters both pull requests and main pushes to application,
-tools, tests and workflow paths. Documentation-only PRs therefore have no new
-workflow run. Requiring its six checks globally without changing that behavior
-can leave such PRs blocked by pending checks. Decide and validate the trigger
-policy before enforcing those checks: running the full workflow on every PR is
-simple but adds simulator cost to documentation changes; a conditional workflow
-requires explicit tests that app changes cannot bypass the six mandatory jobs.
+The workflow now runs its unchanged six jobs for every pull request, including
+Markdown-only changes. This deliberately trades additional simulator cost for a
+simple, enforceable required-check policy without an untested conditional bypass.
+The main-push path filter is retained. Commands, assertions, bounded recovery,
+runner/toolchain choices, timeouts and artifact handling are unchanged.
 Do not use an existing commit's green checks as results for changed app source.
 
 ## Durable unsigned releases
