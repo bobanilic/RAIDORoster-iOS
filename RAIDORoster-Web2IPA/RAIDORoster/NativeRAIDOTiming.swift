@@ -10,6 +10,7 @@ enum NativeRAIDOTiming {
         case extractorUnavailable = "extractor-unavailable"
         case auth, loading, mismatch, format, limit
         case noFlightRecords = "no-flight-records"
+        case noActivityRecords = "no-activity-records"
         case scriptFailure = "script-failure"
         case invalidPayload = "invalid-payload"
         case pageChanged = "page-changed"
@@ -24,6 +25,7 @@ enum NativeRAIDOTiming {
             case .format: return "The portal's displayed month or activity layout was not recognized."
             case .limit: return "The live timing reference exceeds the supported limits."
             case .noFlightRecords: return "No flight/positioning records were parsed in the displayed month."
+            case .noActivityRecords: return "No activity records were parsed on the displayed roster page."
             case .scriptFailure: return "The read-only portal timing script could not complete."
             case .invalidPayload: return "The portal timing reference failed field or format validation."
             case .pageChanged: return "The portal page changed during timing inspection."
@@ -66,6 +68,11 @@ enum NativeRAIDOTiming {
         guard case .ready(let first) = before, case .ready(let last) = after, first == last else {
             return .unavailable("Portal timing records changed across the native request; timing comparison is inconclusive.")
         }
+        if last.version == 3 {
+            let identity = NativeRAIDOIdentity.assess(native, reference: last)
+            return Assessment(timing: compare(identity.flights).message,
+                fields: identity.summary + "\n" + NativeRAIDOFlightValidation.assess(identity.flights).summary)
+        }
         let pairing = pair(native, reference: last)
         return Assessment(timing: compare(pairing).message, fields: NativeRAIDOFlightValidation.assess(pairing).summary)
     }
@@ -83,10 +90,11 @@ enum NativeRAIDOTiming {
         let checkInUTC: String?
         let checkOutLT: String?
         let checkOutUTC: String?
+        let station: String?
 
         var orderingFields: [String] {
             [day, code, category, route, startLT, startUTC, endLT, endUTC,
-             checkInLT ?? "", checkInUTC ?? "", checkOutLT ?? "", checkOutUTC ?? ""]
+             checkInLT ?? "", checkInUTC ?? "", checkOutLT ?? "", checkOutUTC ?? "", station ?? ""]
         }
     }
 
@@ -96,17 +104,22 @@ enum NativeRAIDOTiming {
         let month: String
         let valid: Bool
         let activities: [ReferenceActivity]
+        let otherActivities: [ReferenceActivity]?
+        var allActivities: [ReferenceActivity] { activities + (otherActivities ?? []) }
 
         static func parse(_ data: Data, month: String) throws -> Self {
             guard data.count <= 1024 * 1024 else { throw Failure.referenceUnavailable }
             _ = try NativeRAIDOContract.boundedJSON(data)
             let value = try JSONDecoder().decode(Self.self, from: data)
-            guard (1...2).contains(value.version), value.valid, value.month == month,
+            guard (1...3).contains(value.version), value.valid, value.month == month,
                   value.sourceURL.utf8.count <= 2048, let url = URL(string: value.sourceURL),
                   PortalBridgePolicy.isPortal(url), url.path.lowercased().hasSuffix("/humanresourceroster.aspx"),
-                  (1...3000).contains(value.activities.count) else { throw Failure.referenceUnavailable }
-            for activity in value.activities {
-                guard NativeRAIDOWire.calendarDay(activity.day), activity.day.hasPrefix(month + "-"),
+                  (1...3000).contains(value.allActivities.count),
+                  value.version == 3 || !value.activities.isEmpty,
+                  value.version != 3 || value.otherActivities != nil else { throw Failure.referenceUnavailable }
+            for activity in value.allActivities {
+                guard NativeRAIDOWire.calendarDay(activity.day),
+                      value.version == 3 || activity.day.hasPrefix(month + "-"),
                       activity.code.utf8.count <= 80, activity.category.utf8.count <= 40, activity.route.utf8.count <= 120,
                       [activity.startLT, activity.startUTC, activity.endLT, activity.endUTC].allSatisfy(NativeRAIDOTiming.validStamp) else {
                     throw Failure.referenceUnavailable
@@ -115,11 +128,22 @@ enum NativeRAIDOTiming {
                 guard duty.allSatisfy({ $0.map(NativeRAIDOTiming.validStamp) ?? (value.version == 1) }) else {
                     throw Failure.referenceUnavailable
                 }
+                if value.version == 3 {
+                    guard let station = activity.station, station.utf8.count <= 20,
+                          activity.startLT.isEmpty || activity.day == String(activity.startLT.prefix(10)) else { throw Failure.referenceUnavailable }
+                }
+            }
+            guard value.activities.allSatisfy({ $0.day.hasPrefix(month + "-") }) else { throw Failure.referenceUnavailable }
+            if value.version == 3 {
+                let primary: (ReferenceActivity) -> Bool = { $0.day.hasPrefix(month + "-") && ["FLIGHT", "POSITIONING"].contains($0.category) }
+                guard value.activities.allSatisfy(primary), value.otherActivities?.allSatisfy({ !primary($0) }) == true else { throw Failure.referenceUnavailable }
             }
             // DOM order can change without a timing change. Preserve duplicates
             // so normalization cannot manufacture a unique activity identity.
             let ordered = value.activities.sorted { $0.orderingFields.lexicographicallyPrecedes($1.orderingFields) }
-            return Self(version: value.version, sourceURL: value.sourceURL, month: value.month, valid: value.valid, activities: ordered)
+            let other = value.otherActivities?.sorted { $0.orderingFields.lexicographicallyPrecedes($1.orderingFields) }
+            return Self(version: value.version, sourceURL: value.sourceURL, month: value.month, valid: value.valid,
+                activities: ordered, otherActivities: other)
         }
     }
 
@@ -157,7 +181,12 @@ enum NativeRAIDOTiming {
     }
 
     struct Key: Hashable { let day: String; let code: String; let departure: String; let arrival: String }
-    struct Pair { let key: Key; let native: NativeRAIDOWire.Activity; let portal: ReferenceActivity }
+    struct Pair {
+        let key: Key
+        let native: NativeRAIDOWire.Activity
+        let portal: ReferenceActivity
+        var multipleContainerDays = false
+    }
     struct Pairing {
         var pairs: [Pair] = []
         var ambiguous = 0
@@ -186,10 +215,10 @@ enum NativeRAIDOTiming {
     private struct CodeRoute: Hashable { let code: String; let departure: String; let arrival: String }
     // Match the existing HTML parser's whitespace compaction. Preserve token
     // boundaries: "AB 123" must never be guessed to mean "AB123".
-    private static func normalized(_ value: String) -> String {
+    static func normalized(_ value: String) -> String {
         value.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ").uppercased()
     }
-    private static func airport(_ value: String?) -> String? {
+    static func airport(_ value: String?) -> String? {
         guard let value, value.utf8.count <= 32 else { return nil }
         let result = normalized(value)
         guard result.utf8.count == 3, result.utf8.allSatisfy({ (65...90).contains($0) }) else { return nil }
@@ -288,20 +317,22 @@ enum NativeRAIDOTiming {
     let r;
     try { r = inspector(month); } catch (_) { return fail('script-failure'); }
     if (!r || r.kind !== 'ready') {
-      const allowed = ['auth','loading','mismatch','format','limit','no-flight-records'];
+      const allowed = ['auth','loading','mismatch','format','limit','no-flight-records','no-activity-records'];
       return fail(allowed.includes(r?.kind) ? r.kind : 'invalid-payload');
     }
     const p = r.payload;
-    if (!p || p.version !== 2 || p.month !== month || p.valid !== true || !Array.isArray(p.activities)) return fail('invalid-payload');
-    if (p.activities.length < 1) return fail('no-flight-records');
-    if (p.activities.length > 3000) return fail('limit');
-    const fields = ['day','code','category','route','startLT','startUTC','endLT','endUTC','checkInLT','checkInUTC','checkOutLT','checkOutUTC'];
-    if (p.activities.some(a => !a || fields.some(key => typeof a[key] !== 'string'))) return fail('invalid-payload');
+    if (!p || p.version !== 3 || p.month !== month || p.valid !== true || !Array.isArray(p.activities) || !Array.isArray(p.otherActivities)) return fail('invalid-payload');
+    const all = p.activities.concat(p.otherActivities);
+    if (all.length < 1) return fail('no-activity-records');
+    if (all.length > 3000) return fail('limit');
+    const fields = ['day','code','category','route','station','startLT','startUTC','endLT','endUTC','checkInLT','checkInUTC','checkOutLT','checkOutUTC'];
+    if (all.some(a => !a || fields.some(key => typeof a[key] !== 'string'))) return fail('invalid-payload');
     // Project again at the bridge: unexpected extra fields never cross to Swift.
-    const activities = p.activities.map(a => ({day:a.day,code:a.code,category:a.category,route:a.route,
+    const project = a => ({day:a.day,code:a.code,category:a.category,route:a.route,station:a.station,
       startLT:a.startLT,startUTC:a.startUTC,endLT:a.endLT,endUTC:a.endUTC,
-      checkInLT:a.checkInLT,checkInUTC:a.checkInUTC,checkOutLT:a.checkOutLT,checkOutUTC:a.checkOutUTC}));
-    const text = JSON.stringify({version:2,sourceURL:location.href,month:p.month,valid:true,activities});
+      checkInLT:a.checkInLT,checkInUTC:a.checkInUTC,checkOutLT:a.checkOutLT,checkOutUTC:a.checkOutUTC});
+    const text = JSON.stringify({version:3,sourceURL:location.href,month:p.month,valid:true,
+      activities:p.activities.map(project),otherActivities:p.otherActivities.map(project)});
     return new TextEncoder().encode(text).byteLength <= 1024*1024 ? text : fail('limit');
     """#
 }

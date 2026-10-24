@@ -37,6 +37,7 @@ enum NativeRAIDOFlightValidation {
         var unsupported = false
         var clockOnly = false
         var signedDay = false
+        var ambiguousAnchor = false
 
         var message: String {
             var parts: [String] = []
@@ -51,6 +52,7 @@ enum NativeRAIDOFlightValidation {
             if absentPortal { parts.append("Some portal LT/UTC references are absent.") }
             if clockOnly { parts.append("Plain clocks do not establish calendar dates.") }
             if signedDay { parts.append("Signed suffixes were tested as roster-day offsets only; this is not an import rule.") }
+            if ambiguousAnchor { parts.append("A repeated source record has no unique container-day anchor for its suffix.") }
             return parts.isEmpty ? "No comparable values were observed." : parts.joined(separator: " ")
         }
     }
@@ -90,7 +92,7 @@ enum NativeRAIDOFlightValidation {
         return Int(value.timeIntervalSince1970 / 86400)
     }
 
-    static func compareClock(_ raw: String?, local: String?, utc: String?, rosterDay: String) -> ClockResult {
+    static func compareClock(_ raw: String?, local: String?, utc: String?, rosterDay: String?) -> ClockResult {
         var result = ClockResult()
         guard let raw, !raw.isEmpty else {
             result.absentNative = (local?.isEmpty == false || utc?.isEmpty == false)
@@ -107,6 +109,7 @@ enum NativeRAIDOFlightValidation {
         var lt = ltClock, z = utcClock
         if let offset = value.signedDay {
             result.signedDay = true
+            guard let rosterDay else { result.ambiguousAnchor = true; return result }
             guard let base = dayNumber(rosterDay), let l = dayNumber(String(local.prefix(10))), let u = dayNumber(String(utc.prefix(10))) else {
                 result.dayDifference = 1; return result
             }
@@ -128,6 +131,7 @@ enum NativeRAIDOFlightValidation {
         total.absentNative = total.absentNative || value.absentNative; total.absentPortal = total.absentPortal || value.absentPortal
         total.unsupported = total.unsupported || value.unsupported; total.clockOnly = total.clockOnly || value.clockOnly
         total.signedDay = total.signedDay || value.signedDay
+        total.ambiguousAnchor = total.ambiguousAnchor || value.ambiguousAnchor
     }
 
     static func assess(_ pairing: NativeRAIDOTiming.Pairing) -> Assessment {
@@ -136,7 +140,8 @@ enum NativeRAIDOFlightValidation {
         var nights = NativeRAIDOTiming.Pairing()
         if pairing.pairs.isEmpty { result.orderUnknown = true }
         for pair in pairing.pairs {
-            let p = pair.portal, n = pair.native, day = pair.key.day
+            let p = pair.portal, n = pair.native
+            let day: String? = pair.multipleContainerDays ? nil : pair.key.day
             merge(compareClock(n.std, local: p.startLT, utc: p.startUTC, rosterDay: day), into: &result.std)
             merge(compareClock(n.sta, local: p.endLT, utc: p.endUTC, rosterDay: day), into: &result.sta)
             merge(compareClock(n.checkIn, local: p.checkInLT, utc: p.checkInUTC, rosterDay: day), into: &result.checkIn)

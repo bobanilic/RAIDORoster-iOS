@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = '3.2.3';
+  const VERSION = '3.2.4';
   if (window !== window.top) return;
   const SCHEMA_VERSION = 1;
   // Login/chooser pages never install roster observers or parse the DOM. Keep
@@ -940,8 +940,8 @@
       pageTitle:document.title || 'RAIDO',monthlyBLH:monthlyBLH(),validation:v,rows:b.days}};
   }
   // Native timing evidence needs neither duty grouping nor calendar discovery.
-  // Keep the existing parser, but project only this month's flight/positioning
-  // records. Hotels spanning months and unrelated display fields are not inputs.
+  // Preserve the current-month flight list and a separate list of other visible
+  // activities, including spanning hotels. Do not export notes or crew fields.
   function historyTimingReference(expectedMonth) {
     if (document.querySelector('input[type="password"]')) return {kind:'auth'};
     if (document.readyState === 'loading' || document.querySelector('[aria-busy="true"]') || window.__RAIDOHistoryNetwork?.pending > 0) return {kind:'loading'};
@@ -951,14 +951,15 @@
     const month = `${m.year}-${pad2(m.month)}`;
     if (month !== expectedMonth) return {kind:'mismatch'};
     if (activityTables().length > 400) return {kind:'limit'};
-    const selected = extractActivities().filter(a => a.dateISO.startsWith(month + '-') &&
-      ['FLIGHT','POSITIONING'].includes(a.category));
-    if (!selected.length) return {kind:'no-flight-records'};
-    if (selected.length > 3000) return {kind:'limit'};
-    return {kind:'ready',payload:{version:2,sourceURL:location.href,month,valid:true,
-      activities:selected.map(a => ({day:a.dateISO,code:a.code,category:a.category,route:a.route || '',
+    const found = extractActivities();
+    if (!found.length) return {kind:'no-activity-records'};
+    if (found.length > 3000) return {kind:'limit'};
+    const selected = a => a.dateISO.startsWith(month + '-') && ['FLIGHT','POSITIONING'].includes(a.category);
+    const project = a => ({day:a.dateISO,code:a.code,category:a.category,route:a.route || '',station:a.station || '',
         startLT:stamp(a.start),startUTC:utcStamp(a.start),endLT:stamp(a.end),endUTC:utcStamp(a.end),
-        checkInLT:stamp(a.checkIn),checkInUTC:utcStamp(a.checkIn),checkOutLT:stamp(a.checkOut),checkOutUTC:utcStamp(a.checkOut)}))}};
+        checkInLT:stamp(a.checkIn),checkInUTC:utcStamp(a.checkIn),checkOutLT:stamp(a.checkOut),checkOutUTC:utcStamp(a.checkOut)});
+    return {kind:'ready',payload:{version:3,sourceURL:location.href,month,valid:true,
+      activities:found.filter(selected).map(project),otherActivities:found.filter(a => !selected(a)).map(project)}};
   }
   function historyNavigate(target) {
     if (!/^20\d{2}-(?:0[1-9]|1[0-2])$/.test(target)) return {kind:'invalid'};

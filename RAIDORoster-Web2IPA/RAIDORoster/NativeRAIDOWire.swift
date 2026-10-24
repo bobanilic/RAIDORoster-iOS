@@ -103,6 +103,12 @@ enum NativeRAIDOWire {
     struct Entry: Equatable, Sendable {
         let calendarDay: String
         let day: Day
+        /// Canonical hashes include every raw record field, including unknown
+        /// ones. In-memory provenance only; never exported or used as account ID.
+        let recordDigests: [Data]?
+        init(calendarDay: String, day: Day, recordDigests: [Data]? = nil) {
+            self.calendarDay = calendarDay; self.day = day; self.recordDigests = recordDigests
+        }
     }
 
     struct Decoded: Equatable, Sendable {
@@ -151,7 +157,7 @@ enum NativeRAIDOWire {
 
     static func decode(_ data: Data, for contract: NativeRAIDOQuery) throws -> Decoded {
         // Check size/depth/node limits before JSONDecoder traverses the data.
-        _ = try NativeRAIDOContract.boundedJSON(data)
+        let raw = try NativeRAIDOContract.boundedJSON(data)
         let payload: Payload, request: Request
         do {
             payload = try JSONDecoder().decode(Root.self, from: data).d
@@ -160,6 +166,8 @@ enum NativeRAIDOWire {
         guard payload.hrId > 0, String(payload.hrId) == request.hrId.value else { throw Failure.identityMismatch }
         guard !payload.roster.days.isEmpty else { throw Failure.emptyRoster }
         guard payload.roster.days.count <= 62 else { throw Failure.malformed }
+        let root = raw as? [String: Any], envelope = root?["d"] as? [String: Any]
+        let roster = envelope?["Roster"] as? [String: Any], rawDays = roster?["Days"] as? [String: Any]
         var entries: [Entry] = [], seen = Set<String>()
         for key in payload.roster.days.keys.sorted() {
             let day: String
@@ -168,7 +176,14 @@ enum NativeRAIDOWire {
             else { throw Failure.invalidDay }
             guard day.hasPrefix(contract.month + "-") else { throw Failure.monthMismatch }
             guard seen.insert(day).inserted else { throw Failure.duplicateDay }
-            entries.append(Entry(calendarDay: day, day: payload.roster.days[key]!))
+            let value = payload.roster.days[key]!
+            var digests: [Data]?
+            if let activities = value.details?.activities {
+                guard let rawDay = rawDays?[key] as? [String: Any], let details = rawDay["Details"] as? [String: Any],
+                      let records = details["ActivityDetails"] as? [[String: Any]], records.count == activities.count else { throw Failure.malformed }
+                digests = try records.map { try NativeRAIDOContract.digest(JSONSerialization.data(withJSONObject: $0)) }
+            }
+            entries.append(Entry(calendarDay: day, day: value, recordDigests: digests))
         }
         return Decoded(responseDate: payload.date, days: entries)
     }

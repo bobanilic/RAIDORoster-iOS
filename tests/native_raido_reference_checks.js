@@ -5,9 +5,9 @@ const source = fs.readFileSync(process.argv[2], 'utf8');
 const script = source.match(/static let referenceScript = #"""\n([\s\S]*?)\n\s*"""#/)[1];
 let checks = 0;
 const check = (value, label) => { assert.ok(value, label); checks++; };
-const activity = () => ({code:'SYN101',category:'FLIGHT',route:'AAA → BBB',startLT:'2026-10-08 13:00',startUTC:'2026-10-08 10:00',endLT:'2026-10-08 14:00',endUTC:'2026-10-08 11:00',checkInLT:'2026-10-08 12:00',checkInUTC:'2026-10-08 09:00',checkOutLT:'2026-10-08 14:30',checkOutUTC:'2026-10-08 11:30',
+const activity = () => ({code:'SYN101',category:'FLIGHT',route:'AAA → BBB',station:'',startLT:'2026-10-08 13:00',startUTC:'2026-10-08 10:00',endLT:'2026-10-08 14:00',endUTC:'2026-10-08 11:00',checkInLT:'2026-10-08 12:00',checkInUTC:'2026-10-08 09:00',checkOutLT:'2026-10-08 14:30',checkOutUTC:'2026-10-08 11:30',
   crew:[{name:'private person'}],notes:'private note',rawText:'private details',phone:'private phone'});
-const ready = () => ({kind:'ready',payload:{version:2,month:'2026-10',valid:true,activities:[{day:'2026-10-08',...activity()}],rawText:'private row'}});
+const ready = () => ({kind:'ready',payload:{version:3,month:'2026-10',valid:true,activities:[{day:'2026-10-08',...activity()}],otherActivities:[],rawText:'private row'}});
 function run(options = {}) {
   let calls = 0;
   const fail = () => { throw Error('No navigation, extraction posting, or network requests allowed'); };
@@ -28,17 +28,22 @@ for(const options of [{frame:true},{location:{protocol:'http:'}},{location:{host
 }
 check(JSON.parse(run({missingAPI:true}).result).issue==='extractor-unavailable','missing extractor is distinguished');
 check(JSON.parse(run({throws:true}).result).issue==='script-failure','script failures exclude exception details');
-for (const kind of ['auth','loading','mismatch','format','limit','no-flight-records']) {
+for (const kind of ['auth','loading','mismatch','format','limit','no-flight-records','no-activity-records']) {
   check(JSON.parse(run({value:{kind}}).result).issue===kind,'unready portal has a fixed reason');
 }
 check(JSON.parse(run({value:{kind:'private arbitrary state'}}).result).issue==='invalid-payload','unknown status values are not exported');
 for (const mutate of [v=>v.payload.month='2026-09',v=>v.payload.valid=false,v=>v.payload.version=true,
-  v=>v.payload.activities=undefined,v=>v.payload.version=1,v=>v.payload.activities[0].checkInLT=undefined,v=>v.payload.activities[0].checkOutUTC=123,v=>v.payload.activities[0]=null]) {
+  v=>v.payload.activities=undefined,v=>v.payload.version=1,v=>v.payload.activities[0].checkInLT=undefined,v=>v.payload.activities[0].checkOutUTC=123,v=>v.payload.activities[0]=null,v=>v.payload.otherActivities=undefined,v=>v.payload.activities[0].station=undefined,v=>v.payload.version=2]) {
   const input=ready();mutate(input);check(JSON.parse(run({value:input}).result).issue==='invalid-payload','explicit validity and payload structure enforced');
 }
 for (const mutate of [v=>v.payload.activities=Array(3001).fill({day:'2026-10-08',...activity()}),
   v=>v.payload.activities[0].code='x'.repeat(1024*1024)]) {
   const input=ready();mutate(input);check(JSON.parse(run({value:input}).result).issue==='limit','record and byte limits enforced');
 }
-check(JSON.parse(run({value:{kind:'ready',payload:{version:2,month:'2026-10',valid:true,activities:[]}}}).result).issue==='no-flight-records','empty timing subset cannot claim a basis');
+check(JSON.parse(run({value:{kind:'ready',payload:{version:3,month:'2026-10',valid:true,activities:[],otherActivities:[]}}}).result).issue==='no-activity-records','empty visible roster cannot claim a basis');
+const nonflight=ready();nonflight.payload.otherActivities=[{...nonflight.payload.activities[0],code:'STB',category:'STANDBY',route:'',station:'VNO'}];nonflight.payload.activities=[];
+check(JSON.parse(run({value:nonflight}).result).otherActivities[0].category==='STANDBY','non-flight-only pages retain explicit timing evidence');
+check(!run({value:nonflight}).result.includes('private person'),'other activity projection excludes crew');
+const tooMany=ready();tooMany.payload.otherActivities=Array(3000).fill(tooMany.payload.activities[0]);
+check(JSON.parse(run({value:tooMany}).result).issue==='limit','limit applies across both reference lists');
 console.log(`Native RAIDO reference: ${checks} behavior checks passed`);

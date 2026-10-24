@@ -123,7 +123,7 @@ final class RosterBridgeTests: XCTestCase {
         XCTAssertEqual(activity["pickup"] as? String, "8 OCT • 07:50 LT")
         XCTAssertEqual(activity["route"] as? String, "TLV → HER")
     }
-    func testActualNativeTimingReferenceWorksHiddenAndExcludesAdjacentMonthAndNonFlightRows() async throws {
+    func testActualNativeReferenceKeepsFlightProjectionAndAddsOtherActivities() async throws {
         let ready = expectation(description: "Native timing fixture ready")
         try loadFixture("roster", path: "HumanResourceRoster.aspx", expectation: ready)
         defer {
@@ -146,7 +146,8 @@ final class RosterBridgeTests: XCTestCase {
         XCTAssertEqual(reference.activities.count, 5)
         XCTAssertEqual(reference.activities.first?.startUTC, "2026-10-08 06:50")
         XCTAssertEqual(reference.activities.first?.route, "TLV → HER")
-        XCTAssertEqual(reference.version, 2)
+        XCTAssertEqual(reference.version, 3)
+        XCTAssertEqual(reference.otherActivities?.count, 0)
         XCTAssertEqual(reference.activities.first?.checkInLT, "2026-10-08 08:50")
         XCTAssertEqual(reference.activities.first?.checkInUTC, "2026-10-08 05:50")
         XCTAssertEqual(reference.activities.first?.checkOutUTC, "")
@@ -176,9 +177,37 @@ final class RosterBridgeTests: XCTestCase {
               Start 15OCT26 00:00 (LT) End 15OCT26 23:59 (LT)</td></tr></table>`);
             """)
         let withUnrelated = await probe.timingReference(in: view, month: "2026-10")
-        XCTAssertEqual(withUnrelated, first, "Only the requested month's flight/positioning timings form the reference")
+        guard case .ready(let expanded) = withUnrelated else { XCTFail("Expanded reference unavailable"); return }
+        XCTAssertEqual(expanded.activities, reference.activities, "The original flight projection retains its scope")
+        XCTAssertEqual(expanded.otherActivities?.count, 3)
+        XCTAssertEqual(Set(expanded.otherActivities?.map(\.category) ?? []), ["HOTEL", "FLIGHT", "OFF"])
+        XCTAssertNotEqual(withUnrelated, first, "Other visible activities now participate in stability validation")
         let wrongMonth = await probe.timingReference(in: view, month: "2026-09")
         XCTAssertEqual(wrongMonth, .unavailable(.mismatch))
+    }
+
+    func testActualNativeReferenceAcceptsNonFlightOnlyPage() async throws {
+        let ready = expectation(description: "Non-flight reference fixture ready")
+        try loadFixture("roster", path: "HumanResourceRoster.aspx", expectation: ready)
+        defer {
+            webView?.configuration.userContentController.removeAllScriptMessageHandlers()
+            webView = nil; recorder = nil; fixtureWindow?.isHidden = true; fixtureWindow = nil
+        }
+        await fulfillment(of: [ready], timeout: 60)
+        let view = try XCTUnwrap(webView), probe = NativeRAIDOExperiment()
+        _ = try await view.evaluateJavaScript("""
+            document.body.innerHTML = `<h1>October 2026</h1><table class="activity-table"><tr><td>
+            Activity STB,STB Morning Station VNO - Airport
+            Start 09OCT26 09:00 (LT) / 09OCT26 06:00 (UTC)
+            End 09OCT26 17:00 (LT) / 09OCT26 14:00 (UTC)</td></tr></table>`;
+            true;
+            """)
+        let result = await probe.timingReference(in: view, month: "2026-10")
+        guard case .ready(let reference) = result else { XCTFail("Non-flight reference unavailable: \(result)"); return }
+        XCTAssertTrue(reference.activities.isEmpty)
+        XCTAssertEqual(reference.otherActivities?.count, 1)
+        XCTAssertEqual(reference.otherActivities?.first?.category, "STANDBY")
+        XCTAssertEqual(reference.otherActivities?.first?.startUTC, "2026-10-09 06:00")
     }
 
     func testNativeTimingReadinessRetriesOnlyBusyAndRemainsBounded() async throws {

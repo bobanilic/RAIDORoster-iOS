@@ -105,6 +105,76 @@ wire-schema fixture, canonical-model decoder, and full importer parity checks.
 
 ## Evidence boundary
 
+### Build 22939 — source identity normalization and non-flight local candidates
+
+The owner reported on 22938: matched native JSON; paired validity/STD/STA/
+check-in/out evidence agreeing with portal LT; paired overnight validity agreeing
+with LT; some missing UTC ordering fields; repeated identities, different day
+labels, native-only routed records, and unsupported STA forms. The historical
+test was not run in that capture. Previous-month successes on earlier builds
+remain separate evidence. All six CI jobs at the exact 22938 commit passed.
+
+Native day entries now carry in-memory canonical hashes of each complete raw
+activity object, including unknown fields. Hashes never enter diagnostics or
+files. Source normalization groups copies only when a positive native ID maps
+to one complete raw hash and every occurrence occupies a distinct day bucket.
+Every original occurrence and container day remains in provenance. Conflicting
+IDs, unknown-field differences, duplicates within a bucket, and records lacking
+verified provenance stay separate. This establishes identical source copies for
+comparison, not the global meaning of the native ID or final event cardinality.
+
+Identity matching first uses code/route identities unique in both the captured
+response and visible reference, without dates or times. Non-flight fallback
+requires a code unique across both complete inputs. Repeated codes/routes use
+mutually unique container-day edges. Degrees are computed in the full candidate
+graph before accepted pairs are removed, so greedy removal cannot manufacture
+uniqueness. No ordinal, timestamp, inferred date shift, or guessed alias chooses
+a pair. All unmatched records remain represented. Limits of 6,000 source
+occurrences and 20,000 candidate edges abort extended mapping without a partial
+success claim.
+
+Reference version 3 preserves the original current-month flight projection and
+adds a separate list of other visible records, including non-flight duties and
+activities spanning month boundaries. Non-flight-only pages are supported.
+Station and explicit CI/CO/start/end LT/UTC fields participate in strict parsing
+and before/after stability; the list partition and day/start-LT consistency are
+validated. The ordinary HTML importer is unchanged. Crew, notes, raw text,
+contacts, and HTML do not cross this reference bridge.
+
+`NativeRAIDOIdentity` independently checks matched native validity bounds against
+complete portal LT dates/minutes. It prepares ephemeral local-field candidates
+from the native timestamps only when both match and precision/zone checks pass.
+The source record, all container-day provenance, and raw compact display strings
+remain intact. A letter-suffixed STA need not invent a minute value: a validated
+complete native validity bound can supply that local candidate instead. Explicit
+zones, sub-minute differences, and unknown classifications do not become local
+candidates. No absolute UTC time, domain roster item, cache or import is created.
+
+Fixed per-category validation now covers standby, reserve, off/DND, training,
+vacation/leave/rest, hotels, expenses and relocation. These annotations come
+from the existing portal parser after identity/time checks; they are not a new
+independent native classification catalog. Fields such as standby period,
+crew/pickup/notes, full canonical mapping, authenticated-current-user identity,
+and UTC conversion remain unverified. Signed compact-time suffixes have no
+unique dictionary-day anchor for grouped multi-bucket records and remain
+unresolved in that case.
+
+Detailed outcomes still require matching native JSON, stable complete references,
+and unchanged scoped cookies. Only fixed status text and approved category
+labels survive. No raw values, IDs, hashes, timestamps, source codes, routes,
+counts, station names or exception text are exported. Background/navigation/
+stop/session invalidation retains its existing clearing behavior. Missing native
+day details explicitly keep roster coverage unverified.
+
+Synthetic fixtures cover full-raw provenance, unknown-field differences, exact
+cross-day copies, same-bucket duplicates, conflicting IDs, response-unique date
+checks, repeated-route refusal, full-graph ambiguity, non-flight-only pages,
+spanning hotels, local-candidate precision/zone boundaries, source/edge limits,
+reference-v3 boundaries/stability and value-free summaries. Actual WebKit tests
+retain the original flight projection assertions while validating the expanded
+reference and an all-standby page. Current-build CI and live results are recorded
+separately; native importing and historical caching remain disabled.
+
 ### Build 22938 — flight identity and compact-clock validation
 
 Owner evidence from build 22937 reports matched native JSON, successful known

@@ -521,7 +521,7 @@ final class NativeRAIDOExperiment: ObservableObject {
         guard !isWorking, let contract, let webView else { return }
         let ticket = generation; isWorking = true; comparison = "in progress"; copyStatus = nil; nativeDecoded = false
         timingStatus = "Reading the live portal timing reference…"
-        flightStatus = "Checking flight identities, compact clocks, and overnight calendar evidence…"
+        flightStatus = "Checking activity identities, local-field candidates, and overnight evidence…"
         status = "Comparing through the native connection…"
         work = Task { [weak self] in
             do {
@@ -703,7 +703,7 @@ struct NativeRAIDOExperimentView: View {
                     .disabled(!experiment.canTestPreviousMonth)
                 if let target = experiment.previousMonthTarget { Text("Previous-month target: \(target)").font(.footnote) }
                 Text(experiment.historyStatus).font(.footnote)
-                Text("Timing evidence uses uniquely paired flight/positioning records from a stable live portal view. A shared server revision and full roster parity remain unverified. The previous-month test sends one request without navigating or caching.")
+                Text("Identity checks include non-flight duties and repeated records across day buckets. Local-field candidates do not create a canonical roster or select a UTC conversion. A shared server revision and full roster parity remain unverified. The previous-month test sends one request without navigating or caching.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section("Response schema") {
