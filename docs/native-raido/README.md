@@ -1,6 +1,6 @@
 # Native RAIDO experiment
 
-Status: milestone 1 transport-comparison prototype with sanitized schema copy;
+Status: milestone 1 transport-comparison prototype with sanitized schema copy (v2);
 opt-in, no native imports into the saved roster. Owner reported matching native
 and portal JSON for October 2026 on build 22932 (24 October 2026). The screenshot
 establishes that comparison result, not decoded roster parity or a wire schema.
@@ -47,8 +47,10 @@ again, compare natively, copy the schema, and paste it into the project chat.
 The copy includes the app version, comparison outcome, reviewed property names,
 JSON types, and fixed string-format labels. It excludes response scalar values,
 request details, endpoint URLs, cookies, account identifiers, and response hashes.
-Unrecognized/dynamic property names merge under `<redacted-key>` rather than
-being exported. Mixed arrays merge all observed element shapes; supported JSON
+The original v1 export merged unrecognized/dynamic property names under
+`<redacted-key>`. The owner's first copied schema exposed excessive merging;
+build 22934 replaces that behavior as described below. Mixed arrays merge all
+observed element shapes; supported JSON
 encoded inside common response-envelope strings is inspected structurally too.
 Empty arrays reveal no item shape, and masked names cannot establish exact field
 mapping. Any encoded-envelope inspection limit is marked `truncated`.
@@ -61,6 +63,33 @@ Schema processing is bounded by 4 MiB input, depth 20, 100,000 visits, 512 schem
 nodes, 16 encoded JSON envelopes, and 64 KiB output. An unsupported schema does
 not disable the independent native comparison. Synthetic tests cover value/key
 redaction, array merging, encoded envelopes, bounds, and capture/copy/clear.
+
+Build 22934 emits `raido-response-schema-v2`. Unknown sibling fields receive
+distinct, scoped `<field-N>` identities that stay consistent across records
+within that schema node. A homogeneous dictionary of numeric, date, or UUID
+keys instead merges under `<numeric-key>`, `<date-key>`, or `<uuid-key>`. Key
+values and unreviewed names remain excluded. These categories describe key
+syntax only; they do not prove that numeric keys represent day numbers.
+Additional reviewed property names cover validity boundaries, note collections,
+text colors, and nested detail values. Their presence in a future capture still
+needs observation; static names alone do not prove a wire contract.
+
+Timing fields also emit bounded `timingStringShapes`: digits become `#`, letter
+runs become `A`, and unapproved characters become `?`. Delimiters remain to
+distinguish timestamp layouts without emitting example dates, times, or words.
+At most eight timing shapes are retained per field; excess variants are marked.
+Three additional fixtures check anonymous field separation, dictionary key
+categories, and value-free timing shapes. This improves schema evidence only;
+it does not implement or enable a native roster importer.
+
+The owner's build-22933 export reported another matched native comparison and
+described `d` as an object containing `Date`, `HrId`, `Username`, and `Roster`.
+`Roster.Days` was an object/dictionary; its merged day shape included
+`Details.ActivityDetails` and `Notes` arrays. Activity details included `Activity`,
+`Dep`, `Arr`, `STD`, `STA`, nullable `CheckIn`, `CheckOut`, and nested detail/crew
+records. Null observations of `ATA`, `ATD`, or `State` do not establish their
+complete supported types. The exact day-key format, masked fields, timing
+semantics, and operational parity remain unverified.
 
 A portal page using only HTML will not produce this request. An absent capture
 is not a native-API failure. A digest match validates this transport/response

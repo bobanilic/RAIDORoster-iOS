@@ -95,8 +95,8 @@ struct NativeRAIDOContract: Sendable {
 }
 
 /// Builds a value-free description before the captured response is discarded.
-/// Only reviewed property names may leave the process; unknown/dynamic keys merge
-/// under a placeholder, so an identity used as a dictionary key is not exported.
+/// Only reviewed property names may leave the process. Unknown fields retain
+/// separate anonymous identities; dictionary keys expose their format only.
 enum NativeRAIDOResponseSchema {
     private static let names = Set("""
         d data result results response payload value json roster rosters rostermonth rosterdays
@@ -140,8 +140,29 @@ enum NativeRAIDOResponseSchema {
         dailyvalues monthlyvalues accumulatedvalues dailyrecords records record
         rosteractivityid rostereventid rosteritemid rostertype offset utcoffset startoffset endoffset
         isutc zulu sectorcount flightcount dutycount
+        validfrom validto textcolor values valuetext nestedvalue jumpseatinfo
+        posnote daynote activitynote noteitems designators rosterdesignators
         """.split(whereSeparator: \.isWhitespace).map(String.init))
     private static let jsonEnvelopeNames: Set<String> = ["d", "data", "result", "response", "payload", "roster", "json"]
+    private static let timingNames: Set<String> = ["std", "sta", "atd", "ata", "checkin", "checkout", "validfrom", "validto",
+        "start", "end", "starttime", "endtime", "startdate", "enddate", "departuretime", "arrivaltime"]
+
+    private static func keyKind(_ key: String) -> String {
+        if key.utf8.count <= 32, key.range(of: #"^[0-9]+$"#, options: .regularExpression) != nil { return "numeric" }
+        if key.utf8.count <= 80, key.range(of: #"^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$"#, options: .regularExpression) != nil { return "date" }
+        if key.utf8.count == 36, UUID(uuidString: key) != nil { return "uuid" }
+        return "other"
+    }
+
+    private static func timingShape(_ value: String) -> String? {
+        guard value.utf8.count <= 256 else { return nil }
+        var shape = value.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        shape = shape.replacingOccurrences(of: #"[0-9]"#, with: "#", options: .regularExpression)
+        shape = shape.replacingOccurrences(of: #"[\p{L}\p{M}]+"#, with: "A", options: .regularExpression)
+        shape = shape.replacingOccurrences(of: #"[^#A:/.+()<> ,\-]"#, with: "?", options: .regularExpression)
+        guard !shape.isEmpty, shape.utf8.count <= 80 else { return nil }
+        return shape
+    }
 
     private final class Node {
         var types = Set<String>()
@@ -150,6 +171,10 @@ enum NativeRAIDOResponseSchema {
         var items: Node?
         var encodedJSON: Node?
         var maskedKeys = false
+        var anonymousFields: [String: String] = [:]
+        var keyKinds = Set<String>()
+        var timingShapes = Set<String>()
+        var timingShapesOmitted = false
         var truncated = false
 
         func object() -> [String: Any] {
@@ -159,6 +184,9 @@ enum NativeRAIDOResponseSchema {
             if let items { result["items"] = items.object() }
             if let encodedJSON { result["encodedJSON"] = encodedJSON.object() }
             if maskedKeys { result["unrecognizedKeysMasked"] = true }
+            if !keyKinds.isEmpty { result["maskedKeyKinds"] = keyKinds.sorted() }
+            if !timingShapes.isEmpty { result["timingStringShapes"] = timingShapes.sorted() }
+            if timingShapesOmitted { result["additionalTimingShapesOmitted"] = true }
             if truncated { result["truncated"] = true }
             return result
         }
@@ -180,10 +208,23 @@ enum NativeRAIDOResponseSchema {
             if value is NSNull { node.types.insert("null") }
             else if let object = value as? [String: Any] {
                 node.types.insert("object")
+                let kinds = Set(object.keys.map(keyKind))
+                // A homogeneous map of numeric/date/UUID keys can be merged as
+                // a dictionary. Other unknown sibling fields must stay distinct.
+                let dictionaryKind = kinds.count == 1 && !kinds.contains("other") ? kinds.first : nil
                 for key in object.keys.sorted() {
                     let known = names.contains(key.lowercased()) && key.utf8.count <= 64
-                    let exportedKey = known ? key : "<redacted-key>"
-                    if !known { node.maskedKeys = true }
+                    let exportedKey: String
+                    if known { exportedKey = key }
+                    else {
+                        node.maskedKeys = true; node.keyKinds.insert(keyKind(key))
+                        if let dictionaryKind { exportedKey = "<\(dictionaryKind)-key>" }
+                        else if let existing = node.anonymousFields[key] { exportedKey = existing }
+                        else {
+                            exportedKey = "<field-\(node.anonymousFields.count + 1)>"
+                            node.anonymousFields[key] = exportedKey
+                        }
+                    }
                     let child: Node
                     if let existing = node.fields[exportedKey] { child = existing }
                     else { child = try newNode(); node.fields[exportedKey] = child }
@@ -199,6 +240,10 @@ enum NativeRAIDOResponseSchema {
                 }
             } else if let string = value as? String {
                 node.types.insert("string")
+                if let field, timingNames.contains(field), let shape = timingShape(string) {
+                    if node.timingShapes.count < 8 || node.timingShapes.contains(shape) { node.timingShapes.insert(shape) }
+                    else { node.timingShapesOmitted = true }
+                }
                 // Known envelopes sometimes contain JSON encoded as a string.
                 // Inspect its structure, never its scalar values or arbitrary keys.
                 if let field, jsonEnvelopeNames.contains(field),
@@ -232,9 +277,11 @@ enum NativeRAIDOResponseSchema {
         }
         let root = Node()
         try merge(value, into: root, depth: 0)
-        let document: [String: Any] = ["format": "raido-response-schema-v1", "operation": "GetRoster",
+        let document: [String: Any] = ["format": "raido-response-schema-v2", "operation": "GetRoster",
             "source": "portal capture", "valuesIncluded": false,
-            "propertyNamePolicy": "Reviewed names only; other keys merged under <redacted-key>.", "schema": root.object()]
+            "propertyNamePolicy": "Reviewed names only; unknown fields have scoped anonymous identities. Numeric/date/UUID dictionary keys are grouped by format. No key values are exported.",
+            "timingShapePolicy": "Timing fields only: # replaces digits, A replaces letter runs, other unapproved characters become ?. Shapes contain no original letters or digits.",
+            "schema": root.object()]
         let output = try JSONSerialization.data(withJSONObject: document, options: [.prettyPrinted, .sortedKeys])
         guard output.count <= 64 * 1024, let text = String(data: output, encoding: .utf8) else {
             throw NativeRAIDOContract.Failure.responseTooLarge

@@ -167,7 +167,7 @@ final class NativeRAIDOTests: XCTestCase {
                        "fixture.private@example.invalid", "+999123456789", "https://example.invalid", "2026-10-24"] {
             XCTAssertFalse(text.contains(secret), secret)
         }
-        XCTAssertTrue(text.contains("<redacted-key>")); XCTAssertTrue(text.contains("unrecognizedKeysMasked"))
+        XCTAssertTrue(text.contains("<field-1>")); XCTAssertTrue(text.contains("unrecognizedKeysMasked"))
         XCTAssertTrue(text.contains("hrId")); XCTAssertTrue(text.contains("boolean")); XCTAssertTrue(text.contains("number"))
         let document = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
         XCTAssertEqual(document["valuesIncluded"] as? Bool, false)
@@ -217,6 +217,48 @@ final class NativeRAIDOTests: XCTestCase {
         let data = try JSONSerialization.data(withJSONObject: (0..<20).map { _ in ["d": "{\"days\":[]}"] })
         let text = try NativeRAIDOResponseSchema.make(from: data)
         XCTAssertTrue(text.contains("truncated")); XCTAssertTrue(text.contains("encodedJSON"))
+    }
+
+    func testUnknownSiblingFieldsKeepTheirTypesSeparateAcrossArrayRecords() throws {
+        let data = Data(#"[{"privateAlpha":"secret-one","privateBeta":{"Id":42}},{"privateBeta":{"Id":43}}]"#.utf8)
+        let text = try NativeRAIDOResponseSchema.make(from: data)
+        let document = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+        let schema = try XCTUnwrap(document["schema"] as? [String: Any])
+        let items = try XCTUnwrap(schema["items"] as? [String: Any])
+        let fields = try XCTUnwrap(items["properties"] as? [String: [String: Any]])
+        XCTAssertEqual(fields["<field-1>"]?["types"] as? [String], ["string"])
+        XCTAssertEqual(fields["<field-2>"]?["types"] as? [String], ["object"])
+        for secret in ["privateAlpha", "privateBeta", "secret-one"] { XCTAssertFalse(text.contains(secret)) }
+        XCTAssertEqual(document["format"] as? String, "raido-response-schema-v2")
+    }
+
+    func testSchemaGroupsDynamicDayKeysWithoutExportingDatesOrNumbers() throws {
+        for (keys, kind) in [(["2026-10-01", "2026-10-02"], "date"), (["16", "17"], "numeric"),
+                             (["C1061883-3DB2-4CC6-9EE0-42666DF0B111", "B68F2E00-53DB-4DC9-8A46-418E44812222"], "uuid")] {
+            let value: [String: Any] = ["Days": [keys[0]: ["Details": ["ActivityDetails": []]],
+                                               keys[1]: ["Notes": []]]]
+            let text = try NativeRAIDOResponseSchema.make(from: JSONSerialization.data(withJSONObject: value))
+            XCTAssertTrue(text.contains("<\(kind)-key>")); XCTAssertTrue(text.contains("maskedKeyKinds"))
+            for key in keys { XCTAssertFalse(text.contains("\"\(key)\"")) }
+            XCTAssertTrue(text.contains("ActivityDetails")); XCTAssertTrue(text.contains("Notes"))
+        }
+    }
+
+    func testSchemaRecognizesReviewedDetailNamesAndMasksTimingExamples() throws {
+        let value: [String: Any] = ["ValidFrom": "2026-10-24T05:30:00Z", "ValidTo": "2026-10-25T01:00:00Z",
+            "STD": "05:30 (UTC)", "STA": "07:45<br>09:45", "CheckIn": "24/10/2026 04:30",
+            "NoteItems": [["Note": "private note", "TextColor": "private color"]],
+            "Values": ["private content"], "JumpSeatInfo": "private seat", "PosNote": "private pos"]
+        let text = try NativeRAIDOResponseSchema.make(from: JSONSerialization.data(withJSONObject: value))
+        for key in value.keys { XCTAssertTrue(text.contains("\"\(key)\""), key) }
+        for secret in ["2026", "05:30", "07:45", "09:45", "24/10", "private note", "private color", "private content", "private seat", "private pos", "UTC", "<br>"] {
+            XCTAssertFalse(text.contains(secret), secret)
+        }
+        XCTAssertTrue(text.contains("timingStringShapes")); XCTAssertTrue(text.contains("##:## (A)"))
+        let document = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+        let schema = try XCTUnwrap(document["schema"] as? [String: Any])
+        let properties = try XCTUnwrap(schema["properties"] as? [String: [String: Any]])
+        XCTAssertEqual(properties["CheckIn"]?["timingStringShapes"] as? [String], ["##/##/#### ##:##"])
     }
 
     func testCapturedSchemaCanBeCopiedAndClearsOnStop() async throws {
