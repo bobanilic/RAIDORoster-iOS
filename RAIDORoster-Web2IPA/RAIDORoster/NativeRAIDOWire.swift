@@ -7,7 +7,7 @@ enum NativeRAIDOWire {
         case malformed, identityMismatch, monthMismatch, emptyRoster, invalidDay, duplicateDay
     }
 
-    private static func calendarDay(_ value: String) -> Bool {
+    static func calendarDay(_ value: String) -> Bool {
         let bytes = Array(value.utf8)
         guard bytes.count == 10, bytes.enumerated().allSatisfy({ index, byte in
             index == 4 || index == 7 ? byte == 45 : (48...57).contains(byte)
@@ -146,6 +146,10 @@ enum NativeRAIDOWire {
     }
 
     static func decode(_ data: Data, for contract: NativeRAIDOContract) throws -> Decoded {
+        try decode(data, for: contract.request)
+    }
+
+    static func decode(_ data: Data, for contract: NativeRAIDOQuery) throws -> Decoded {
         // Check size/depth/node limits before JSONDecoder traverses the data.
         _ = try NativeRAIDOContract.boundedJSON(data)
         let payload: Payload, request: Request
@@ -172,14 +176,22 @@ enum NativeRAIDOWire {
     /// Fixed messages only; neither thrown errors nor private field values are
     /// copied into diagnostics. The decoded model is discarded after assessment.
     static func assessment(_ data: Data, for contract: NativeRAIDOContract) -> String {
+        assessment(data, for: contract.request)
+    }
+
+    static func assessment(_ data: Data, for contract: NativeRAIDOQuery) -> String {
         do {
             let decoded = try decode(data, for: contract)
-            if decoded.hasMissingActivityDetails { return "Partial wire structure: some days lack activity details. Nothing imported." }
-            if decoded.hasUnspecifiedActivityZone { return "Known wire fields decoded. Activity timestamp zones are unspecified; nothing imported." }
-            return "Known wire fields decoded. Operational mapping and time semantics remain unverified; nothing imported."
+            return describe(decoded)
         } catch Failure.identityMismatch { return "Wire response HR identity differs from the request; rejected." }
         catch Failure.monthMismatch { return "Wire response includes another month; rejected." }
         catch Failure.emptyRoster { return "Wire response has no day records; not treated as an empty imported roster." }
         catch { return "Wire structure is unsupported or incomplete; nothing imported." }
+    }
+
+    static func describe(_ decoded: Decoded) -> String {
+        if decoded.hasMissingActivityDetails { return "Partial wire structure: some days lack activity details. Nothing imported." }
+        if decoded.hasUnspecifiedActivityZone { return "Known wire fields decoded. Activity timestamp zones are unspecified; nothing imported." }
+        return "Known wire fields decoded. Operational mapping and time semantics remain unverified; nothing imported."
     }
 }

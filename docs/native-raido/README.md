@@ -105,6 +105,54 @@ wire-schema fixture, canonical-model decoder, and full importer parity checks.
 
 ## Evidence boundary
 
+### Build 22936 — live timing evidence and one previous-month request
+
+The owner reported a matched native comparison and successful known-field
+decoding on 22935. This is one live capture, not a complete importer parity
+result. All six CI jobs at that version's exact commit subsequently passed.
+
+The native comparison now reads compact timing references from the existing
+`RAIDOPlus.history.inspect(month)` before and after its request. These inspections
+read the current rendered portal; they never call extraction posting, month
+navigation, or another network operation. Native validation checks origin, path,
+month, sizes, types, day labels, and timing formats. Both references must agree,
+the native JSON must still match the captured JSON, and scoped cookies must
+remain unchanged. Otherwise timing evidence is inconclusive. A stable DOM does
+not establish a shared backend revision or authenticated-current-user identity.
+
+`NativeRAIDOTiming` pairs records only by a unique calendar-day/activity-code/
+departure/arrival key, using portal FLIGHT/POSITIONING records and explicit
+three-letter routes. Neither ordering nor the times being tested choose a pair.
+It compares `ValidFrom`/`ValidTo` wall-minute strings against portal LT and UTC
+start/end fields. It does not assume those API bounds actually mean operational
+start/end. Duplicates, missing fields, unmatched records, coincident LT/UTC,
+mixed/different evidence, sub-minute precision, and explicit zones stay visible
+or inconclusive. No result selects a time policy or produces an imported roster.
+
+After a matched comparison and supported native decoding, an explicit **Test
+previous month natively** button sends one request using the observed endpoint
+and HR identity with only month/year changed. The target is shown before the
+action, including December rollover; requests before 2000 are refused. The
+query has no captured-response digest. The response must pass request/response
+identity and requested-month day checks. Empty or unsupported responses do not
+establish an unavailable/empty month. There are no retries, portal navigation,
+batch history enumeration, cache writes, or changes to the original capture.
+
+**Copy test summary** copies only app version and fixed comparison/wire/timing/
+historical outcomes. It excludes raw field values, record counts, schedules,
+identifiers, endpoints, and cookies. Full schema copy remains available.
+Background, stop, navigation, cancellation, and session invalidation clear the
+in-memory results. As before, ordinary portal refresh can use the existing
+importer; these new read-only operations never call its ingest/cache methods.
+
+Tests cover UTC/LT/minute evidence, mixed or identical clocks, missing fields,
+precision, overnight dates, duplicate identities, mismatched day/code/routes,
+reference boundaries, previous-month body/session preservation, rollover,
+lower bounds, and one-request mocked HTTP validation. The actual embedded
+reference JavaScript is exercised separately for privacy, read-only behavior,
+origin/frame checks, and bounds. Historical caching remains gated on live access
+testing and a complete canonical decoder/parity result.
+
 ### Build 22935 — first read-only wire decoder
 
 The owner's v2 export from build 22934 says `Native comparison: not run`.

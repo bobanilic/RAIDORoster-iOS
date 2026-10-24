@@ -5,6 +5,26 @@ import WebKit
 import SwiftUI
 import UIKit
 
+/// A validated read-only request. It deliberately carries no comparison digest.
+struct NativeRAIDOQuery: Sendable {
+    let url: URL
+    let body: Data
+    let month: String
+    fileprivate init(url: URL, body: Data, month: String) { self.url = url; self.body = body; self.month = month }
+
+    func previousMonth() throws -> Self {
+        let parts = month.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2 else { throw NativeRAIDOContract.Failure.unsupportedRequest }
+        let prior = parts[0] * 12 + parts[1] - 2
+        let year = prior / 12, month = prior % 12 + 1
+        guard year >= 2000, var object = try JSONSerialization.jsonObject(with: body) as? [String: Any] else {
+            throw NativeRAIDOContract.Failure.unsupportedRequest
+        }
+        object["year"] = year; object["month"] = month
+        return try NativeRAIDOContract.query(url: url, body: JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]))
+    }
+}
+
 /// Transport comparison only. No decoder in this experiment writes to RosterStore.
 struct NativeRAIDOContract: Sendable {
     static let maximumResponseBytes = 4 * 1024 * 1024
@@ -12,6 +32,10 @@ struct NativeRAIDOContract: Sendable {
     let body: Data
     let month: String
     let expectedDigest: Data
+    var request: NativeRAIDOQuery { NativeRAIDOQuery(url: url, body: body, month: month) }
+    private init(url: URL, body: Data, month: String, expectedDigest: Data) {
+        self.url = url; self.body = body; self.month = month; self.expectedDigest = expectedDigest
+    }
 
     enum Failure: Error, Equatable {
         case unsupportedRequest, unsupportedResponse, responseTooLarge, signInRequired
@@ -26,14 +50,18 @@ struct NativeRAIDOContract: Sendable {
     }
 
     static func capture(url: URL, request: Data, response: Data) throws -> Self {
-        guard permits(url), request.count <= 4096,
-              let object = try? JSONSerialization.jsonObject(with: request) as? [String: Any],
+        let value = try Self.query(url: url, body: request)
+        return try Self(url: value.url, body: value.body, month: value.month, expectedDigest: digest(response))
+    }
+
+    static func query(url: URL, body: Data) throws -> NativeRAIDOQuery {
+        guard permits(url), body.count <= 4096,
+              let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
               Set(object.keys) == Set(["month", "year", "hrId"]),
               let month = integer(object["month"], range: 1...12),
               let year = integer(object["year"], range: 2000...2100),
               validIdentity(object["hrId"]) else { throw Failure.unsupportedRequest }
-        return try Self(url: url, body: request, month: String(format: "%04d-%02d", year, month),
-                        expectedDigest: digest(response))
+        return NativeRAIDOQuery(url: url, body: body, month: String(format: "%04d-%02d", year, month))
     }
 
     private static func integer(_ value: Any?, range: ClosedRange<Int>) -> Int? {
@@ -305,6 +333,10 @@ final class NativeRAIDOHTTPClient: NSObject, URLSessionDataDelegate, @unchecked 
     private var started = false
 
     func fetch(_ contract: NativeRAIDOContract, cookies: [HTTPCookie], configuration: URLSessionConfiguration = .ephemeral) async throws -> Data {
+        try await fetch(contract.request, cookies: cookies, configuration: configuration)
+    }
+
+    func fetch(_ contract: NativeRAIDOQuery, cookies: [HTTPCookie], configuration: URLSessionConfiguration = .ephemeral) async throws -> Data {
         guard NativeRAIDOContract.permits(contract.url) else { throw NativeRAIDOContract.Failure.unsupportedRequest }
         let scoped = NativeRAIDOContract.scopedCookies(cookies, for: contract.url)
         guard !scoped.isEmpty else { throw NativeRAIDOContract.Failure.signInRequired }
@@ -388,6 +420,9 @@ final class NativeRAIDOExperiment: ObservableObject {
     @Published private(set) var schemaStatus = "Capture a roster request to prepare its sanitized schema."
     @Published private(set) var copyStatus: String?
     @Published private(set) var wireStatus = "Wire decoder awaits a capture."
+    @Published private(set) var timingStatus = "Run a native comparison to check portal LT/UTC evidence."
+    @Published private(set) var historyStatus = "Previous-month native access has not been tested."
+    private var nativeDecoded = false
     private var comparison = "not run"
     private weak var webView: WKWebView?
     private var contract: NativeRAIDOContract?
@@ -429,6 +464,8 @@ final class NativeRAIDOExperiment: ObservableObject {
         sanitizedSchema = nil; copyStatus = nil; comparison = "not run"
         schemaStatus = "Capture a roster request to prepare its sanitized schema."
         wireStatus = "Wire decoder awaits a capture."
+        timingStatus = "Run a native comparison to check portal LT/UTC evidence."
+        historyStatus = "Previous-month native access has not been tested."; nativeDecoded = false
     }
 
     func stop() {
@@ -480,7 +517,8 @@ final class NativeRAIDOExperiment: ObservableObject {
 
     func compare() {
         guard !isWorking, let contract, let webView else { return }
-        let ticket = generation; isWorking = true; comparison = "in progress"; copyStatus = nil
+        let ticket = generation; isWorking = true; comparison = "in progress"; copyStatus = nil; nativeDecoded = false
+        timingStatus = "Reading the live portal timing reference…"
         status = "Comparing through the native connection…"
         work = Task { [weak self] in
             do {
@@ -488,13 +526,32 @@ final class NativeRAIDOExperiment: ObservableObject {
                 let cookies = NativeRAIDOContract.scopedCookies(allCookies, for: contract.url)
                 guard let self, self.generation == ticket, !Task.isCancelled else { return }
                 guard NativeRAIDOContract.cookieDigest(cookies) == self.cookiesAtCapture else { throw NativeRAIDOContract.Failure.sessionChanged }
+                let before = await self.timingReference(in: webView, month: contract.month)
+                guard self.generation == ticket, !Task.isCancelled else { return }
                 let response = try await NativeRAIDOHTTPClient().fetch(contract, cookies: cookies)
+                let after = await self.timingReference(in: webView, month: contract.month)
+                let finalCookies = await webView.configuration.websiteDataStore.httpCookieStore.nativeExperimentCookies()
+                guard self.generation == ticket, !Task.isCancelled else { return }
+                guard NativeRAIDOContract.cookieDigest(NativeRAIDOContract.scopedCookies(finalCookies, for: contract.url)) == self.cookiesAtCapture else {
+                    throw NativeRAIDOContract.Failure.sessionChanged
+                }
                 let decoded = try await Task.detached(priority: .utility) {
-                    (try NativeRAIDOContract.digest(response), NativeRAIDOWire.assessment(response, for: contract))
+                    let digest = try NativeRAIDOContract.digest(response)
+                    guard let wire = try? NativeRAIDOWire.decode(response, for: contract) else {
+                        return (digest, NativeRAIDOWire.assessment(response, for: contract), false,
+                                "Timing comparison requires a decoded native wire response.")
+                    }
+                    let timing: String
+                    if digest != contract.expectedDigest { timing = "Native JSON changed from capture; timing comparison is inconclusive." }
+                    else if let before, let after, before == after {
+                        timing = NativeRAIDOTiming.compare(wire, reference: after).message
+                    } else { timing = "A stable live portal timing reference was unavailable; timing comparison is inconclusive." }
+                    return (digest, NativeRAIDOWire.describe(wire), !wire.hasMissingActivityDetails, timing)
                 }.value
                 guard self.generation == ticket, !Task.isCancelled else { return }
                 let digest = decoded.0
                 self.wireStatus = "Native response: " + decoded.1
+                self.nativeDecoded = decoded.2; self.timingStatus = decoded.3
                 self.comparison = digest == contract.expectedDigest ? "matched" : "different"
                 self.status = digest == contract.expectedDigest
                     ? "Native and portal JSON match for \(contract.month). Saved roster was not changed."
@@ -504,11 +561,13 @@ final class NativeRAIDOExperiment: ObservableObject {
                 guard let self, self.generation == ticket else { return }
                 self.isWorking = false; self.work = nil
                 self.comparison = "not verified"
+                self.nativeDecoded = false; self.timingStatus = "Native comparison was not verified; timing evidence is unavailable."
                 if let failure = error as? NativeRAIDOContract.Failure, [.signInRequired, .sessionChanged, .redirect].contains(failure) {
                     self.contract = nil; self.cookiesAtCapture = nil; self.capturedMonth = nil
                     self.sanitizedSchema = nil; self.copyStatus = nil
                     self.schemaStatus = "Capture again after signing in to prepare a current schema."
                     self.wireStatus = "Wire assessment cleared after session invalidation."
+                    self.historyStatus = "Previous-month test cleared after session invalidation."
                     self.status = "The session changed or needs sign-in. Open Live RAIDO and capture again."
                 } else {
                     self.status = "Native comparison could not be verified. Saved roster was not changed."
@@ -517,11 +576,78 @@ final class NativeRAIDOExperiment: ObservableObject {
         }
     }
 
-    var schemaForCopy: String? {
-        guard !isWorking, let sanitizedSchema else { return nil }
+    private func timingReference(in webView: WKWebView, month: String) async -> NativeRAIDOTiming.Reference? {
+        guard let url = webView.url, PortalBridgePolicy.isPortal(url),
+              url.path.lowercased().hasSuffix("/humanresourceroster.aspx") else { return nil }
+        do {
+            guard let text = try await webView.callAsyncJavaScript(NativeRAIDOTiming.referenceScript,
+                arguments: ["month": month], in: nil, contentWorld: .page) as? String,
+                  text.utf8.count <= 1024 * 1024, webView.url == url, !Task.isCancelled else { return nil }
+            let data = Data(text.utf8)
+            return try await Task.detached(priority: .utility) { try NativeRAIDOTiming.Reference.parse(data, month: month) }.value
+        } catch { return nil }
+    }
+
+    var previousMonthTarget: String? { try? contract?.request.previousMonth().month }
+    var canTestPreviousMonth: Bool { !isWorking && comparison == "matched" && nativeDecoded && previousMonthTarget != nil }
+
+    func testPreviousMonth() {
+        guard canTestPreviousMonth, let contract, let webView, let query = try? contract.request.previousMonth() else { return }
+        let ticket = generation; isWorking = true; copyStatus = nil
+        historyStatus = "Requesting the previous month directly; no portal navigation…"
+        work = Task { [weak self] in
+            do {
+                let all = await webView.configuration.websiteDataStore.httpCookieStore.nativeExperimentCookies()
+                guard let self, self.generation == ticket, !Task.isCancelled else { return }
+                let cookies = NativeRAIDOContract.scopedCookies(all, for: query.url)
+                guard NativeRAIDOContract.cookieDigest(cookies) == self.cookiesAtCapture else { throw NativeRAIDOContract.Failure.sessionChanged }
+                let response = try await NativeRAIDOHTTPClient().fetch(query, cookies: cookies)
+                let message = try await Task.detached(priority: .utility) {
+                    let decoded = try NativeRAIDOWire.decode(response, for: query)
+                    if decoded.hasMissingActivityDetails { return "Previous-month account/month checks passed, but activity details are incomplete. Nothing cached or imported." }
+                    if !decoded.days.contains(where: { !($0.day.details?.activities?.isEmpty ?? true) }) {
+                        return "Previous-month day records returned without decoded activities; coverage remains unverified. Nothing cached or imported."
+                    }
+                    return "Previous-month roster data decoded through the native request. Nothing cached or imported."
+                }.value
+                let latestCookies = await webView.configuration.websiteDataStore.httpCookieStore.nativeExperimentCookies()
+                guard self.generation == ticket, !Task.isCancelled else { return }
+                guard NativeRAIDOContract.cookieDigest(NativeRAIDOContract.scopedCookies(latestCookies, for: query.url)) == self.cookiesAtCapture else {
+                    throw NativeRAIDOContract.Failure.sessionChanged
+                }
+                self.historyStatus = message; self.isWorking = false; self.work = nil
+            } catch {
+                guard let self, self.generation == ticket else { return }
+                self.isWorking = false; self.work = nil
+                if let failure = error as? NativeRAIDOContract.Failure, [.signInRequired, .sessionChanged, .redirect].contains(failure) {
+                    self.invalidate(); self.comparison = "not verified"
+                    self.status = "Session changed. Sign in and capture again."
+                    self.historyStatus = "Previous-month test stopped after session invalidation."
+                } else if let failure = error as? NativeRAIDOWire.Failure, failure == .monthMismatch || failure == .identityMismatch {
+                    self.historyStatus = "Previous-month response failed account/month validation; rejected. Nothing cached or imported."
+                } else {
+                    self.historyStatus = "Previous-month access could not be established. This does not prove an unavailable or empty month. Nothing cached or imported."
+                }
+            }
+        }
+    }
+
+    var summaryForCopy: String? {
+        guard !isWorking, contract != nil else { return nil }
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
-        return "RAIDO native response schema\nApp: \(version) (\(build))\nNative comparison: \(comparison)\nWire decoder: \(wireStatus)\n\n\(sanitizedSchema)"
+        return "RAIDO native checks\nApp: \(version) (\(build))\nNative comparison: \(comparison)\nWire decoder: \(wireStatus)\nTiming comparison: \(timingStatus)\nHistorical test: \(historyStatus)"
+    }
+
+    var schemaForCopy: String? {
+        guard let summaryForCopy, let sanitizedSchema else { return nil }
+        return summaryForCopy + "\n\n" + sanitizedSchema
+    }
+
+    func copyTestSummary(to pasteboard: UIPasteboard = .general) {
+        guard let text = summaryForCopy else { return }
+        pasteboard.setItems([["public.utf8-plain-text": text]], options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(15 * 60)])
+        copyStatus = "Test summary copied. Paste it into this chat."
     }
 
     func copySanitizedSchema(to pasteboard: UIPasteboard = .general) {
@@ -551,9 +677,20 @@ struct NativeRAIDOExperimentView: View {
                 Button("Open Live RAIDO", action: openPortal)
                 Button("Compare natively") { experiment.compare() }
                     .disabled(experiment.capturedMonth == nil || experiment.isWorking)
+                Button("Copy test summary") { experiment.copyTestSummary() }
+                    .disabled(experiment.summaryForCopy == nil)
                 if experiment.isWorking { ProgressView() }
                 Text(experiment.status).font(.footnote).accessibilityIdentifier("native-raido-status")
                 if experiment.armed { Button("Stop and clear capture") { experiment.stop() } }
+            }
+            Section("Read-only checks") {
+                Text(experiment.timingStatus).font(.footnote)
+                Button("Test previous month natively") { experiment.testPreviousMonth() }
+                    .disabled(!experiment.canTestPreviousMonth)
+                if let target = experiment.previousMonthTarget { Text("Previous-month target: \(target)").font(.footnote) }
+                Text(experiment.historyStatus).font(.footnote)
+                Text("Timing evidence uses uniquely paired flight/positioning records from a stable live portal view. A shared server revision and full roster parity remain unverified. The previous-month test sends one request without navigating or caching.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             Section("Response schema") {
                 Button("Copy sanitized schema") { experiment.copySanitizedSchema() }

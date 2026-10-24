@@ -155,6 +155,8 @@ final class NativeRAIDOTests: XCTestCase {
         probe.receive(["token":"untrusted", "url":endpoint.absoluteString])
         XCTAssertFalse(probe.isWorking)
         probe.arm(in: WKWebView()); XCTAssertTrue(probe.armed)
+        XCTAssertFalse(probe.canTestPreviousMonth)
+        probe.testPreviousMonth(); XCTAssertFalse(probe.isWorking)
         probe.stop(); XCTAssertFalse(probe.armed); XCTAssertNil(probe.capturedMonth); XCTAssertFalse(probe.isWorking)
     }
 
@@ -409,6 +411,51 @@ final class NativeRAIDOTests: XCTestCase {
         for value in ["fixture", "2026", "23h", "2350", "SYN101", "AAA", "BBB", "700"] { XCTAssertFalse(status.contains(value)) }
         let wrongID = NativeRAIDOWire.assessment(try wireData(["2026-10-08": wireDay()], hrId: 43), for: try contract())
         XCTAssertTrue(wrongID.contains("identity differs")); XCTAssertFalse(wrongID.contains("43"))
+    }
+
+    func testPreviousMonthQueryKeepsTheObservedEndpointAndIdentityWithoutMutatingCapture() throws {
+        let request = Data(#"{"month":10,"year":2026,"hrId":"00042"}"#.utf8)
+        let context = try NativeRAIDOContract.capture(url: endpoint, request: request, response: payload)
+        let query = try context.request.previousMonth()
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: query.body) as? [String: Any])
+        XCTAssertEqual(query.url, endpoint); XCTAssertEqual(query.month, "2026-09")
+        XCTAssertEqual(body["month"] as? Int, 9); XCTAssertEqual(body["year"] as? Int, 2026)
+        XCTAssertEqual(body["hrId"] as? String, "00042"); XCTAssertEqual(Set(body.keys), Set(["month", "year", "hrId"]))
+        XCTAssertEqual(context.body, request); XCTAssertEqual(context.month, "2026-10")
+        XCTAssertEqual(context.expectedDigest, try NativeRAIDOContract.digest(payload))
+    }
+
+    func testPreviousMonthQueryRollsYearsAndStopsAtTheSupportedBoundary() throws {
+        let january = try NativeRAIDOContract.query(url: endpoint, body: Data(#"{"month":1,"year":2026,"hrId":42}"#.utf8))
+        XCTAssertEqual(try january.previousMonth().month, "2025-12")
+        let first = try NativeRAIDOContract.query(url: endpoint, body: Data(#"{"month":1,"year":2000,"hrId":42}"#.utf8))
+        XCTAssertThrowsError(try first.previousMonth())
+    }
+
+    func testPreviousMonthUsesOneNativeRequestAndValidatesTheReturnedMonth() async throws {
+        let context = try contract(), query = try context.request.previousMonth(), target = endpoint
+        let response = try wireData(["2026-09-08": wireDay(["ValidFrom": "2026-09-08T10:00:00", "ValidTo": "2026-09-08T11:00:00"])])
+        let called = expectation(description: "One previous-month native request")
+        called.assertForOverFulfill = true
+        NativeRAIDOTestProtocol.setHandler { request, client, instance in
+            called.fulfill(); XCTAssertEqual(request.url, target); XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Cookie"), "SyntheticSession=fixture-only")
+            var data = request.httpBody
+            if data == nil, let stream = request.httpBodyStream {
+                stream.open(); defer { stream.close() }
+                var buffer = [UInt8](repeating: 0, count: 4096), value = Data()
+                while stream.hasBytesAvailable { let n = stream.read(&buffer, maxLength: buffer.count); if n <= 0 { break }; value.append(contentsOf: buffer.prefix(n)) }
+                data = value
+            }
+            XCTAssertEqual(data, query.body)
+            client.urlProtocol(instance, didReceive: HTTPURLResponse(url: target, statusCode: 200, httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+            client.urlProtocol(instance, didLoad: response); client.urlProtocolDidFinishLoading(instance)
+        }
+        let data = try await NativeRAIDOHTTPClient().fetch(query, cookies: [cookie()], configuration: configuration())
+        await fulfillment(of: [called], timeout: 5)
+        XCTAssertEqual(try NativeRAIDOWire.decode(data, for: query).days.first?.calendarDay, "2026-09-08")
+        XCTAssertThrowsError(try NativeRAIDOWire.decode(data, for: context))
     }
 }
 
