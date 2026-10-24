@@ -173,7 +173,8 @@ The existing production paths to preserve are:
 
 ## Milestone 1 — read-only native roster import
 
-State: transport-comparison prototype implemented; importer/decoder not started.
+State: transport comparison and known-field wire decoding implemented;
+canonical importer/decoder not started.
 Depends on confirming the real service URL and wire payload using the owner's
 existing authorized portal session.
 

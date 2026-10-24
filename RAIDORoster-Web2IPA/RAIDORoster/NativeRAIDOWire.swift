@@ -7,6 +7,14 @@ enum NativeRAIDOWire {
         case malformed, identityMismatch, monthMismatch, emptyRoster, invalidDay, duplicateDay
     }
 
+    private static func calendarDay(_ value: String) -> Bool {
+        let bytes = Array(value.utf8)
+        guard bytes.count == 10, bytes.enumerated().allSatisfy({ index, byte in
+            index == 4 || index == 7 ? byte == 45 : (48...57).contains(byte)
+        }) else { return false }
+        return PortalBridgePolicy.day(value)
+    }
+
     /// A calendar timestamp, kept verbatim. No Date conversion or device-timezone
     /// fallback is available: a timestamp without a zone is not an absolute time.
     struct Timestamp: Decodable, Equatable, Sendable {
@@ -16,8 +24,10 @@ enum NativeRAIDOWire {
 
         init(_ raw: String) throws {
             let pattern = #"^20\d{2}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,9})?(Z|[+-](?:0\d|1[0-4]):?[0-5]\d)?$"#
-            guard raw.utf8.count <= 80, raw.range(of: pattern, options: .regularExpression) != nil,
-                  PortalBridgePolicy.day(String(raw.prefix(10))) else { throw Failure.malformed }
+            guard raw.utf8.count <= 80, raw.utf8.allSatisfy({ $0 < 128 }),
+                  let match = raw.range(of: pattern, options: .regularExpression),
+                  match.lowerBound == raw.startIndex, match.upperBound == raw.endIndex,
+                  NativeRAIDOWire.calendarDay(String(raw.prefix(10))) else { throw Failure.malformed }
             let tail = String(raw.dropFirst(19))
             let zone: String?
             if raw.hasSuffix("Z") { zone = "Z" }
@@ -149,7 +159,7 @@ enum NativeRAIDOWire {
         var entries: [Entry] = [], seen = Set<String>()
         for key in payload.roster.days.keys.sorted() {
             let day: String
-            if PortalBridgePolicy.day(key) { day = key }
+            if calendarDay(key) { day = key }
             else if let stamp = try? Timestamp(key) { day = stamp.calendarDay }
             else { throw Failure.invalidDay }
             guard day.hasPrefix(contract.month + "-") else { throw Failure.monthMismatch }

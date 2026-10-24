@@ -384,6 +384,14 @@ final class NativeRAIDOTests: XCTestCase {
         for value in ["2026-02-30T12:00:00", "2026-10-25T03:30:00+14:01", "2026-10-25T03:30:60Z"] {
             XCTAssertThrowsError(try NativeRAIDOWire.Timestamp(value))
         }
+        for value in ["2026-10-25T03:30:00Z\n", "20٢٦-10-25T03:30:00"] {
+            XCTAssertThrowsError(try NativeRAIDOWire.Timestamp(value))
+        }
+        for key in ["2026-10-08\n", "20٢٦-10-08"] {
+            XCTAssertThrowsError(try NativeRAIDOWire.decode(wireData([key: wireDay()]), for: contract())) {
+                XCTAssertEqual($0 as? NativeRAIDOWire.Failure, .invalidDay)
+            }
+        }
     }
 
     func testWireDecoderPreservesHeterogeneousDetailValues() throws {
