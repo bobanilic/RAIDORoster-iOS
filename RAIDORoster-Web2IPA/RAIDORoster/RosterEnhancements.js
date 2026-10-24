@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = '3.2.2';
+  const VERSION = '3.2.3';
   if (window !== window.top) return;
   const SCHEMA_VERSION = 1;
   // Login/chooser pages never install roster observers or parse the DOM. Keep
@@ -955,9 +955,10 @@
       ['FLIGHT','POSITIONING'].includes(a.category));
     if (!selected.length) return {kind:'no-flight-records'};
     if (selected.length > 3000) return {kind:'limit'};
-    return {kind:'ready',payload:{version:1,sourceURL:location.href,month,valid:true,
+    return {kind:'ready',payload:{version:2,sourceURL:location.href,month,valid:true,
       activities:selected.map(a => ({day:a.dateISO,code:a.code,category:a.category,route:a.route || '',
-        startLT:stamp(a.start),startUTC:utcStamp(a.start),endLT:stamp(a.end),endUTC:utcStamp(a.end)}))}};
+        startLT:stamp(a.start),startUTC:utcStamp(a.start),endLT:stamp(a.end),endUTC:utcStamp(a.end),
+        checkInLT:stamp(a.checkIn),checkInUTC:utcStamp(a.checkIn),checkOutLT:stamp(a.checkOut),checkOutUTC:utcStamp(a.checkOut)}))}};
   }
   function historyNavigate(target) {
     if (!/^20\d{2}-(?:0[1-9]|1[0-2])$/.test(target)) return {kind:'invalid'};

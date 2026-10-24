@@ -146,16 +146,22 @@ final class RosterBridgeTests: XCTestCase {
         XCTAssertEqual(reference.activities.count, 5)
         XCTAssertEqual(reference.activities.first?.startUTC, "2026-10-08 06:50")
         XCTAssertEqual(reference.activities.first?.route, "TLV → HER")
+        XCTAssertEqual(reference.version, 2)
+        XCTAssertEqual(reference.activities.first?.checkInLT, "2026-10-08 08:50")
+        XCTAssertEqual(reference.activities.first?.checkInUTC, "2026-10-08 05:50")
+        XCTAssertEqual(reference.activities.first?.checkOutUTC, "")
         let days = try (8...12).map { day -> NativeRAIDOWire.Entry in
             let date = String(format: "2026-10-%02d", day)
             let activity = NativeRAIDOWire.Activity(id: Int64(day), activity: "6H501", departure: "TLV", arrival: "HER",
-                std: "0650", sta: "0840", checkIn: nil, checkOut: nil,
+                std: "0650", sta: "0840", checkIn: "0850", checkOut: nil,
                 validFrom: try .init(date + "T06:50:00.0000000"), validTo: try .init(date + "T08:40:00.0000000"), details: nil)
             return .init(calendarDay: date, day: .init(details: .init(activities: [activity]), notes: []))
         }
         let wire = NativeRAIDOWire.Decoded(responseDate: try .init("2026-10-01T00:00:00"), days: days)
         let evidence = NativeRAIDOTiming.compare(wire, reference: reference)
         XCTAssertEqual(evidence.paired, 5); XCTAssertEqual(evidence.utcOnly, 10)
+        let fields = NativeRAIDOFlightValidation.assess(NativeRAIDOTiming.pair(wire, reference: reference))
+        XCTAssertEqual(fields.std.utcOnly, 5); XCTAssertEqual(fields.checkIn.localOnly, 5)
         XCTAssertTrue(NativeRAIDOTiming.message(wire, before: first, after: first, jsonMatched: true).contains("UTC minutes"))
         view.isHidden = true
         let hidden = await probe.timingReference(in: view, month: "2026-10")

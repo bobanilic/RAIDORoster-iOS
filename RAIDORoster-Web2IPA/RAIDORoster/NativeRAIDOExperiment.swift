@@ -421,6 +421,7 @@ final class NativeRAIDOExperiment: ObservableObject {
     @Published private(set) var copyStatus: String?
     @Published private(set) var wireStatus = "Wire decoder awaits a capture."
     @Published private(set) var timingStatus = "Run a native comparison to check portal LT/UTC evidence."
+    @Published private(set) var flightStatus = "Flight field checks await a native comparison."
     @Published private(set) var historyStatus = "Previous-month native access has not been tested."
     private var nativeDecoded = false
     private var comparison = "not run"
@@ -465,6 +466,7 @@ final class NativeRAIDOExperiment: ObservableObject {
         schemaStatus = "Capture a roster request to prepare its sanitized schema."
         wireStatus = "Wire decoder awaits a capture."
         timingStatus = "Run a native comparison to check portal LT/UTC evidence."
+        flightStatus = "Flight field checks await a native comparison."
         historyStatus = "Previous-month native access has not been tested."; nativeDecoded = false
     }
 
@@ -519,6 +521,7 @@ final class NativeRAIDOExperiment: ObservableObject {
         guard !isWorking, let contract, let webView else { return }
         let ticket = generation; isWorking = true; comparison = "in progress"; copyStatus = nil; nativeDecoded = false
         timingStatus = "Reading the live portal timing reference…"
+        flightStatus = "Checking flight identities, compact clocks, and overnight calendar evidence…"
         status = "Comparing through the native connection…"
         work = Task { [weak self] in
             do {
@@ -539,16 +542,16 @@ final class NativeRAIDOExperiment: ObservableObject {
                     let digest = try NativeRAIDOContract.digest(response)
                     guard let wire = try? NativeRAIDOWire.decode(response, for: contract) else {
                         return (digest, NativeRAIDOWire.assessment(response, for: contract), false,
-                                "Timing comparison requires a decoded native wire response.")
+                                NativeRAIDOTiming.Assessment.unavailable("Timing comparison requires a decoded native wire response."))
                     }
-                    let timing = NativeRAIDOTiming.message(wire, before: before, after: after,
+                    let timing = NativeRAIDOTiming.assessment(wire, before: before, after: after,
                         jsonMatched: digest == contract.expectedDigest)
                     return (digest, NativeRAIDOWire.describe(wire), !wire.hasMissingActivityDetails, timing)
                 }.value
                 guard self.generation == ticket, !Task.isCancelled else { return }
                 let digest = decoded.0
                 self.wireStatus = "Native response: " + decoded.1
-                self.nativeDecoded = decoded.2; self.timingStatus = decoded.3
+                self.nativeDecoded = decoded.2; self.timingStatus = decoded.3.timing; self.flightStatus = decoded.3.fields
                 self.comparison = digest == contract.expectedDigest ? "matched" : "different"
                 self.status = digest == contract.expectedDigest
                     ? "Native and portal JSON match for \(contract.month). Saved roster was not changed."
@@ -559,6 +562,7 @@ final class NativeRAIDOExperiment: ObservableObject {
                 self.isWorking = false; self.work = nil
                 self.comparison = "not verified"
                 self.nativeDecoded = false; self.timingStatus = "Native comparison was not verified; timing evidence is unavailable."
+                self.flightStatus = "Flight field checks were not verified; no import."
                 if let failure = error as? NativeRAIDOContract.Failure, [.signInRequired, .sessionChanged, .redirect].contains(failure) {
                     self.contract = nil; self.cookiesAtCapture = nil; self.capturedMonth = nil
                     self.sanitizedSchema = nil; self.copyStatus = nil
@@ -645,7 +649,7 @@ final class NativeRAIDOExperiment: ObservableObject {
         guard !isWorking, contract != nil else { return nil }
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
-        return "RAIDO native checks\nApp: \(version) (\(build))\nNative comparison: \(comparison)\nWire decoder: \(wireStatus)\nTiming comparison: \(timingStatus)\nHistorical test: \(historyStatus)"
+        return "RAIDO native checks\nApp: \(version) (\(build))\nNative comparison: \(comparison)\nWire decoder: \(wireStatus)\nTiming comparison: \(timingStatus)\n\(flightStatus)\nHistorical test: \(historyStatus)"
     }
 
     var schemaForCopy: String? {
@@ -694,6 +698,7 @@ struct NativeRAIDOExperimentView: View {
             }
             Section("Read-only checks") {
                 Text(experiment.timingStatus).font(.footnote)
+                Text(experiment.flightStatus).font(.footnote)
                 Button("Test previous month natively") { experiment.testPreviousMonth() }
                     .disabled(!experiment.canTestPreviousMonth)
                 if let target = experiment.previousMonthTarget { Text("Previous-month target: \(target)").font(.footnote) }

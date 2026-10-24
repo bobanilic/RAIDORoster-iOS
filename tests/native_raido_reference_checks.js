@@ -5,9 +5,9 @@ const source = fs.readFileSync(process.argv[2], 'utf8');
 const script = source.match(/static let referenceScript = #"""\n([\s\S]*?)\n\s*"""#/)[1];
 let checks = 0;
 const check = (value, label) => { assert.ok(value, label); checks++; };
-const activity = () => ({code:'SYN101',category:'FLIGHT',route:'AAA → BBB',startLT:'2026-10-08 13:00',startUTC:'2026-10-08 10:00',endLT:'2026-10-08 14:00',endUTC:'2026-10-08 11:00',
+const activity = () => ({code:'SYN101',category:'FLIGHT',route:'AAA → BBB',startLT:'2026-10-08 13:00',startUTC:'2026-10-08 10:00',endLT:'2026-10-08 14:00',endUTC:'2026-10-08 11:00',checkInLT:'2026-10-08 12:00',checkInUTC:'2026-10-08 09:00',checkOutLT:'2026-10-08 14:30',checkOutUTC:'2026-10-08 11:30',
   crew:[{name:'private person'}],notes:'private note',rawText:'private details',phone:'private phone'});
-const ready = () => ({kind:'ready',payload:{version:1,month:'2026-10',valid:true,activities:[{day:'2026-10-08',...activity()}],rawText:'private row'}});
+const ready = () => ({kind:'ready',payload:{version:2,month:'2026-10',valid:true,activities:[{day:'2026-10-08',...activity()}],rawText:'private row'}});
 function run(options = {}) {
   let calls = 0;
   const fail = () => { throw Error('No navigation, extraction posting, or network requests allowed'); };
@@ -20,6 +20,7 @@ function run(options = {}) {
 let h = run(), value = JSON.parse(h.result);
 check(h.calls===1,'one read-only inspection');
 check(value.activities.length===1 && value.activities[0].startUTC==='2026-10-08 10:00','required live timing fields preserved on device');
+check(value.activities[0].checkInUTC==='2026-10-08 09:00' && value.activities[0].checkOutLT==='2026-10-08 14:30','explicit CI/CO timing fields retained on device');
 check(value.activities[0].day==='2026-10-08' && value.month==='2026-10','day and month retained for validation');
 for (const secret of ['private person','private note','private details','private phone','private row','crew','rawText']) check(!h.result.includes(secret),'unneeded private fields excluded from reference');
 for(const options of [{frame:true},{location:{protocol:'http:'}},{location:{hostname:'example.invalid'}},{location:{port:'444'}},{location:{pathname:'/Login.aspx'}}]) {
@@ -32,12 +33,12 @@ for (const kind of ['auth','loading','mismatch','format','limit','no-flight-reco
 }
 check(JSON.parse(run({value:{kind:'private arbitrary state'}}).result).issue==='invalid-payload','unknown status values are not exported');
 for (const mutate of [v=>v.payload.month='2026-09',v=>v.payload.valid=false,v=>v.payload.version=true,
-  v=>v.payload.activities=undefined]) {
+  v=>v.payload.activities=undefined,v=>v.payload.version=1,v=>v.payload.activities[0].checkInLT=undefined,v=>v.payload.activities[0].checkOutUTC=123,v=>v.payload.activities[0]=null]) {
   const input=ready();mutate(input);check(JSON.parse(run({value:input}).result).issue==='invalid-payload','explicit validity and payload structure enforced');
 }
 for (const mutate of [v=>v.payload.activities=Array(3001).fill({day:'2026-10-08',...activity()}),
   v=>v.payload.activities[0].code='x'.repeat(1024*1024)]) {
   const input=ready();mutate(input);check(JSON.parse(run({value:input}).result).issue==='limit','record and byte limits enforced');
 }
-check(JSON.parse(run({value:{kind:'ready',payload:{version:1,month:'2026-10',valid:true,activities:[]}}}).result).issue==='no-flight-records','empty timing subset cannot claim a basis');
+check(JSON.parse(run({value:{kind:'ready',payload:{version:2,month:'2026-10',valid:true,activities:[]}}}).result).issue==='no-flight-records','empty timing subset cannot claim a basis');
 console.log(`Native RAIDO reference: ${checks} behavior checks passed`);

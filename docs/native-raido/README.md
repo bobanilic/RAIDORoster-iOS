@@ -105,6 +105,66 @@ wire-schema fixture, canonical-model decoder, and full importer parity checks.
 
 ## Evidence boundary
 
+### Build 22938 — flight identity and compact-clock validation
+
+Owner evidence from build 22937 reports matched native JSON, successful known
+wire-field decoding, paired validity fields agreeing with portal LT minutes,
+unpaired/ambiguous other records, and another successful previous-month native
+request. This establishes LT agreement for that uniquely paired subset, not a
+global timezone rule, all-duty mapping, or a cached/imported roster. All six CI
+jobs at the exact build-22937 commit subsequently passed.
+
+The flight matcher now reports fixed reasons for repeated identities, missing
+native/portal counterparts, different routes, different day labels, unsupported
+portal routes, and native records outside the routed-flight scope. It compacts
+whitespace as the current HTML parser does while preserving token boundaries;
+no activity-code alias, record-order fallback, time-based pairing, or day shift
+is guessed. Identity lookup and reason classification use bounded dictionaries
+and sets rather than pairwise schedule searches. Duplicate keys remain skipped.
+
+The read-only portal reference now uses version 2 and includes explicit
+check-in/out LT/UTC strings in addition to start/end. These participate in the
+before/after stability comparison and strict native validation. Missing fields
+are not treated as empty values in v2; v1 fixtures retain their limited evidence
+semantics. The bridge still projects only the reviewed timing/identity fields;
+crew, notes, raw HTML, and request data are excluded.
+
+`NativeRAIDOFlightValidation` checks STD, STA, CheckIn, and CheckOut separately
+against the corresponding explicit portal LT/UTC fields. Strict four-digit
+clocks provide clock-only evidence, never calendar dates. A bounded signed
+suffix is tested as a proposed offset from the roster's dictionary-day label;
+agreement is explicitly a hypothesis, not an imported-date rule. The tests use
+Gregorian UTC arithmetic only for calendar-label differences, without device
+zone fallback or an operational interpretation of a zone-less timestamp.
+Letter-suffixed times, malformed strings, missing references, different clocks,
+mixed LT/UTC evidence, and wrong offset hypotheses remain visible and unresolved.
+
+A separate overnight subset includes legs crossing local/UTC dates and duties
+whose explicit check-in/out local dates cross midnight. Validity comparisons
+retain full calendar dates and existing precision/zone gates. When no paired
+overnight record is observed, the status reports that check as unverified. Portal UTC
+ordering checks start/end and any provided CI/CO envelope bounds, allowing
+those duty bounds to repeat across multiple sectors. These checks assess the
+reference only; they do not synthesize native absolute instants.
+
+**Copy test summary** includes fixed matching/STD/STA/check-in/check-out/
+overnight/ordering outcomes. It exports no values, counts, routes, dates,
+identifiers, request information, or exception text. Results clear with the
+existing capture/session/generation lifecycle. Only stable references, matched
+native JSON, and unchanged scoped cookies can produce the detailed assessment.
+No code here constructs a canonical roster, feeds RosterStore, writes a history
+cache, acknowledges a revision, or changes calendars/notifications/Live Activities.
+
+Synthetic native fixtures cover strict forms, month/year/leap-day offsets,
+missing/unsupported values, per-field LT/UTC evidence, duplicate/mismatched
+identities, whitespace normalization, overnight full dates, repeated duty bounds,
+invalid UTC ordering, reference-v2 requirements/stability, and value-free gated
+status text. The actual WebKit fixture now checks CI/CO projection and distinct
+UTC scheduled-clock versus LT check-in evidence. Current-build CI and owner
+results must be recorded separately. Full native imports and historical caching
+remain gated on complete operational mapping and parity, including non-flight
+duties; this flight-only assessment cannot establish them.
+
 ### Build 22937 — isolated timing inspection and explicit failure reasons
 
 The owner tested build 22936 and reported a matched native JSON comparison,
