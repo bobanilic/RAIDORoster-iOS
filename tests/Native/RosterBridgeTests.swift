@@ -139,6 +139,7 @@ final class RosterBridgeTests: XCTestCase {
               window.RAIDOPlus.history[key] = () => { throw Error('Unrelated history API called'); };
             }
             window.RAIDOPlus.extractNow = () => { throw Error('Extraction posting called'); };
+            true; // Return a bridgeable primitive, not the assigned JS function.
             """)
         let first = await probe.timingReference(in: view, month: "2026-10")
         guard case .ready(let reference) = first else { XCTFail("Actual timing reference unavailable: \(first)"); return }
