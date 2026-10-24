@@ -1,0 +1,203 @@
+# Native RAIDO experiment
+
+Status: planning baseline; application behavior is unchanged.
+
+Created 24 October 2026 from `main` at
+`5fa24ca8b6ba46635770b99275ac8cb31b9874fa`.
+
+## Objective and working approach
+
+Evaluate six improvements in sequence: native roster import, shared session
+handling, optional legality enrichment, validated duty catalogs, portal revision
+management, and Live Activity delivery. The first deliverable is a read-only
+native import prototype. A useful experiment must demonstrate correct data and
+an operational benefit before replacing an existing path.
+
+Use `codex/native-raido-experiment` for the experiment and its evidence. Keep
+milestones in separate commits. Promote validated work through focused pull
+requests against then-current main; avoid making all six milestones a single
+merge requirement. Later milestones remain conditional on the evidence and
+their own exit criteria. Refresh the baseline when main changes.
+
+No runtime feature, native importer, production endpoint configuration, new
+backend, signing change, or application version bump is introduced by this
+planning commit. All names for future controls/interfaces below are proposals.
+
+## Evidence boundary
+
+Static inspection of Roster Helper 1.3.4/build 41 established a native
+`GetRoster` operation, request construction with `month`, `year`, and `hrId`,
+POST/JSON/AJAX headers, and a `URLSession` call. It also identified
+`GetCurrentUserInfo`, `GetDailyLegalityValues`, and
+`GetMonthlyAccumulatedValues`, session/cookie models, revision components,
+versioned catalogs, and ActivityKit push-token/backend support.
+
+These observations do not establish the complete URL construction, current
+wire schemas, authorized operation behavior, exact retry policies, or measured
+performance. They are not a documented public API contract. Implement our own
+client and models; do not add the competitor's binaries, recovered code,
+assets, or policy commentary to this repository.
+
+The existing production paths to preserve are:
+
+- `RosterWebView.swift` and `RosterEnhancements.js`: authenticated portal and
+  extraction bridge.
+- `PortalBridgePolicy.swift`: native origin, bounds, schema, and date checks.
+- `RosterMonthCache.swift`: serial foreground work, deadlines, cancellation,
+  generation checks, and bounded month requests.
+- `RosterStore.swift`: canonical ingestion, month archives, local changes,
+  and asynchronous startup restoration.
+- `ProtectedJSONFile.swift`: protected atomic persistence and migration.
+- `LockScreenActivityController.swift`: local ActivityKit reconciliation,
+  preview handling, and scheduled starts on supported OS versions.
+
+## Milestone 1 — read-only native roster import
+
+State: not started. Depends on confirming the real service URL and wire payload
+using the owner's existing authorized portal session.
+
+1. Reuse successful WebKit authentication; obtain only the portal cookies needed
+   for this tenant and verify the current account/HR identity. Do not initially
+   add username/password submission or background automatic login.
+2. Verify the complete native service URL, required headers, request parameter
+   types, and response envelope before selecting production configuration.
+   Static operation names alone are insufficient.
+3. Independently implement an injected, cancellable native transport with
+   explicit timeouts and typed authentication, transport, rate-limit, format,
+   unpublished-month, and storage outcomes. Constrain origin, redirects, and
+   tenant/account identity.
+4. Decode to the existing roster domain model. Preserve source duty codes,
+   notes, UTC/local meaning, multiple duty envelopes, and source/freshness
+   information. Apply existing validation or equivalent native validation.
+5. Expose the prototype only through an explicit experimental control; the
+   default path remains the current importer. A comparison run must not commit
+   a second snapshot or repeat calendar/reminder side effects.
+6. Compare both importers against the same captured roster revision, retaining
+   last-known-good data after rejected or incomplete responses. Report sanitized
+   differences; account changes or a revision during capture make a run
+   inconclusive rather than an importer defect.
+
+Exit criteria: agreement on operational fields across representative months
+and all synthetic boundary cases; no wrong-account/wrong-month/partial-data
+overwrite; cancellation and session expiry behave correctly; owner-device
+validation is recorded. Measure request count, import latency, main-thread
+stalls, and peak memory on the same device before claiming an improvement.
+
+## Milestone 2 — centralized session lifecycle
+
+State: not started. Minimal cookie reuse needed by milestone 1 is part of that
+prototype; this milestone hardens the shared lifecycle.
+
+Introduce one session owner for browser/native callers, explicit session and
+reauthentication states, single-flight refresh, account-generation checks,
+tenant isolation, and controlled cookie invalidation. Preserve cookie scope,
+expiry, Secure/HttpOnly semantics, and safe storage accessibility. Never log
+cookie values, tokens, passwords, or full authenticated request URLs.
+
+Keep interactive Microsoft SSO as the reauthentication route. If automatic
+credential login is later justified, add a shared attempt gate that stops on
+credential rejection, lockout, or password expiry and honors server cooldowns.
+Do not classify those outcomes as ordinary network failures.
+
+Exit criteria: concurrent refresh, expiry during import, logout/account switch,
+cancelled work, bad credentials, lockout, and stale completion tests; successful
+owner-device sign-in and relaunch/session recovery. Existing public-login UI
+tests are not evidence of successful authenticated operation.
+
+## Milestone 3 — optional legality and monthly totals
+
+State: not started. Depends on milestones 1/2 and verified response contracts.
+
+Load the basic roster first. Request legality/totals as separate cancellable
+enrichment, with bounded per-session concurrency, backoff for queue limits, and
+an explicit per-day/field distinction between server-confirmed values, derived
+values, unavailable values, and stale values. Prevent responses for another
+account/month/generation from being merged.
+
+Exit criteria: missing records, HTTP 500/queue-limit responses, timeout,
+malformed responses, cancellation, and out-of-order completion preserve the
+usable roster. No failure becomes a zero or a compliance pass. Verify totals,
+units, dates, and timezone meaning against the portal before showing them.
+
+## Milestone 4 — validated duty-code catalog
+
+State: not started. Can be developed independently once baseline fixtures exist.
+
+Centralize our GetJet classification rules in a small, versioned catalog with
+schema validation, unique priorities, bounded matching, and visible unknown
+codes. Keep raw portal codes and independent display semantics. Preserve
+standby M/A/N, positioning, reserve, days off, hotel markers, and multi-sector
+duty grouping. Derive operational policy values from authoritative operator
+documents, not another application's comments.
+
+Start with bundled rules; remote rule delivery is a separate decision.
+
+Exit criteria: no unexplained change to the existing classification corpus;
+ambiguous/header tokens cannot become duties; malformed catalogs fail safely;
+unknown codes retain source information. Review deliberate behavior changes
+separately from moving existing rules.
+
+## Milestone 5 — portal revision workflow
+
+State: not started. Depends on verified authenticated revision responses.
+
+Add separate read-only availability and old/new revision models. Preserve a
+timestamped comparison snapshot, distinguish unavailable/unknown/none/pending,
+and invalidate warmed results when account or revision identity changes.
+Keep our local snapshot review distinct from airline acknowledgement.
+
+Only add server confirmation after the read-only path is verified. Confirmation
+must follow a specific user action and a fresh revision identity check. A
+timeout after submission is an uncertain outcome requiring reconciliation,
+not a reason to blindly submit again.
+
+Exit criteria: added/removed/modified duties, overnight timing, multiple
+envelopes, changed notes, stale revision state, and expired sessions are handled.
+Neither background refresh nor local review can acknowledge a portal revision.
+Demonstrate the confirmation behavior on-device before enabling it for use.
+
+## Milestone 6 — Live Activity delivery assessment
+
+State: not started. Begin by measuring current local/scheduled behavior.
+
+Verify actual starts, updates, dismissal, stale data, and system-disabled states
+with the current code on the owner's installation. Reproduce the glass issue
+separately; the competitor's linked styling APIs do not explain its cause.
+
+If remote delivery solves a demonstrated gap, design a separate APNs service,
+minimal duty-plan payload, push-token rotation/invalidation, authentication,
+and failure behavior. Verify the actual signing/provisioning and widget
+installation supports those capabilities. A third-party IPA's entitlement
+declaration does not grant them to a sideloaded build.
+
+Exit criteria: a documented local-versus-remote decision, device evidence,
+compatible provisioning, explicit data-flow documentation, and delivery/failure
+tests. Do not deploy a backend or upload crew schedules merely to finish this
+milestone. Background refresh is opportunistic and cannot promise exact times.
+
+## Validation, promotion, and rollback
+
+Use independently authored synthetic fixtures in the public repository.
+Authenticated captures remain private; sanitize identities, crew contacts,
+rosters, cookies, and tokens before constructing regression fixtures.
+Mocked tests establish client behavior, not live service compatibility.
+
+For changed application source, run the checks relevant to the milestone and
+all required repository validation at its exact commit: `release`,
+`native-tests`, and simulator `four-sectors`, `login`, `responsiveness`, and
+`today-return`. Use `tools/ci.sh` and existing runners/assertions. Do not weaken
+tests, reuse another commit's green checks, or call unexecuted checks passed.
+Documentation-only planning does not establish app functionality.
+
+After each milestone, record scope, exact commit, test results, private-device
+evidence summary, known limitations, and rollback mechanism. Keep experimental
+behavior opt-in until its exit criteria are met. Keep cache formats compatible
+or supply a verified migration. Promote useful milestones independently.
+
+## Immediate next deliverable
+
+A verified request/response contract and fixture-backed, read-only native
+import prototype using the existing authenticated session. If live contract
+evidence is unavailable, finish transport/parser test seams and identify the
+missing evidence explicitly; do not guess a working endpoint or claim a
+successful import.
