@@ -94,6 +94,155 @@ struct NativeRAIDOContract: Sendable {
     }
 }
 
+/// Builds a value-free description before the captured response is discarded.
+/// Only reviewed property names may leave the process; unknown/dynamic keys merge
+/// under a placeholder, so an identity used as a dictionary key is not exported.
+enum NativeRAIDOResponseSchema {
+    private static let names = Set("""
+        d data result results response payload value json roster rosters rostermonth rosterdays
+        days day date dates activities activity activityitems activitytype activitycode activityid
+        events event items item rows row table table1 table2 tables dataset schedule schedules
+        duties duty dutyid dutycode dutytype dutyperiod dutyperiods dutytime dutyminutes dutyhours
+        flights flight flightid flightnumber flightno flightcode flighttype flightdate flightlegs
+        legs leg legid sectors sector sectorid segments segment assignments assignment assignmentid
+        id hrid employeeid personid userid crewid rosterid revisionid rosterrevision revision version
+        name firstname lastname fullname displayname title description text label code type kind
+        status state published ispublished confirmed isconfirmed acknowledged isacknowledged
+        start end begin finish startdate enddate starttime endtime from to fromdate todate
+        datefrom dateto timefrom timeto startutc endutc startlocal endlocal utc local timezone
+        departure arrival departuretime arrivaltime departureutc arrivalutc departurelocal arrivallocal
+        departureairport arrivalairport origin destination airport airports airportcode iata icao
+        originairport destinationairport fromairport toairport dep arr depairport arrairport
+        scheduleddeparture scheduledarrival actualdeparture actualarrival estimateddeparture estimatedarrival
+        std sta etd eta atd ata offblock onblock blocktime blockminutes blockhours duration minutes hours
+        report reporting reporttime reportingtime release releasetime briefing briefingtime debriefing
+        checkin checkout checkintime checkouttime pickup pickuptime transport transportation
+        standby standbytype reserve positioning deadhead off leave training simulator ground hotel
+        base homebase dutybase location station route aircraft aircrafttype registration tail tailnumber
+        operator airline company fleet crew crewmembers members roles role rank position positions
+        notes note remarks remark comment comments details detail contacts contact email phone telephone
+        username address employee person user account token cookie password session authorization
+        isflight isduty isstandby isoff ispositioning istraining cancelled iscanceled iscancelled
+        changed ischanged isnew deleted isdeleted allday isallday overnight isovernight
+        month year totals total accumulated legality legalities limits limit warnings warning
+        rest resttime restminutes fdp flightdutyperiod maxfdp remaining remainingtime
+        url color colour backgroundcolor foregroundcolor icon flags attributes properties children
+        success error errors message messages count hasmore next previous metadata meta
+        created updated createdat updatedat effectivefrom effectiveto timestamp lastmodified
+        activitystart activityend dutybegin dutyend flightstart flightend scheduledstart scheduledend
+        startdatetime enddatetime begindatetime finishdatetime departuredate arrivaldate
+        rosteractivities rosteractivity dutyactivities dutyactivity dailyactivities dailyroster
+        rosterentries rosterentry entries entry activitydetails dutydetails flightdetails
+        dutyname activityname typename typenameid dutytypeid activitytypeid activitytypecode
+        dutytypename activitytypename startairport endairport scheduledoffblock scheduledonblock
+        hractivities hractivity rotations rotation trips trip tripid tripnumber
+        activitydesignator dutyidentifier identifier workcode worktype summary html content
+        dailyvalues monthlyvalues accumulatedvalues dailyrecords records record
+        rosteractivityid rostereventid rosteritemid rostertype offset utcoffset startoffset endoffset
+        isutc zulu sectorcount flightcount dutycount
+        """.split(whereSeparator: \.isWhitespace).map(String.init))
+    private static let jsonEnvelopeNames: Set<String> = ["d", "data", "result", "response", "payload", "roster", "json"]
+
+    private final class Node {
+        var types = Set<String>()
+        var formats = Set<String>()
+        var fields: [String: Node] = [:]
+        var items: Node?
+        var encodedJSON: Node?
+        var maskedKeys = false
+        var truncated = false
+
+        func object() -> [String: Any] {
+            var result: [String: Any] = ["types": types.sorted()]
+            if !formats.isEmpty { result["stringFormats"] = formats.sorted() }
+            if !fields.isEmpty { result["properties"] = fields.mapValues { $0.object() } }
+            if let items { result["items"] = items.object() }
+            if let encodedJSON { result["encodedJSON"] = encodedJSON.object() }
+            if maskedKeys { result["unrecognizedKeysMasked"] = true }
+            if truncated { result["truncated"] = true }
+            return result
+        }
+    }
+
+    static func make(from data: Data) throws -> String {
+        guard data.count <= NativeRAIDOContract.maximumResponseBytes,
+              let value = try? JSONSerialization.jsonObject(with: data),
+              value is [String: Any] || value is [Any] else { throw NativeRAIDOContract.Failure.unsupportedResponse }
+        var visits = 0, nodes = 1, decodedEnvelopes = 0
+        func newNode() throws -> Node {
+            nodes += 1
+            guard nodes <= 512 else { throw NativeRAIDOContract.Failure.responseTooLarge }
+            return Node()
+        }
+        func merge(_ value: Any, into node: Node, depth: Int, field: String? = nil) throws {
+            visits += 1
+            guard depth <= 20, visits <= 100_000 else { throw NativeRAIDOContract.Failure.responseTooLarge }
+            if value is NSNull { node.types.insert("null") }
+            else if let object = value as? [String: Any] {
+                node.types.insert("object")
+                for key in object.keys.sorted() {
+                    let known = names.contains(key.lowercased()) && key.utf8.count <= 64
+                    let exportedKey = known ? key : "<redacted-key>"
+                    if !known { node.maskedKeys = true }
+                    let child: Node
+                    if let existing = node.fields[exportedKey] { child = existing }
+                    else { child = try newNode(); node.fields[exportedKey] = child }
+                    try merge(object[key]!, into: child, depth: depth + 1, field: known ? key.lowercased() : nil)
+                }
+            } else if let array = value as? [Any] {
+                node.types.insert("array")
+                if !array.isEmpty {
+                    let child: Node
+                    if let existing = node.items { child = existing }
+                    else { child = try newNode(); node.items = child }
+                    for item in array { try merge(item, into: child, depth: depth + 1) }
+                }
+            } else if let string = value as? String {
+                node.types.insert("string")
+                // Known envelopes sometimes contain JSON encoded as a string.
+                // Inspect its structure, never its scalar values or arbitrary keys.
+                if let field, jsonEnvelopeNames.contains(field),
+                   let first = string.first(where: { !$0.isWhitespace }), first == "{" || first == "[" {
+                    if decodedEnvelopes < 16 {
+                        decodedEnvelopes += 1
+                        if let decoded = try? JSONSerialization.jsonObject(with: Data(string.utf8)),
+                           decoded is [String: Any] || decoded is [Any] {
+                            let child: Node
+                            if let existing = node.encodedJSON { child = existing }
+                            else { child = try newNode(); node.encodedJSON = child }
+                            try merge(decoded, into: child, depth: depth + 1)
+                        }
+                    } else { node.truncated = true }
+                }
+                // Bounded format recognition emits fixed labels, not examples.
+                if string.utf8.count <= 80 {
+                    let patterns = [
+                        ("date", #"^\d{4}-\d{2}-\d{2}$"#),
+                        ("time", #"^\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$"#),
+                        ("iso8601-date-time", #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$"#),
+                        ("date-time-space", #"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$"#),
+                        ("microsoft-json-date", #"^/Date\(-?\d+(?:[+-]\d{4})?\)/$"#)]
+                    for (label, pattern) in patterns where string.range(of: pattern, options: .regularExpression) != nil {
+                        node.formats.insert(label)
+                    }
+                }
+            } else if let number = value as? NSNumber {
+                node.types.insert(CFGetTypeID(number) == CFBooleanGetTypeID() ? "boolean" : "number")
+            } else { throw NativeRAIDOContract.Failure.unsupportedResponse }
+        }
+        let root = Node()
+        try merge(value, into: root, depth: 0)
+        let document: [String: Any] = ["format": "raido-response-schema-v1", "operation": "GetRoster",
+            "source": "portal capture", "valuesIncluded": false,
+            "propertyNamePolicy": "Reviewed names only; other keys merged under <redacted-key>.", "schema": root.object()]
+        let output = try JSONSerialization.data(withJSONObject: document, options: [.prettyPrinted, .sortedKeys])
+        guard output.count <= 64 * 1024, let text = String(data: output, encoding: .utf8) else {
+            throw NativeRAIDOContract.Failure.responseTooLarge
+        }
+        return text
+    }
+}
+
 /// One bounded request per instance. Redirects never receive portal cookies.
 final class NativeRAIDOHTTPClient: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private let lock = NSLock()
@@ -184,6 +333,10 @@ final class NativeRAIDOExperiment: ObservableObject {
     @Published private(set) var armed = false
     @Published private(set) var isWorking = false
     @Published private(set) var capturedMonth: String?
+    @Published private(set) var sanitizedSchema: String?
+    @Published private(set) var schemaStatus = "Capture a roster request to prepare its sanitized schema."
+    @Published private(set) var copyStatus: String?
+    private var comparison = "not run"
     private weak var webView: WKWebView?
     private var contract: NativeRAIDOContract?
     private var cookiesAtCapture: Data?
@@ -221,6 +374,8 @@ final class NativeRAIDOExperiment: ObservableObject {
     private func invalidate() {
         generation = UUID(); work?.cancel(); work = nil
         contract = nil; cookiesAtCapture = nil; capturedMonth = nil; isWorking = false
+        sanitizedSchema = nil; copyStatus = nil; comparison = "not run"
+        schemaStatus = "Capture a roster request to prepare its sanitized schema."
     }
 
     func stop() {
@@ -246,15 +401,20 @@ final class NativeRAIDOExperiment: ObservableObject {
         isWorking = true
         work = Task { [weak self] in
             do {
-                let contract = try await Task.detached(priority: .utility) {
-                    try NativeRAIDOContract.capture(url: url, request: requestData, response: responseData)
+                let captured = try await Task.detached(priority: .utility) {
+                    let contract = try NativeRAIDOContract.capture(url: url, request: requestData, response: responseData)
+                    return (contract, try? NativeRAIDOResponseSchema.make(from: responseData))
                 }.value
+                let contract = captured.0
                 let allCookies = await webView.configuration.websiteDataStore.httpCookieStore.nativeExperimentCookies()
                 let cookies = NativeRAIDOContract.scopedCookies(allCookies, for: contract.url)
                 guard let self, self.generation == ticket, !Task.isCancelled else { return }
                 guard !cookies.isEmpty else { throw NativeRAIDOContract.Failure.signInRequired }
                 self.contract = contract; self.cookiesAtCapture = NativeRAIDOContract.cookieDigest(cookies)
                 self.capturedMonth = contract.month; self.isWorking = false; self.work = nil
+                self.sanitizedSchema = captured.1
+                self.schemaStatus = captured.1 == nil ? "Schema could not be prepared within the supported limits. Native comparison is still available."
+                    : "Sanitized schema ready. Compare natively, then copy it here."
                 self.status = "Captured \(contract.month). Ready for a native read-only comparison."
             } catch {
                 guard let self, self.generation == ticket else { return }
@@ -266,7 +426,8 @@ final class NativeRAIDOExperiment: ObservableObject {
 
     func compare() {
         guard !isWorking, let contract, let webView else { return }
-        let ticket = generation; isWorking = true; status = "Comparing through the native connection…"
+        let ticket = generation; isWorking = true; comparison = "in progress"; copyStatus = nil
+        status = "Comparing through the native connection…"
         work = Task { [weak self] in
             do {
                 let allCookies = await webView.configuration.websiteDataStore.httpCookieStore.nativeExperimentCookies()
@@ -276,6 +437,7 @@ final class NativeRAIDOExperiment: ObservableObject {
                 let response = try await NativeRAIDOHTTPClient().fetch(contract, cookies: cookies)
                 let digest = try await Task.detached(priority: .utility) { try NativeRAIDOContract.digest(response) }.value
                 guard self.generation == ticket, !Task.isCancelled else { return }
+                self.comparison = digest == contract.expectedDigest ? "matched" : "different"
                 self.status = digest == contract.expectedDigest
                     ? "Native and portal JSON match for \(contract.month). Saved roster was not changed."
                     : "Native and portal JSON differ. This may include a newer revision or changing fields. Nothing was imported."
@@ -283,14 +445,30 @@ final class NativeRAIDOExperiment: ObservableObject {
             } catch {
                 guard let self, self.generation == ticket else { return }
                 self.isWorking = false; self.work = nil
+                self.comparison = "not verified"
                 if let failure = error as? NativeRAIDOContract.Failure, [.signInRequired, .sessionChanged, .redirect].contains(failure) {
                     self.contract = nil; self.cookiesAtCapture = nil; self.capturedMonth = nil
+                    self.sanitizedSchema = nil; self.copyStatus = nil
+                    self.schemaStatus = "Capture again after signing in to prepare a current schema."
                     self.status = "The session changed or needs sign-in. Open Live RAIDO and capture again."
                 } else {
                     self.status = "Native comparison could not be verified. Saved roster was not changed."
                 }
             }
         }
+    }
+
+    var schemaForCopy: String? {
+        guard !isWorking, let sanitizedSchema else { return nil }
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+        return "RAIDO native response schema\nApp: \(version) (\(build))\nNative comparison: \(comparison)\n\n\(sanitizedSchema)"
+    }
+
+    func copySanitizedSchema(to pasteboard: UIPasteboard = .general) {
+        guard let text = schemaForCopy else { return }
+        pasteboard.setItems([["public.utf8-plain-text": text]], options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(15 * 60)])
+        copyStatus = "Sanitized schema copied. Paste it into this chat."
     }
 }
 
@@ -317,6 +495,19 @@ struct NativeRAIDOExperimentView: View {
                 if experiment.isWorking { ProgressView() }
                 Text(experiment.status).font(.footnote).accessibilityIdentifier("native-raido-status")
                 if experiment.armed { Button("Stop and clear capture") { experiment.stop() } }
+            }
+            Section("Response schema") {
+                Button("Copy sanitized schema") { experiment.copySanitizedSchema() }
+                    .disabled(experiment.schemaForCopy == nil)
+                    .accessibilityIdentifier("native-raido-copy-schema")
+                Text(experiment.copyStatus ?? experiment.schemaStatus).font(.footnote)
+                if let text = experiment.schemaForCopy {
+                    DisclosureGroup("Preview sanitized schema") {
+                        ScrollView(.horizontal) { Text(text).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }
+                    }
+                }
+                Text("Includes reviewed field names and data types. Response values, request details, and unrecognized field names are omitted. The copied text remains available for 15 minutes.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             Section {
                 Text("Captures one observed GetRoster request. If this portal page uses HTML instead, no native request will be captured. A matching response verifies transport only; the native importer is not enabled.")

@@ -1,6 +1,7 @@
 import XCTest
 import Foundation
 import WebKit
+import UIKit
 @testable import RAIDORoster
 
 @MainActor
@@ -154,6 +155,96 @@ final class NativeRAIDOTests: XCTestCase {
         XCTAssertFalse(probe.isWorking)
         probe.arm(in: WKWebView()); XCTAssertTrue(probe.armed)
         probe.stop(); XCTAssertFalse(probe.armed); XCTAssertNil(probe.capturedMonth); XCTAssertFalse(probe.isWorking)
+    }
+
+    func testSchemaNeverExportsValuesOrDynamicIdentityKeys() throws {
+        let object: [String: Any] = ["hrId": 987654321, "name": "Fixture Private Person", "token": "fixture-secret-token",
+            "crew": ["PrivatePersonFixture": ["email": "fixture.private@example.invalid"],
+                     "987654321": ["phone": "+999123456789"]],
+            "notes": "https://example.invalid/secret?session=private", "date": "2026-10-24", "published": true]
+        let text = try NativeRAIDOResponseSchema.make(from: JSONSerialization.data(withJSONObject: object))
+        for secret in ["987654321", "Fixture Private Person", "fixture-secret-token", "PrivatePersonFixture",
+                       "fixture.private@example.invalid", "+999123456789", "https://example.invalid", "2026-10-24"] {
+            XCTAssertFalse(text.contains(secret), secret)
+        }
+        XCTAssertTrue(text.contains("<redacted-key>")); XCTAssertTrue(text.contains("unrecognizedKeysMasked"))
+        XCTAssertTrue(text.contains("hrId")); XCTAssertTrue(text.contains("boolean")); XCTAssertTrue(text.contains("number"))
+        let document = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+        XCTAssertEqual(document["valuesIncluded"] as? Bool, false)
+        XCTAssertNil(document["request"]); XCTAssertNil(document["url"])
+    }
+
+    func testSchemaMergesAllArrayElementsAndScalarKinds() throws {
+        let text = try NativeRAIDOResponseSchema.make(from: Data(#"{"activities":[{"code":"STB"},{"code":null,"duration":30},false]}"#.utf8))
+        let document = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+        let schema = try XCTUnwrap(document["schema"] as? [String: Any])
+        let properties = try XCTUnwrap(schema["properties"] as? [String: [String: Any]])
+        let items = try XCTUnwrap(properties["activities"]?["items"] as? [String: Any])
+        XCTAssertEqual(items["types"] as? [String], ["boolean", "object"])
+        let fields = try XCTUnwrap(items["properties"] as? [String: [String: Any]])
+        XCTAssertEqual(fields["code"]?["types"] as? [String], ["null", "string"])
+        XCTAssertEqual(fields["duration"]?["types"] as? [String], ["number"])
+        XCTAssertFalse(text.contains("STB"))
+    }
+
+    func testSchemaDescribesEncodedJSONEnvelopeWithoutItsValues() throws {
+        let inner = #"{"days":[{"date":"2026-10-24","notes":"fixture-confidential-note"}]}"#
+        let data = try JSONSerialization.data(withJSONObject: ["d": inner])
+        let text = try NativeRAIDOResponseSchema.make(from: data)
+        XCTAssertTrue(text.contains("encodedJSON")); XCTAssertTrue(text.contains("days"))
+        XCTAssertTrue(text.contains("stringFormats")); XCTAssertTrue(text.contains("date"))
+        XCTAssertFalse(text.contains("2026-10-24")); XCTAssertFalse(text.contains("fixture-confidential-note"))
+    }
+
+    func testSchemaIsDeterministicAcrossObjectOrderAndHidesUnknownNames() throws {
+        let a = try NativeRAIDOResponseSchema.make(from: Data(#"{"days":[],"unreviewedSecretKey":{"code":"A"},"name":"Person One"}"#.utf8))
+        let b = try NativeRAIDOResponseSchema.make(from: Data(#"{"name":"Person Two","unreviewedSecretKey":{"code":"B"},"days":[]}"#.utf8))
+        XCTAssertEqual(a, b); XCTAssertFalse(a.contains("unreviewedSecretKey"))
+    }
+
+    func testSchemaBoundsInputDepthAndTraversal() throws {
+        for value in [Data("<html>sign in</html>".utf8), Data("true".utf8),
+                      Data((String(repeating: "[", count: 22) + "0" + String(repeating: "]", count: 22)).utf8),
+                      Data(("[" + String(repeating: "0,", count: 100_000) + "0]").utf8),
+                      Data(repeating: 32, count: NativeRAIDOContract.maximumResponseBytes + 1)] {
+            XCTAssertThrowsError(try NativeRAIDOResponseSchema.make(from: value))
+        }
+        let empty = try NativeRAIDOResponseSchema.make(from: Data("[]".utf8))
+        XCTAssertTrue(empty.contains("array")); XCTAssertLessThan(empty.utf8.count, 64 * 1024)
+    }
+
+    func testSchemaMarksEncodedEnvelopeLimitRatherThanSilentlyDroppingIt() throws {
+        let data = try JSONSerialization.data(withJSONObject: (0..<20).map { _ in ["d": "{\"days\":[]}"] })
+        let text = try NativeRAIDOResponseSchema.make(from: data)
+        XCTAssertTrue(text.contains("truncated")); XCTAssertTrue(text.contains("encodedJSON"))
+    }
+
+    func testCapturedSchemaCanBeCopiedAndClearsOnStop() async throws {
+        let webView = WKWebView(), probe = NativeRAIDOExperiment()
+        let pasteboard = UIPasteboard.withUniqueName()
+        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        pasteboard.string = "untouched"
+        probe.copySanitizedSchema(to: pasteboard)
+        XCTAssertEqual(pasteboard.string, "untouched")
+        await withCheckedContinuation { continuation in
+            webView.configuration.websiteDataStore.httpCookieStore.setCookie(cookie()) { continuation.resume() }
+        }
+        probe.arm(in: webView)
+        let source = try XCTUnwrap(webView.configuration.userContentController.userScripts.first?.source)
+        let token = try XCTUnwrap(source.components(separatedBy: "const token = '").dropFirst().first?.components(separatedBy: "'").first)
+        probe.receive(["token": token, "url": endpoint.absoluteString,
+                       "requestBody": String(decoding: request, as: UTF8.self),
+                       "responseBody": String(decoding: payload, as: UTF8.self)])
+        for _ in 0..<200 where probe.isWorking { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertNotNil(probe.sanitizedSchema); XCTAssertNotNil(probe.schemaForCopy)
+        probe.copySanitizedSchema(to: pasteboard)
+        let copied = try XCTUnwrap(pasteboard.string)
+        XCTAssertTrue(copied.contains("Native comparison: not run")); XCTAssertTrue(copied.contains("activities"))
+        XCTAssertFalse(copied.contains("2026-10-08")); XCTAssertFalse(copied.contains("fixture-only"))
+        XCTAssertFalse(copied.contains(endpoint.absoluteString)); XCTAssertFalse(copied.contains("hrId"))
+        probe.stop()
+        XCTAssertNil(probe.sanitizedSchema); XCTAssertNil(probe.schemaForCopy); XCTAssertNil(probe.copyStatus)
+        XCTAssertEqual(pasteboard.string, copied, "Explicitly copied sanitized text survives switching apps")
     }
 }
 

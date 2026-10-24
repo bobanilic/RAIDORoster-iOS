@@ -1,7 +1,9 @@
 # Native RAIDO experiment
 
-Status: milestone 1 transport-comparison prototype; opt-in, no native imports
-into the saved roster. Live request/schema and owner-device validation remain pending.
+Status: milestone 1 transport-comparison prototype with sanitized schema copy;
+opt-in, no native imports into the saved roster. Owner reported matching native
+and portal JSON for October 2026 on build 22932 (24 October 2026). The screenshot
+establishes that comparison result, not decoded roster parity or a wire schema.
 
 Created 24 October 2026 from `main` at
 `5fa24ca8b6ba46635770b99275ac8cb31b9874fa`.
@@ -37,8 +39,28 @@ The experiment observes one same-origin main-frame POST to an actual
 the request in memory and retains a digest of the JSON response. The native
 comparison reuses cookies scoped to that URL, refuses redirects, checks for a
 changed cookie set, bounds response size, and compares canonical JSON digests.
-No roster content or credentials are written to a file, clipboard, or report.
+No raw roster content or credentials are written to a file, clipboard, or report.
 No result is passed to RosterStore, Calendar, reminders, or Live Activities.
+
+Build 22933 adds **Copy sanitized schema** and a preview on this screen. Capture
+again, compare natively, copy the schema, and paste it into the project chat.
+The copy includes the app version, comparison outcome, reviewed property names,
+JSON types, and fixed string-format labels. It excludes response scalar values,
+request details, endpoint URLs, cookies, account identifiers, and response hashes.
+Unrecognized/dynamic property names merge under `<redacted-key>` rather than
+being exported. Mixed arrays merge all observed element shapes; supported JSON
+encoded inside common response-envelope strings is inspected structurally too.
+Empty arrays reveal no item shape, and masked names cannot establish exact field
+mapping. Any encoded-envelope inspection limit is marked `truncated`.
+
+Only the sanitized schema is retained alongside the existing contract/digests.
+Stop, navigation, background, and session-change invalidation clear it. Copy is
+an explicit user action to a local-only clipboard item expiring after 15 minutes;
+the copied text survives switching apps. Ordinary diagnostics remain unchanged.
+Schema processing is bounded by 4 MiB input, depth 20, 100,000 visits, 512 schema
+nodes, 16 encoded JSON envelopes, and 64 KiB output. An unsupported schema does
+not disable the independent native comparison. Synthetic tests cover value/key
+redaction, array merging, encoded envelopes, bounds, and capture/copy/clear.
 
 A portal page using only HTML will not produce this request. An absent capture
 is not a native-API failure. A digest match validates this transport/response
@@ -48,7 +70,8 @@ Changing server fields or a new revision may produce a legitimate mismatch.
 The prototype deliberately does not synthesize an unobserved service URL.
 
 Synthetic tests exercise the real recorder and native boundaries. They do not
-establish authenticated compatibility. The next milestone-1 work is a verified
+establish live decoding compatibility; the owner's reported comparison is a
+separate, single-session transport observation. The next milestone-1 work is a verified
 wire-schema fixture, canonical-model decoder, and full importer parity checks.
 
 ## Evidence boundary
