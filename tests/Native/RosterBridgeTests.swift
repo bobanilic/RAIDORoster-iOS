@@ -123,6 +123,133 @@ final class RosterBridgeTests: XCTestCase {
         XCTAssertEqual(activity["pickup"] as? String, "8 OCT • 07:50 LT")
         XCTAssertEqual(activity["route"] as? String, "TLV → HER")
     }
+    func testActualNativeReferenceKeepsFlightProjectionAndAddsOtherActivities() async throws {
+        let ready = expectation(description: "Native timing fixture ready")
+        try loadFixture("roster", path: "HumanResourceRoster.aspx", expectation: ready)
+        defer {
+            webView?.configuration.userContentController.removeAllScriptMessageHandlers()
+            webView = nil; recorder = nil; fixtureWindow?.isHidden = true; fixtureWindow = nil
+        }
+        await fulfillment(of: [ready], timeout: 60)
+        let view = try XCTUnwrap(webView), probe = NativeRAIDOExperiment()
+        // Navigation discovery and the complete history snapshot are unrelated
+        // to this check. The actual dedicated parser must work without either.
+        _ = try await view.evaluateJavaScript("""
+            for (const key of ['inspect','discover','navigate']) {
+              window.RAIDOPlus.history[key] = () => { throw Error('Unrelated history API called'); };
+            }
+            window.RAIDOPlus.extractNow = () => { throw Error('Extraction posting called'); };
+            true; // Return a bridgeable primitive, not the assigned JS function.
+            """)
+        let first = await probe.timingReference(in: view, month: "2026-10")
+        guard case .ready(let reference) = first else { XCTFail("Actual timing reference unavailable: \(first)"); return }
+        XCTAssertEqual(reference.activities.count, 5)
+        XCTAssertEqual(reference.activities.first?.startUTC, "2026-10-08 06:50")
+        XCTAssertEqual(reference.activities.first?.route, "TLV → HER")
+        XCTAssertEqual(reference.version, 3)
+        XCTAssertEqual(reference.otherActivities?.count, 0)
+        XCTAssertEqual(reference.activities.first?.checkInLT, "2026-10-08 08:50")
+        XCTAssertEqual(reference.activities.first?.checkInUTC, "2026-10-08 05:50")
+        XCTAssertEqual(reference.activities.first?.checkOutUTC, "")
+        let days = try (8...12).map { day -> NativeRAIDOWire.Entry in
+            let date = String(format: "2026-10-%02d", day)
+            let activity = NativeRAIDOWire.Activity(id: Int64(day), activity: "6H501", departure: "TLV", arrival: "HER",
+                std: "0650", sta: "0840", checkIn: "0850", checkOut: nil,
+                validFrom: try .init(date + "T06:50:00.0000000"), validTo: try .init(date + "T08:40:00.0000000"), details: nil)
+            return .init(calendarDay: date, day: .init(details: .init(activities: [activity]), notes: []))
+        }
+        let wire = NativeRAIDOWire.Decoded(responseDate: try .init("2026-10-01T00:00:00"), days: days)
+        let evidence = NativeRAIDOTiming.compare(wire, reference: reference)
+        XCTAssertEqual(evidence.paired, 5); XCTAssertEqual(evidence.utcOnly, 10)
+        let fields = NativeRAIDOFlightValidation.assess(NativeRAIDOTiming.pair(wire, reference: reference))
+        XCTAssertEqual(fields.std.utcOnly, 5); XCTAssertEqual(fields.checkIn.localOnly, 5)
+        XCTAssertTrue(NativeRAIDOTiming.message(wire, before: first, after: first, jsonMatched: true).contains("UTC minutes"))
+        view.isHidden = true
+        let hidden = await probe.timingReference(in: view, month: "2026-10")
+        XCTAssertEqual(hidden, first, "The diagnostic screen keeps the live web view off-screen")
+        _ = try await view.evaluateJavaScript("""
+            document.body.insertAdjacentHTML('beforeend', `
+              <table class="activity-table"><tr><td>Activity 6H999, Departure AAA - Airport Arrival BBB - Airport
+              Start 30SEP26 23:00 (LT) / 30SEP26 20:00 (UTC) End 01OCT26 01:00 (LT) / 30SEP26 22:00 (UTC)</td></tr></table>
+              <table class="activity-table"><tr><td>Activity HTL,Hotel Example Station TLV - Airport
+              Start 29SEP26 00:00 (LT) / 28SEP26 21:00 (UTC) End 20OCT26 23:59 (LT) / 20OCT26 20:59 (UTC)</td></tr></table>
+              <table class="activity-table"><tr><td>Activity OFF,Day off
+              Start 15OCT26 00:00 (LT) End 15OCT26 23:59 (LT)</td></tr></table>`);
+            """)
+        let withUnrelated = await probe.timingReference(in: view, month: "2026-10")
+        guard case .ready(let expanded) = withUnrelated else { XCTFail("Expanded reference unavailable"); return }
+        XCTAssertEqual(expanded.activities, reference.activities, "The original flight projection retains its scope")
+        XCTAssertEqual(expanded.otherActivities?.count, 3)
+        XCTAssertEqual(Set(expanded.otherActivities?.map(\.category) ?? []), ["HOTEL", "FLIGHT", "OFF"])
+        XCTAssertNotEqual(withUnrelated, first, "Other visible activities now participate in stability validation")
+        let wrongMonth = await probe.timingReference(in: view, month: "2026-09")
+        XCTAssertEqual(wrongMonth, .unavailable(.mismatch))
+    }
+
+    func testActualNativeReferenceAcceptsNonFlightOnlyPage() async throws {
+        let ready = expectation(description: "Non-flight reference fixture ready")
+        try loadFixture("roster", path: "HumanResourceRoster.aspx", expectation: ready)
+        defer {
+            webView?.configuration.userContentController.removeAllScriptMessageHandlers()
+            webView = nil; recorder = nil; fixtureWindow?.isHidden = true; fixtureWindow = nil
+        }
+        await fulfillment(of: [ready], timeout: 60)
+        let view = try XCTUnwrap(webView), probe = NativeRAIDOExperiment()
+        _ = try await view.evaluateJavaScript("""
+            document.body.innerHTML = `<h1>October 2026</h1><table class="activity-table"><tr><td>
+            Activity STB,STB Morning Station VNO - Airport
+            Start 09OCT26 09:00 (LT) / 09OCT26 06:00 (UTC)
+            End 09OCT26 17:00 (LT) / 09OCT26 14:00 (UTC)</td></tr></table>`;
+            true;
+            """)
+        let result = await probe.timingReference(in: view, month: "2026-10")
+        guard case .ready(let reference) = result else { XCTFail("Non-flight reference unavailable: \(result)"); return }
+        XCTAssertTrue(reference.activities.isEmpty)
+        XCTAssertEqual(reference.otherActivities?.count, 1)
+        XCTAssertEqual(reference.otherActivities?.first?.category, "STANDBY")
+        XCTAssertEqual(reference.otherActivities?.first?.startUTC, "2026-10-09 06:00")
+    }
+
+    func testNativeTimingReadinessRetriesOnlyBusyAndRemainsBounded() async throws {
+        let ready = expectation(description: "Timing readiness fixture ready")
+        try loadFixture("roster", path: "HumanResourceRoster.aspx", expectation: ready)
+        defer {
+            webView?.configuration.userContentController.removeAllScriptMessageHandlers()
+            webView = nil; recorder = nil; fixtureWindow?.isHidden = true; fixtureWindow = nil
+        }
+        await fulfillment(of: [ready], timeout: 60)
+        let view = try XCTUnwrap(webView), probe = NativeRAIDOExperiment()
+        _ = try await view.evaluateJavaScript("""
+            window.timingReads = 0;
+            const timingInspector = window.RAIDOPlus.history.timingReference;
+            window.RAIDOPlus.history.timingReference = month => {
+              window.timingReads++;
+              if (window.clearTimingBusyAt === window.timingReads) document.body.removeAttribute('aria-busy');
+              return timingInspector(month);
+            };
+            document.body.setAttribute('aria-busy','true');
+            """)
+        let busy = await probe.timingReference(in: view, month: "2026-10")
+        XCTAssertEqual(busy, .unavailable(.loading))
+        let busyReads = try await view.evaluateJavaScript("window.timingReads")
+        XCTAssertEqual(busyReads as? Int, 3)
+        _ = try await view.evaluateJavaScript("window.timingReads=0; window.clearTimingBusyAt=2;")
+        let recovered = await probe.timingReference(in: view, month: "2026-10")
+        guard case .ready = recovered else { XCTFail("Rendering readiness should recover: \(recovered)"); return }
+        let recoveredReads = try await view.evaluateJavaScript("window.timingReads")
+        XCTAssertEqual(recoveredReads as? Int, 2)
+        _ = try await view.evaluateJavaScript("window.timingReads=0;")
+        let wrong = await probe.timingReference(in: view, month: "2026-09")
+        XCTAssertEqual(wrong, .unavailable(.mismatch))
+        let mismatchReads = try await view.evaluateJavaScript("window.timingReads")
+        XCTAssertEqual(mismatchReads as? Int, 1, "Only explicit loading receives another DOM read")
+        let cancelled = Task { await probe.timingReference(in: view, month: "2026-10") }
+        cancelled.cancel()
+        _ = await cancelled.value
+        let cancelledReads = try await view.evaluateJavaScript("window.timingReads")
+        XCTAssertEqual(cancelledReads as? Int, 1, "Cancellation must prevent another DOM read")
+    }
+
     func testChangedLayoutProducesExplicitFailure() async throws {
         let body = try await extract("changed-layout", path: "HumanResourceRoster.aspx")
         XCTAssertEqual(body["error"] as? String, "portal-format-changed")

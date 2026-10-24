@@ -11,7 +11,7 @@ import subprocess
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-RESOURCES = ('RosterEnhancements.js', 'GetJetAnnouncements.json', 'OfflineLand.json',
+RESOURCES = ('NativeRAIDORecorder.js', 'RosterEnhancements.js', 'GetJetAnnouncements.json', 'OfflineLand.json',
              'OfflinePlaceLabels.json', 'GlobalAirportIndex.json', 'AirportTimeZones.json',
              'ThirdPartyNotices.txt')
 spec = importlib.util.spec_from_file_location('raido_version', Path(__file__).with_name('version.py'))

@@ -6302,6 +6302,12 @@ struct SettingsView: View {
                 }.listRowBackground(MidnightTheme.surface)
 
                 Section("Diagnostics") {
+                    NavigationLink {
+                        NativeRAIDOExperimentView(experiment: browser.nativeExperiment,
+                            startCapture: browser.armNativeExperiment, openPortal: openPortal)
+                    } label: {
+                        Label("Native RAIDO experiment", systemImage: "network")
+                    }.accessibilityIdentifier("settings-native-raido")
                     DisclosureGroup("Flight Companion state") {
                         Text(TodayLiveFlightLocationManager.shared.companionStateText())
                             .font(.caption.monospaced())
