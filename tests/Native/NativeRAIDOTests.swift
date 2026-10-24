@@ -2,6 +2,7 @@ import XCTest
 import Foundation
 import WebKit
 import UIKit
+import Combine
 @testable import RAIDORoster
 
 @MainActor
@@ -262,7 +263,9 @@ final class NativeRAIDOTests: XCTestCase {
     }
 
     func testCapturedSchemaCanBeCopiedAndClearsOnStop() async throws {
-        let webView = WKWebView(), probe = NativeRAIDOExperiment()
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        let webView = WKWebView(frame: .zero, configuration: configuration), probe = NativeRAIDOExperiment()
         let pasteboard = UIPasteboard.withUniqueName()
         defer { UIPasteboard.remove(withName: pasteboard.name) }
         pasteboard.string = "untouched"
@@ -277,8 +280,12 @@ final class NativeRAIDOTests: XCTestCase {
         probe.receive(["token": token, "url": endpoint.absoluteString,
                        "requestBody": String(decoding: request, as: UTF8.self),
                        "responseBody": String(decoding: payload, as: UTF8.self)])
-        for _ in 0..<200 where probe.isWorking { try await Task.sleep(nanoseconds: 10_000_000) }
-        XCTAssertNotNil(probe.sanitizedSchema); XCTAssertNotNil(probe.schemaForCopy)
+        let completed = expectation(description: "Capture finishes after the cookie-store callback")
+        let observation = probe.$isWorking.filter { !$0 }.first().sink { _ in completed.fulfill() }
+        await fulfillment(of: [completed], timeout: 15)
+        withExtendedLifetime(observation) {}
+        _ = try XCTUnwrap(probe.sanitizedSchema, probe.status)
+        XCTAssertNotNil(probe.schemaForCopy)
         probe.copySanitizedSchema(to: pasteboard)
         let copied = try XCTUnwrap(pasteboard.string)
         XCTAssertTrue(copied.contains("Native comparison: not run")); XCTAssertTrue(copied.contains("activities"))
@@ -287,6 +294,113 @@ final class NativeRAIDOTests: XCTestCase {
         probe.stop()
         XCTAssertNil(probe.sanitizedSchema); XCTAssertNil(probe.schemaForCopy); XCTAssertNil(probe.copyStatus)
         XCTAssertEqual(pasteboard.string, copied, "Explicitly copied sanitized text survives switching apps")
+    }
+
+    private func wireDay(_ overrides: [String: Any] = [:]) -> [String: Any] {
+        var activity: [String: Any] = ["Id": 101, "Activity": "SYN101", "Dep": "AAA", "Arr": "BBB",
+            "STD": "23h", "STA": "0105", "CheckIn": "2350-1", "CheckOut": "0135",
+            "ValidFrom": "2026-10-08T23:50:00.0000000", "ValidTo": "2026-10-09T01:05:00.1234567",
+            "Details": [["Label": "fixture text", "Value": "fixture-only detail", "Values": []],
+                        ["Label": "fixture nested", "Value": ["Id": "fixture ID", "Label": NSNull(), "Value": "fixture value", "Values": []]],
+                        ["Label": "fixture collection", "Value": NSNull(), "Values": [["Value": "fixture child"]]]],
+            "JumpSeatInfo": ["Items": [["FirstName": "Fixture", "LastName": "Person", "Id": 700, "Status": "synthetic"]]]]
+        activity.merge(overrides) { _, new in new }
+        return ["Details": ["ActivityDetails": [activity]],
+                "Notes": [["Note": "fixture-only note", "TextColor": "black", "BackgroundColor": "white"]]]
+    }
+
+    private func wireData(_ days: [String: Any], hrId: Any = 42) throws -> Data {
+        try JSONSerialization.data(withJSONObject: ["d": ["Date": "2026-10-01T00:00:00.0000000", "HrId": hrId,
+            "Username": "fixture-only-user", "Roster": ["Days": days]]])
+    }
+
+    func testWireDecoderReadsDateKeyedDaysAndKeepsTimingStringsVerbatim() throws {
+        let decoded = try NativeRAIDOWire.decode(wireData(["2026-10-08": wireDay()]), for: contract())
+        XCTAssertEqual(decoded.days.map(\.calendarDay), ["2026-10-08"])
+        let activity = try XCTUnwrap(decoded.days.first?.day.details?.activities?.first)
+        XCTAssertEqual(activity.id, 101); XCTAssertEqual(activity.activity, "SYN101")
+        XCTAssertEqual(activity.std, "23h"); XCTAssertEqual(activity.sta, "0105"); XCTAssertEqual(activity.checkIn, "2350-1")
+        XCTAssertEqual(activity.validTo.rawValue, "2026-10-09T01:05:00.1234567")
+        XCTAssertEqual(activity.validTo.calendarDay, "2026-10-09")
+        XCTAssertNil(activity.validFrom.zoneSuffix); XCTAssertTrue(decoded.hasUnspecifiedActivityZone)
+        XCTAssertEqual(decoded.days.first?.day.notes?.first?.text, "fixture-only note")
+    }
+
+    func testWireDecoderKeepsMissingDetailsDistinctFromAnEmptyActivityArray() throws {
+        let missing = try NativeRAIDOWire.decode(wireData(["2026-10-08": ["Notes": []]]), for: contract())
+        let empty = try NativeRAIDOWire.decode(wireData(["2026-10-08": ["Details": ["ActivityDetails": []]]]), for: contract())
+        XCTAssertTrue(missing.hasMissingActivityDetails); XCTAssertFalse(empty.hasMissingActivityDetails)
+        let nullable = try NativeRAIDOWire.decode(wireData(["2026-10-08": wireDay(["CheckIn": NSNull()])]), for: contract())
+        XCTAssertNil(nullable.days.first?.day.details?.activities?.first?.checkIn)
+    }
+
+    func testWireDecoderChecksResponseIdentityWithoutClaimingAuthenticatedUserVerification() throws {
+        XCTAssertThrowsError(try NativeRAIDOWire.decode(wireData(["2026-10-08": wireDay()], hrId: 43), for: contract())) {
+            XCTAssertEqual($0 as? NativeRAIDOWire.Failure, .identityMismatch)
+        }
+        for id in [true, 42.5] as [Any] {
+            XCTAssertThrowsError(try NativeRAIDOWire.decode(wireData(["2026-10-08": wireDay()], hrId: id), for: contract()))
+        }
+        let request = Data(#"{"month":10,"year":2026,"hrId":"00042"}"#.utf8)
+        let context = try NativeRAIDOContract.capture(url: endpoint, request: request, response: payload)
+        XCTAssertNoThrow(try NativeRAIDOWire.decode(wireData(["2026-10-08": wireDay()]), for: context))
+    }
+
+    func testWireDecoderRejectsOtherMonthsAndDoesNotTreatMissingRosterAsEmptyImport() throws {
+        XCTAssertThrowsError(try NativeRAIDOWire.decode(wireData(["2026-11-08": wireDay()]), for: contract())) {
+            XCTAssertEqual($0 as? NativeRAIDOWire.Failure, .monthMismatch)
+        }
+        XCTAssertThrowsError(try NativeRAIDOWire.decode(wireData([:]), for: contract())) {
+            XCTAssertEqual($0 as? NativeRAIDOWire.Failure, .emptyRoster)
+        }
+        XCTAssertThrowsError(try NativeRAIDOWire.decode(Data(#"{"d":null}"#.utf8), for: contract()))
+    }
+
+    func testWireDecoderRejectsInvalidAndDuplicateCalendarDays() throws {
+        XCTAssertThrowsError(try NativeRAIDOWire.decode(wireData(["2026-02-30": wireDay()]), for: contract())) {
+            XCTAssertEqual($0 as? NativeRAIDOWire.Failure, .invalidDay)
+        }
+        let days = ["2026-10-08": wireDay(), "2026-10-08T00:00:00.0000000": wireDay()]
+        XCTAssertThrowsError(try NativeRAIDOWire.decode(wireData(days), for: contract())) {
+            XCTAssertEqual($0 as? NativeRAIDOWire.Failure, .duplicateDay)
+        }
+        XCTAssertNoThrow(try NativeRAIDOWire.decode(wireData(["2026-10-08T00:00:00.0000000": wireDay()]), for: contract()))
+    }
+
+    func testWireDecoderRejectsMalformedKnownFieldsInsteadOfDroppingRecords() throws {
+        let invalid: [[String: Any]] = [["Id": true], ["Activity": 4], ["STD": 2350],
+            ["ValidFrom": "2026-10-08T25:00:00.0000000"], ["ValidTo": "not a timestamp"],
+            ["Details": [["Label": "fixture", "Value": 7]]]]
+        for overrides in invalid {
+            XCTAssertThrowsError(try NativeRAIDOWire.decode(wireData(["2026-10-08": wireDay(overrides)]), for: contract()))
+        }
+    }
+
+    func testWireTimestampKeepsUnspecifiedZonesAndValidatesExplicitOffsets() throws {
+        XCTAssertNil(try NativeRAIDOWire.Timestamp("2026-10-25T03:30:00.1234567").zoneSuffix)
+        XCTAssertEqual(try NativeRAIDOWire.Timestamp("2026-10-25T03:30:00Z").zoneSuffix, "Z")
+        XCTAssertEqual(try NativeRAIDOWire.Timestamp("2026-10-25T03:30:00+02:00").zoneSuffix, "+02:00")
+        XCTAssertEqual(try NativeRAIDOWire.Timestamp("2026-10-25T03:30:00-0230").zoneSuffix, "-0230")
+        for value in ["2026-02-30T12:00:00", "2026-10-25T03:30:00+14:01", "2026-10-25T03:30:60Z"] {
+            XCTAssertThrowsError(try NativeRAIDOWire.Timestamp(value))
+        }
+    }
+
+    func testWireDecoderPreservesHeterogeneousDetailValues() throws {
+        let decoded = try NativeRAIDOWire.decode(wireData(["2026-10-08": wireDay()]), for: contract())
+        let details = try XCTUnwrap(decoded.days.first?.day.details?.activities?.first?.details)
+        XCTAssertEqual(details.count, 3); XCTAssertEqual(details[0].value, .text("fixture-only detail"))
+        guard case .record(let nested)? = details[1].value else { return XCTFail("Expected nested detail value") }
+        XCTAssertEqual(nested.id, "fixture ID"); XCTAssertEqual(nested.value, .text("fixture value"))
+        XCTAssertNil(details[2].value); XCTAssertEqual(details[2].values?.first?.value, .text("fixture child"))
+    }
+
+    func testWireAssessmentContainsOnlyFixedStatusText() throws {
+        let status = NativeRAIDOWire.assessment(try wireData(["2026-10-08": wireDay()]), for: try contract())
+        XCTAssertTrue(status.contains("zones are unspecified"))
+        for value in ["fixture", "2026", "23h", "2350", "SYN101", "AAA", "BBB", "700"] { XCTAssertFalse(status.contains(value)) }
+        let wrongID = NativeRAIDOWire.assessment(try wireData(["2026-10-08": wireDay()], hrId: 43), for: try contract())
+        XCTAssertTrue(wrongID.contains("identity differs")); XCTAssertFalse(wrongID.contains("43"))
     }
 }
 

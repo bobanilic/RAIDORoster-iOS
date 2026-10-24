@@ -105,6 +105,46 @@ wire-schema fixture, canonical-model decoder, and full importer parity checks.
 
 ## Evidence boundary
 
+### Build 22935 — first read-only wire decoder
+
+The owner's v2 export from build 22934 says `Native comparison: not run`.
+It is portal-schema evidence only; earlier reported native matches remain
+separate observations. It identifies date-shaped day keys, `ValidFrom` and
+`ValidTo` with seven fractional digits and no explicit timezone suffix, display
+timings with multiple string shapes, heterogeneous detail values, and notes.
+
+`NativeRAIDOWire.swift` independently decodes the known `d.Roster.Days` envelope,
+date-keyed day records, `Details.ActivityDetails`, validity timestamps, and note
+and nested detail collections. It verifies response/request HR identity equality
+(not authenticated-current-user identity), rejects another month, invalid or
+duplicate calendar days, empty day maps, and malformed known fields. Missing
+activity details remain distinct from an observed empty array. Unknown fields
+are not mapped or claimed to be decoded; `JumpSeatInfo` person records are not
+assumed to identify the operating crew.
+
+Timestamp strings remain verbatim with their explicit zone suffix or an
+unspecified-zone marker. There is no conversion to `Date`, no device-zone
+fallback, and no interpretation of compact/letter-suffixed display times.
+Validity boundaries are not assigned duty-start/end semantics. The header's
+`Date` is not assumed to prove the requested month.
+
+During capture and native comparison, the wire model exists only in the bounded
+worker task. Only a fixed status message survives; that message appears on the
+diagnostic screen and in copied schema headers, distinguishing portal from
+native assessment. The model does not reach RosterStore, calendar, reminders,
+or Live Activities. This remains a wire decoder foundation, not a canonical
+roster importer or a parity claim.
+
+Nine synthetic fixtures cover observed structures, missing versus empty details,
+response identity, month/day boundaries, malformed fields, seven-digit timestamp
+fractions, explicit offsets, heterogeneous details, and value-free status text.
+Build 22934's native suite reported four failures in the capture/copy integration
+test while all schema-focused fixtures and four simulator jobs passed. That
+integration test used a shared persistent cookie store and a two-second polling
+window. It now isolates the cookie store and awaits the production completion
+publication for up to 15 seconds, retaining all capture/copy/privacy assertions
+and reporting the status on failure. Passing results require the new commit.
+
 Static inspection of Roster Helper 1.3.4/build 41 established a native
 `GetRoster` operation, request construction with `month`, `year`, and `hrId`,
 POST/JSON/AJAX headers, and a `URLSession` call. It also identified

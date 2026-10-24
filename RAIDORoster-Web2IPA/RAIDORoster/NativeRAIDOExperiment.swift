@@ -50,7 +50,7 @@ struct NativeRAIDOContract: Sendable {
         return integer(value, range: 1...9_007_199_254_740_991) != nil
     }
 
-    static func digest(_ data: Data) throws -> Data {
+    static func boundedJSON(_ data: Data) throws -> Any {
         guard data.count <= maximumResponseBytes else { throw Failure.responseTooLarge }
         guard let value = try? JSONSerialization.jsonObject(with: data),
               value is [String: Any] || value is [Any] else { throw Failure.unsupportedResponse }
@@ -62,9 +62,13 @@ struct NativeRAIDOContract: Sendable {
             if let d = value as? [String: Any] { return d.values.allSatisfy { bounded($0, depth: depth + 1) } }
             return true
         }
-        guard bounded(value, depth: 0), let canonical = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]) else {
-            throw Failure.unsupportedResponse
-        }
+        guard bounded(value, depth: 0) else { throw Failure.unsupportedResponse }
+        return value
+    }
+
+    static func digest(_ data: Data) throws -> Data {
+        let value = try boundedJSON(data)
+        let canonical = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
         return Data(SHA256.hash(data: canonical))
     }
 
@@ -383,6 +387,7 @@ final class NativeRAIDOExperiment: ObservableObject {
     @Published private(set) var sanitizedSchema: String?
     @Published private(set) var schemaStatus = "Capture a roster request to prepare its sanitized schema."
     @Published private(set) var copyStatus: String?
+    @Published private(set) var wireStatus = "Wire decoder awaits a capture."
     private var comparison = "not run"
     private weak var webView: WKWebView?
     private var contract: NativeRAIDOContract?
@@ -423,6 +428,7 @@ final class NativeRAIDOExperiment: ObservableObject {
         contract = nil; cookiesAtCapture = nil; capturedMonth = nil; isWorking = false
         sanitizedSchema = nil; copyStatus = nil; comparison = "not run"
         schemaStatus = "Capture a roster request to prepare its sanitized schema."
+        wireStatus = "Wire decoder awaits a capture."
     }
 
     func stop() {
@@ -450,7 +456,7 @@ final class NativeRAIDOExperiment: ObservableObject {
             do {
                 let captured = try await Task.detached(priority: .utility) {
                     let contract = try NativeRAIDOContract.capture(url: url, request: requestData, response: responseData)
-                    return (contract, try? NativeRAIDOResponseSchema.make(from: responseData))
+                    return (contract, try? NativeRAIDOResponseSchema.make(from: responseData), NativeRAIDOWire.assessment(responseData, for: contract))
                 }.value
                 let contract = captured.0
                 let allCookies = await webView.configuration.websiteDataStore.httpCookieStore.nativeExperimentCookies()
@@ -460,6 +466,7 @@ final class NativeRAIDOExperiment: ObservableObject {
                 self.contract = contract; self.cookiesAtCapture = NativeRAIDOContract.cookieDigest(cookies)
                 self.capturedMonth = contract.month; self.isWorking = false; self.work = nil
                 self.sanitizedSchema = captured.1
+                self.wireStatus = "Portal capture: " + captured.2
                 self.schemaStatus = captured.1 == nil ? "Schema could not be prepared within the supported limits. Native comparison is still available."
                     : "Sanitized schema ready. Compare natively, then copy it here."
                 self.status = "Captured \(contract.month). Ready for a native read-only comparison."
@@ -482,8 +489,12 @@ final class NativeRAIDOExperiment: ObservableObject {
                 guard let self, self.generation == ticket, !Task.isCancelled else { return }
                 guard NativeRAIDOContract.cookieDigest(cookies) == self.cookiesAtCapture else { throw NativeRAIDOContract.Failure.sessionChanged }
                 let response = try await NativeRAIDOHTTPClient().fetch(contract, cookies: cookies)
-                let digest = try await Task.detached(priority: .utility) { try NativeRAIDOContract.digest(response) }.value
+                let decoded = try await Task.detached(priority: .utility) {
+                    (try NativeRAIDOContract.digest(response), NativeRAIDOWire.assessment(response, for: contract))
+                }.value
                 guard self.generation == ticket, !Task.isCancelled else { return }
+                let digest = decoded.0
+                self.wireStatus = "Native response: " + decoded.1
                 self.comparison = digest == contract.expectedDigest ? "matched" : "different"
                 self.status = digest == contract.expectedDigest
                     ? "Native and portal JSON match for \(contract.month). Saved roster was not changed."
@@ -497,6 +508,7 @@ final class NativeRAIDOExperiment: ObservableObject {
                     self.contract = nil; self.cookiesAtCapture = nil; self.capturedMonth = nil
                     self.sanitizedSchema = nil; self.copyStatus = nil
                     self.schemaStatus = "Capture again after signing in to prepare a current schema."
+                    self.wireStatus = "Wire assessment cleared after session invalidation."
                     self.status = "The session changed or needs sign-in. Open Live RAIDO and capture again."
                 } else {
                     self.status = "Native comparison could not be verified. Saved roster was not changed."
@@ -509,7 +521,7 @@ final class NativeRAIDOExperiment: ObservableObject {
         guard !isWorking, let sanitizedSchema else { return nil }
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
-        return "RAIDO native response schema\nApp: \(version) (\(build))\nNative comparison: \(comparison)\n\n\(sanitizedSchema)"
+        return "RAIDO native response schema\nApp: \(version) (\(build))\nNative comparison: \(comparison)\nWire decoder: \(wireStatus)\n\n\(sanitizedSchema)"
     }
 
     func copySanitizedSchema(to pasteboard: UIPasteboard = .general) {
@@ -548,6 +560,7 @@ struct NativeRAIDOExperimentView: View {
                     .disabled(experiment.schemaForCopy == nil)
                     .accessibilityIdentifier("native-raido-copy-schema")
                 Text(experiment.copyStatus ?? experiment.schemaStatus).font(.footnote)
+                Text(experiment.wireStatus).font(.footnote).accessibilityIdentifier("native-raido-wire-status")
                 if let text = experiment.schemaForCopy {
                     DisclosureGroup("Preview sanitized schema") {
                         ScrollView(.horizontal) { Text(text).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }
