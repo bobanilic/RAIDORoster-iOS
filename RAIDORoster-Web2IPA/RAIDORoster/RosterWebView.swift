@@ -18,6 +18,7 @@ final class RosterBrowserModel: ObservableObject {
     @Published var monthNavigationStatus: String?
     @Published private(set) var offlineMonthStatus: String?
     @Published private(set) var offlineMonthNeedsRetry = false
+    let nativeExperiment = NativeRAIDOExperiment()
     private var portalVisible = false
     private lazy var offlineCache: RosterOfflineCache = {
         let cache = RosterOfflineCache(store: store)
@@ -35,6 +36,8 @@ final class RosterBrowserModel: ObservableObject {
     init(store: RosterStore) {
         self.store = store
     }
+
+    func armNativeExperiment() { nativeExperiment.arm(in: webView) }
 
     var preferredStartURL: URL {
         if let saved = UserDefaults.standard.string(forKey: "RAIDORoster.LastPortalURL"),
@@ -385,8 +388,10 @@ struct RosterWebView: UIViewRepresentable {
             let controller = existing.configuration.userContentController
             controller.removeScriptMessageHandler(forName: "rosterCache")
             controller.removeScriptMessageHandler(forName: "rosterCalendarFeed")
+            controller.removeScriptMessageHandler(forName: "nativeRAIDOProbe")
             controller.add(context.coordinator, name: "rosterCache")
             controller.add(context.coordinator, name: "rosterCalendarFeed")
+            controller.add(context.coordinator, name: "nativeRAIDOProbe")
             existing.navigationDelegate = context.coordinator
             existing.uiDelegate = context.coordinator
             let refresh = UIRefreshControl()
@@ -402,6 +407,7 @@ struct RosterWebView: UIViewRepresentable {
         let controller = WKUserContentController()
         controller.add(context.coordinator, name: "rosterCache")
         controller.add(context.coordinator, name: "rosterCalendarFeed")
+        controller.add(context.coordinator, name: "nativeRAIDOProbe")
         config.userContentController = controller
 
         if let source = Self.extractorSource() {
@@ -471,6 +477,8 @@ struct RosterWebView: UIViewRepresentable {
                 }
             case "rosterCalendarFeed":
                 Task { @MainActor in model.store.ingestCalendarFeed(messageBody: message.body) }
+            case "nativeRAIDOProbe":
+                Task { @MainActor in model.nativeExperiment.receive(message.body) }
             default:
                 break
             }
@@ -478,7 +486,10 @@ struct RosterWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             guard let model else { return }
-            Task { @MainActor in model.navigationStarted() }
+            Task { @MainActor in
+                model.nativeExperiment.navigationChanged()
+                model.navigationStarted()
+            }
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

@@ -1,6 +1,7 @@
 # Native RAIDO experiment
 
-Status: planning baseline; application behavior is unchanged.
+Status: milestone 1 transport-comparison prototype; opt-in, no native imports
+into the saved roster. Live request/schema and owner-device validation remain pending.
 
 Created 24 October 2026 from `main` at
 `5fa24ca8b6ba46635770b99275ac8cb31b9874fa`.
@@ -19,9 +20,36 @@ requests against then-current main; avoid making all six milestones a single
 merge requirement. Later milestones remain conditional on the evidence and
 their own exit criteria. Refresh the baseline when main changes.
 
-No runtime feature, native importer, production endpoint configuration, new
-backend, signing change, or application version bump is introduced by this
-planning commit. All names for future controls/interfaces below are proposals.
+The initial planning commit changed no application behavior. The first
+implementation adds the explicitly activated diagnostic described below.
+No native importer, production endpoint configuration, new backend, signing
+change, or application version bump is enabled by this prototype.
+
+### First implementation: capture and native transport comparison
+
+Open Settings → Diagnostics → Native RAIDO experiment. Activate capture,
+open Live RAIDO and refresh the roster, then return to compare if a supported
+request was observed. Stop capture explicitly or background the app to clear
+the captured state. The recorder is never installed during ordinary use.
+
+The experiment observes one same-origin main-frame POST to an actual
+`GetRoster` URL, with exactly `month`, `year`, and `hrId` parameters. It keeps
+the request in memory and retains a digest of the JSON response. The native
+comparison reuses cookies scoped to that URL, refuses redirects, checks for a
+changed cookie set, bounds response size, and compares canonical JSON digests.
+No roster content or credentials are written to a file, clipboard, or report.
+No result is passed to RosterStore, Calendar, reminders, or Live Activities.
+
+A portal page using only HTML will not produce this request. An absent capture
+is not a native-API failure. A digest match validates this transport/response
+comparison only: it does not establish a decoded roster contract, operational
+field parity, current-user verification, or that the payload is a usable roster.
+Changing server fields or a new revision may produce a legitimate mismatch.
+The prototype deliberately does not synthesize an unobserved service URL.
+
+Synthetic tests exercise the real recorder and native boundaries. They do not
+establish authenticated compatibility. The next milestone-1 work is a verified
+wire-schema fixture, canonical-model decoder, and full importer parity checks.
 
 ## Evidence boundary
 
@@ -53,8 +81,9 @@ The existing production paths to preserve are:
 
 ## Milestone 1 — read-only native roster import
 
-State: not started. Depends on confirming the real service URL and wire payload
-using the owner's existing authorized portal session.
+State: transport-comparison prototype implemented; importer/decoder not started.
+Depends on confirming the real service URL and wire payload using the owner's
+existing authorized portal session.
 
 1. Reuse successful WebKit authentication; obtain only the portal cookies needed
    for this tenant and verify the current account/HR identity. Do not initially
