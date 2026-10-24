@@ -11,14 +11,20 @@ const check = (value, message) => { assert.ok(value, message); assertions++; };
 function harness(hostname = 'gjt.noc.vmc.navblue.cloud', frame = false) {
   const messages = [], sent = [], fetches = [];
   class XHR {
-    constructor() { this.listeners = []; this.responseType = ''; }
+    constructor() { this.listeners = []; this.ends = []; this.responseType = ''; }
     open(method, url) { this.opened = {method,url}; return 'open-result'; }
     send(value) { sent.push({xhr:this,value}); return 'send-result'; }
-    addEventListener(name, listener) { if (name === 'load') this.listeners.push(listener); }
+    addEventListener(name, listener) { (name === 'load' ? this.listeners : this.ends).push(listener); }
+    removeEventListener(name, listener) {
+      const key = name === 'load' ? 'listeners' : 'ends';
+      this[key] = this[key].filter(value => value !== listener);
+    }
+    abort() { for (const listener of this.ends.slice()) listener(); }
     finish(value, options = {}) {
       this.status = options.status || 200; this.responseURL = options.url || url;
       this.responseType = options.type || ''; this.responseText = value; this.response = value;
       for (const listener of this.listeners.splice(0)) listener();
+      for (const listener of this.ends.slice()) listener();
     }
   }
   let nextFetch = () => new Response('{"days":[]}', {headers:{'content-type':'application/json'}});
@@ -48,6 +54,17 @@ async function run() {
   check(h.messages.length === 1 && h.messages[0].token === 'synthetic-token', 'one bounded matching request captured');
   xhr = new h.XHR(); xhr.open('POST',url); xhr.send(body); xhr.finish('{"days":[]}');
   check(h.messages.length === 1, 'capture exactly one response');
+
+  for (const abort of [false, true]) {
+    h = harness(); xhr = new h.XHR(); xhr.open('POST',url); xhr.send(body);
+    if (abort) xhr.abort();
+    xhr.open('POST',url);
+    const nextBody = JSON.stringify({month:11,year:2026,hrId:42});
+    xhr.send(nextBody); xhr.finish('{"days":[]}');
+    check(h.messages.length === 1 && h.messages[0].requestBody === nextBody,
+      'reused XHR captures its current body after reopening or abort');
+    check(xhr.listeners.length === 0 && xhr.ends.length === 0, 'completed XHR releases recorder listeners');
+  }
 
   for (const [method,target,request] of [['GET',url,body],['POST',origin+'/ConfirmRevision',body],
     ['POST','https://example.invalid/GetRoster',body],['POST',url+'?x=1',body],

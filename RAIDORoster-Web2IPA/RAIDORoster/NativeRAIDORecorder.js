@@ -63,22 +63,40 @@
   const originalOpen = XMLHttpRequest.prototype.open;
   const originalSend = XMLHttpRequest.prototype.send;
   const requests = new WeakMap();
+  const pending = new WeakMap();
+  const discard = xhr => {
+    const listeners = pending.get(xhr);
+    if (!listeners) return;
+    xhr.removeEventListener('load', listeners.load);
+    xhr.removeEventListener('loadend', listeners.end);
+    pending.delete(xhr);
+  };
   const wrappedOpen = function(method, url) {
+    // Reopening an aborted XHR must not pair its old body with a new response.
+    discard(this);
     const result = originalOpen.apply(this, arguments);
     requests.set(this, {method, url});
     return result;
   };
   const wrappedSend = function(body) {
     const meta = requests.get(this), request = meta && eligible(meta.url, meta.method, body);
-    if (request) this.addEventListener('load', () => {
-      if (stopped || delivered || this.responseURL !== request.url || this.status !== 200) return;
-      try {
-        const value = this.responseType === 'json' ? JSON.stringify(this.response) :
-          (this.responseType === '' || this.responseType === 'text' ? this.responseText : null);
-        send(request, this.status, value);
-      } catch (_) {}
-    }, {once:true});
-    return originalSend.apply(this, arguments);
+    if (request) {
+      const load = () => {
+        discard(this);
+        if (stopped || delivered || this.responseURL !== request.url || this.status !== 200) return;
+        try {
+          const value = this.responseType === 'json' ? JSON.stringify(this.response) :
+            (this.responseType === '' || this.responseType === 'text' ? this.responseText : null);
+          send(request, this.status, value);
+        } catch (_) {}
+      };
+      const end = () => discard(this);
+      pending.set(this, {load, end});
+      this.addEventListener('load', load, {once:true});
+      this.addEventListener('loadend', end, {once:true});
+    }
+    try { return originalSend.apply(this, arguments); }
+    catch (error) { discard(this); throw error; }
   };
   if (typeof originalFetch === 'function') window.fetch = wrappedFetch;
   XMLHttpRequest.prototype.open = wrappedOpen;
