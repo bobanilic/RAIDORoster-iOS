@@ -96,4 +96,44 @@ final class NativeRAIDOTimingTests: XCTestCase {
         let result = NativeRAIDOTiming.compare(try native(), reference: try reference())
         for value in ["SYN101", "AAA", "BBB", "2026", "10:00", "13:00"] { XCTAssertFalse(result.message.contains(value)) }
     }
+
+    func testReferenceOrderIsNormalizedWithoutRemovingAmbiguousDuplicates() throws {
+        let data = try referenceData(duplicate: true)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var activities = try XCTUnwrap(object["activities"] as? [[String: Any]])
+        var other = activities[0]; other["code"] = "OTHER101"
+        activities.append(other); object["activities"] = activities
+        let a = try NativeRAIDOTiming.Reference.parse(JSONSerialization.data(withJSONObject: object), month: "2026-10")
+        object["activities"] = activities.reversed().map { $0 }
+        let b = try NativeRAIDOTiming.Reference.parse(JSONSerialization.data(withJSONObject: object), month: "2026-10")
+        XCTAssertEqual(a, b); XCTAssertEqual(a.activities.count, 3)
+        XCTAssertEqual(NativeRAIDOTiming.compare(try native(), reference: b).ambiguous, 1)
+    }
+
+    func testReferenceFailuresStayDistinctAndExcludeArbitraryPortalText() throws {
+        let wire = try native(), valid = NativeRAIDOTiming.Observation.ready(try reference())
+        for issue in NativeRAIDOTiming.ReferenceIssue.allCases {
+            let data = try JSONSerialization.data(withJSONObject: ["issue": issue.rawValue, "error": "private portal exception"])
+            let observation = NativeRAIDOTiming.Observation.parse(data, month: "2026-10")
+            XCTAssertEqual(observation, .unavailable(issue))
+            let before = NativeRAIDOTiming.message(wire, before: observation, after: valid, jsonMatched: true)
+            let after = NativeRAIDOTiming.message(wire, before: valid, after: observation, jsonMatched: true)
+            XCTAssertTrue(before.hasPrefix("Before request:")); XCTAssertTrue(after.hasPrefix("After request:"))
+            XCTAssertTrue(before.contains(issue.message)); XCTAssertTrue(after.contains("inconclusive"))
+            for text in [before, after] {
+                for secret in ["SYN101", "AAA", "2026", "private portal exception"] { XCTAssertFalse(text.contains(secret)) }
+            }
+        }
+        for raw in ["not JSON", "{\"issue\":\"private server error\"}", "{\"issue\":true}", "{}"] {
+            XCTAssertEqual(NativeRAIDOTiming.Observation.parse(Data(raw.utf8), month: "2026-10"), .unavailable(.invalidPayload))
+        }
+    }
+
+    func testChangedReferenceOrNativeJSONCannotEstablishTimingBasis() throws {
+        let wire = try native(), first = NativeRAIDOTiming.Observation.ready(try reference())
+        let changed = NativeRAIDOTiming.Observation.ready(try reference(["startLT": "2026-10-08 14:00"]))
+        XCTAssertTrue(NativeRAIDOTiming.message(wire, before: first, after: changed, jsonMatched: true).contains("records changed"))
+        XCTAssertTrue(NativeRAIDOTiming.message(wire, before: first, after: first, jsonMatched: false).contains("JSON changed"))
+        XCTAssertTrue(NativeRAIDOTiming.message(wire, before: first, after: first, jsonMatched: true).contains("UTC minutes"))
+    }
 }

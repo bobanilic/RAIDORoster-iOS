@@ -105,6 +105,48 @@ wire-schema fixture, canonical-model decoder, and full importer parity checks.
 
 ## Evidence boundary
 
+### Build 22937 — isolated timing inspection and explicit failure reasons
+
+The owner tested build 22936 and reported a matched native JSON comparison,
+successful known-field decoding with unspecified timestamp zones, and a decoded
+previous-month roster through the direct native request. This establishes access
+to one earlier month without portal scrolling. It does not establish complete
+historical availability, canonical import parity, or any cached/imported data.
+The live timing comparison was inconclusive because its stable portal reference
+was unavailable. That generic outcome does not identify a confirmed root cause. All six CI jobs
+at the exact build-22936 commit subsequently passed.
+
+The read-only timing inspector is now separate from `history.inspect`: it uses
+our existing activity parser and projects only FLIGHT/POSITIONING records whose
+local start day is in the displayed/requested month. It does not build duty-day
+summaries, discover calendar navigation, or read monthly totals. Adjacent-month
+and non-flight rows therefore cannot invalidate this narrow timing reference.
+This remains limited evidence rather than full roster parity. The ordinary
+extractor/importer and history-navigation path retain their existing behavior.
+
+References are normalized by complete field ordering before comparison, with
+identical duplicates retained so ambiguity cannot become unique identity.
+Before and after references still need to agree, native JSON must match the
+capture, and the existing cookie/generation checks remain. Explicit portal-busy
+results receive at most three DOM reads with two cancellable 250 ms gaps;
+other failures do not retry. No additional portal request or navigation is made.
+
+Copied diagnostics now distinguish before/after inspection, unsupported page,
+missing inspector, sign-in, busy portal, displayed-month mismatch, unrecognized
+layout, missing flight records, size limits, script failure, invalid reference,
+and page changes. Messages come from a fixed allowlist; exception text, source
+URLs, timings, activity codes, identities, and record counts are not copied.
+Changed native JSON or changed timing records remain independently inconclusive.
+
+Synthetic WebKit tests exercise the actual extractor, embedded bridge script,
+and native reference reader, including a hidden web view, direct minute
+comparison, unrelated spanning hotels/adjacent-month flights, busy-state bounds,
+readiness recovery, cancellation, and avoiding full history/discovery APIs.
+Other fixtures cover failure-code privacy, unknown failures, stable reordering,
+duplicate retention, and changed reference/native JSON. CI and owner testing of
+this build must be recorded separately; no successful live timing result is
+claimed yet. Native cache writes/importing remain disabled.
+
 ### Build 22936 — live timing evidence and one previous-month request
 
 The owner reported a matched native comparison and successful known-field

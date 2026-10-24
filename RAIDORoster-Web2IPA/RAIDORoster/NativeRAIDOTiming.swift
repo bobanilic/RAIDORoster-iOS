@@ -5,6 +5,58 @@ import Foundation
 enum NativeRAIDOTiming {
     enum Failure: Error { case referenceUnavailable }
 
+    enum ReferenceIssue: String, CaseIterable, Sendable {
+        case pageUnavailable = "page-unavailable"
+        case extractorUnavailable = "extractor-unavailable"
+        case auth, loading, mismatch, format, limit
+        case noFlightRecords = "no-flight-records"
+        case scriptFailure = "script-failure"
+        case invalidPayload = "invalid-payload"
+        case pageChanged = "page-changed"
+
+        var message: String {
+            switch self {
+            case .pageUnavailable: return "Live RAIDO is not on a supported roster page."
+            case .extractorUnavailable: return "The portal timing inspector is unavailable; refresh Live RAIDO."
+            case .auth: return "The live portal requires sign-in."
+            case .loading: return "The live portal remained busy during the bounded readiness check."
+            case .mismatch: return "The displayed portal month differs from the captured request."
+            case .format: return "The portal's displayed month or activity layout was not recognized."
+            case .limit: return "The live timing reference exceeds the supported limits."
+            case .noFlightRecords: return "No flight/positioning records were parsed in the displayed month."
+            case .scriptFailure: return "The read-only portal timing script could not complete."
+            case .invalidPayload: return "The portal timing reference failed field or format validation."
+            case .pageChanged: return "The portal page changed during timing inspection."
+            }
+        }
+    }
+
+    enum Observation: Equatable, Sendable {
+        case ready(Reference)
+        case unavailable(ReferenceIssue)
+
+        static func parse(_ data: Data, month: String) -> Self {
+            do {
+                guard data.count <= 1024 * 1024 else { return .unavailable(.limit) }
+                let object = try NativeRAIDOContract.boundedJSON(data)
+                if let object = object as? [String: Any], let raw = object["issue"] as? String {
+                    return .unavailable(ReferenceIssue(rawValue: raw) ?? .invalidPayload)
+                }
+                return .ready(try Reference.parse(data, month: month))
+            } catch { return .unavailable(.invalidPayload) }
+        }
+    }
+
+    static func message(_ native: NativeRAIDOWire.Decoded, before: Observation, after: Observation, jsonMatched: Bool) -> String {
+        guard jsonMatched else { return "Native JSON changed from capture; timing comparison is inconclusive." }
+        if case .unavailable(let issue) = before { return "Before request: " + issue.message + " Timing is inconclusive." }
+        if case .unavailable(let issue) = after { return "After request: " + issue.message + " Timing is inconclusive." }
+        guard case .ready(let first) = before, case .ready(let last) = after, first == last else {
+            return "Portal timing records changed across the native request; timing comparison is inconclusive."
+        }
+        return compare(native, reference: last).message
+    }
+
     struct ReferenceActivity: Decodable, Equatable, Sendable {
         let day: String
         let code: String
@@ -38,7 +90,13 @@ enum NativeRAIDOTiming {
                     throw Failure.referenceUnavailable
                 }
             }
-            return value
+            // DOM order can change without a timing change. Preserve duplicates
+            // so normalization cannot manufacture a unique activity identity.
+            let ordered = value.activities.sorted {
+                [$0.day, $0.code, $0.category, $0.route, $0.startLT, $0.startUTC, $0.endLT, $0.endUTC]
+                    .lexicographicallyPrecedes([$1.day, $1.code, $1.category, $1.route, $1.startLT, $1.startUTC, $1.endLT, $1.endUTC])
+            }
+            return Self(version: value.version, sourceURL: value.sourceURL, month: value.month, valid: value.valid, activities: ordered)
         }
     }
 
@@ -134,27 +192,28 @@ enum NativeRAIDOTiming {
         }
     }
 
-    // Calls the existing read-only inspector; never extractNow(), post(), or
-    // history.navigate(). Only compact timing fields cross the WebKit bridge.
+    // Calls the dedicated read-only inspector; never extractNow(), post(), or
+    // history.inspect/navigate/discover(). Failures expose fixed codes only.
     static let referenceScript = #"""
+    const fail = issue => JSON.stringify({issue});
     if (window !== top || location.protocol !== 'https:' || location.hostname !== 'gjt.noc.vmc.navblue.cloud' ||
-        (location.port && location.port !== '443') || !/\/HumanResourceRoster\.aspx$/i.test(location.pathname)) return null;
-    const r = window.RAIDOPlus?.history?.inspect?.(month);
-    if (!r || r.kind !== 'ready' || !r.payload || r.payload.validation?.month !== month) return null;
-    const p = r.payload;
-    if (p.validation?.isValid !== true) return null;
-    if (!Array.isArray(p.rows) || p.rows.length < 1 || p.rows.length > 400) return null;
-    const activities = [];
-    for (const row of p.rows) {
-      if (!Array.isArray(row.activities) || row.activities.length > 100) return null;
-      for (const a of row.activities) {
-        if (activities.length >= 3000) return null;
-        activities.push({day:row.dateISO,code:a.code,category:a.category,route:a.route,
-          startLT:a.startLT,startUTC:a.startUTC,endLT:a.endLT,endUTC:a.endUTC});
-      }
+        (location.port && location.port !== '443') || !/\/HumanResourceRoster\.aspx$/i.test(location.pathname)) return fail('page-unavailable');
+    const inspector = window.RAIDOPlus?.history?.timingReference;
+    if (typeof inspector !== 'function') return fail('extractor-unavailable');
+    let r;
+    try { r = inspector(month); } catch (_) { return fail('script-failure'); }
+    if (!r || r.kind !== 'ready') {
+      const allowed = ['auth','loading','mismatch','format','limit','no-flight-records'];
+      return fail(allowed.includes(r?.kind) ? r.kind : 'invalid-payload');
     }
-    const text = JSON.stringify({version:1,sourceURL:location.href,month:p.validation.month,
-      valid:p.validation.isValid,activities});
-    return new TextEncoder().encode(text).byteLength <= 1024*1024 ? text : null;
+    const p = r.payload;
+    if (!p || p.version !== 1 || p.month !== month || p.valid !== true || !Array.isArray(p.activities)) return fail('invalid-payload');
+    if (p.activities.length < 1) return fail('no-flight-records');
+    if (p.activities.length > 3000) return fail('limit');
+    // Project again at the bridge: unexpected extra fields never cross to Swift.
+    const activities = p.activities.map(a => ({day:a.day,code:a.code,category:a.category,route:a.route,
+      startLT:a.startLT,startUTC:a.startUTC,endLT:a.endLT,endUTC:a.endUTC}));
+    const text = JSON.stringify({version:1,sourceURL:location.href,month:p.month,valid:true,activities});
+    return new TextEncoder().encode(text).byteLength <= 1024*1024 ? text : fail('limit');
     """#
 }

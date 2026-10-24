@@ -541,11 +541,8 @@ final class NativeRAIDOExperiment: ObservableObject {
                         return (digest, NativeRAIDOWire.assessment(response, for: contract), false,
                                 "Timing comparison requires a decoded native wire response.")
                     }
-                    let timing: String
-                    if digest != contract.expectedDigest { timing = "Native JSON changed from capture; timing comparison is inconclusive." }
-                    else if let before, let after, before == after {
-                        timing = NativeRAIDOTiming.compare(wire, reference: after).message
-                    } else { timing = "A stable live portal timing reference was unavailable; timing comparison is inconclusive." }
+                    let timing = NativeRAIDOTiming.message(wire, before: before, after: after,
+                        jsonMatched: digest == contract.expectedDigest)
                     return (digest, NativeRAIDOWire.describe(wire), !wire.hasMissingActivityDetails, timing)
                 }.value
                 guard self.generation == ticket, !Task.isCancelled else { return }
@@ -576,16 +573,28 @@ final class NativeRAIDOExperiment: ObservableObject {
         }
     }
 
-    private func timingReference(in webView: WKWebView, month: String) async -> NativeRAIDOTiming.Reference? {
+    func timingReference(in webView: WKWebView, month: String) async -> NativeRAIDOTiming.Observation {
         guard let url = webView.url, PortalBridgePolicy.isPortal(url),
-              url.path.lowercased().hasSuffix("/humanresourceroster.aspx") else { return nil }
+              url.path.lowercased().hasSuffix("/humanresourceroster.aspx") else { return .unavailable(.pageUnavailable) }
         do {
-            guard let text = try await webView.callAsyncJavaScript(NativeRAIDOTiming.referenceScript,
-                arguments: ["month": month], in: nil, contentWorld: .page) as? String,
-                  text.utf8.count <= 1024 * 1024, webView.url == url, !Task.isCancelled else { return nil }
-            let data = Data(text.utf8)
-            return try await Task.detached(priority: .utility) { try NativeRAIDOTiming.Reference.parse(data, month: month) }.value
-        } catch { return nil }
+            // A captured GetRoster response can precede the portal finishing its
+            // rendering. Retry only an explicit busy state, never navigate or fetch.
+            for attempt in 0..<3 {
+                try Task.checkCancellation()
+                guard webView.url == url else { return .unavailable(.pageChanged) }
+                guard let text = try await webView.callAsyncJavaScript(NativeRAIDOTiming.referenceScript,
+                    arguments: ["month": month], in: nil, contentWorld: .page) as? String else { return .unavailable(.invalidPayload) }
+                guard webView.url == url else { return .unavailable(.pageChanged) }
+                guard text.utf8.count <= 1024 * 1024 else { return .unavailable(.limit) }
+                let data = Data(text.utf8)
+                let result = await Task.detached(priority: .utility) { NativeRAIDOTiming.Observation.parse(data, month: month) }.value
+                try Task.checkCancellation()
+                if result == .unavailable(.loading), attempt < 2 {
+                    try await Task.sleep(for: .milliseconds(250))
+                } else { return result }
+            }
+            return .unavailable(.loading)
+        } catch { return .unavailable(.scriptFailure) }
     }
 
     var previousMonthTarget: String? { try? contract?.request.previousMonth().month }

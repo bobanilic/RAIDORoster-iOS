@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = '3.2.1';
+  const VERSION = '3.2.2';
   if (window !== window.top) return;
   const SCHEMA_VERSION = 1;
   // Login/chooser pages never install roster observers or parse the DOM. Keep
@@ -8,7 +8,8 @@
     !document.querySelector('input[type="password"]');
   if (!isRosterPage()) {
     window.RAIDOPlus = { version: VERSION, extractNow() {},
-      history: { inspect: () => ({kind: document.querySelector('input[type="password"]') ? 'auth' : 'format'}) } };
+      history: { inspect: () => ({kind: document.querySelector('input[type="password"]') ? 'auth' : 'format'}),
+        timingReference: () => ({kind: document.querySelector('input[type="password"]') ? 'auth' : 'format'}) } };
     return;
   }
   if (window.RAIDOPlus?.version === VERSION) {
@@ -938,6 +939,26 @@
     return {kind:'ready',month:v.month,offered:historyDiscover(),payload:{schemaVersion:SCHEMA_VERSION,sourceURL:location.href,
       pageTitle:document.title || 'RAIDO',monthlyBLH:monthlyBLH(),validation:v,rows:b.days}};
   }
+  // Native timing evidence needs neither duty grouping nor calendar discovery.
+  // Keep the existing parser, but project only this month's flight/positioning
+  // records. Hotels spanning months and unrelated display fields are not inputs.
+  function historyTimingReference(expectedMonth) {
+    if (document.querySelector('input[type="password"]')) return {kind:'auth'};
+    if (document.readyState === 'loading' || document.querySelector('[aria-busy="true"]') || window.__RAIDOHistoryNetwork?.pending > 0) return {kind:'loading'};
+    if (!/^20\d{2}-(?:0[1-9]|1[0-2])$/.test(expectedMonth)) return {kind:'format'};
+    const m = pageMonth();
+    if (!m) return {kind:'format'};
+    const month = `${m.year}-${pad2(m.month)}`;
+    if (month !== expectedMonth) return {kind:'mismatch'};
+    if (activityTables().length > 400) return {kind:'limit'};
+    const selected = extractActivities().filter(a => a.dateISO.startsWith(month + '-') &&
+      ['FLIGHT','POSITIONING'].includes(a.category));
+    if (!selected.length) return {kind:'no-flight-records'};
+    if (selected.length > 3000) return {kind:'limit'};
+    return {kind:'ready',payload:{version:1,sourceURL:location.href,month,valid:true,
+      activities:selected.map(a => ({day:a.dateISO,code:a.code,category:a.category,route:a.route || '',
+        startLT:stamp(a.start),startUTC:utcStamp(a.start),endLT:stamp(a.end),endUTC:utcStamp(a.end)}))}};
+  }
   function historyNavigate(target) {
     if (!/^20\d{2}-(?:0[1-9]|1[0-2])$/.test(target)) return {kind:'invalid'};
     const current = pageMonth();
@@ -1003,7 +1024,7 @@
     version: VERSION,
     extractNow,
     extractHTML,
-    history: {discover:historyDiscover,discoverHTML:(html,url) => historyDiscover(new DOMParser().parseFromString(html,'text/html'),url),inspect:historyInspect,navigate:historyNavigate},
+    history: {discover:historyDiscover,discoverHTML:(html,url) => historyDiscover(new DOMParser().parseFromString(html,'text/html'),url),inspect:historyInspect,timingReference:historyTimingReference,navigate:historyNavigate},
     diagnostics
   };
 
